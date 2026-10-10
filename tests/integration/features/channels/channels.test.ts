@@ -11,7 +11,7 @@ import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
 
-const pool = databaseFixture();
+const pool = databaseFixture(2);
 const token = 'test-only-shared-bot-token';
 const provider = {
   verifyCredential: vi.fn(async () => ({
@@ -284,5 +284,33 @@ test('A wrong webhook secret is rejected before the JSON body is parsed', async 
   expect(response.status).toBe(403);
   expect(response.body.error.code).toBe('E-WEBHOOK-FORBIDDEN');
   expect(response.body.error).not.toHaveProperty('message');
+  await expectNoIngestion();
+});
+
+test('SRS T-20: POST /channels twice with the same chat id produces one row and one 409 E-TG-CHANNEL-DUPLICATE', async () => {
+  const connectionId = await connectBot();
+  const submit = () =>
+    request(app).post('/api/v1/channels').set('Cookie', cookie).send({
+      botConnectionId: connectionId,
+      providerChatId: '-54330',
+      displayName: 'Duplicate group',
+    });
+  const responses = await Promise.all([submit(), submit()]);
+  expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
+  expect(responses.find((response) => response.status === 409)?.body.error.code).toBe(
+    'E-TG-CHANNEL-DUPLICATE',
+  );
+  const rows = (await pool.query('SELECT id FROM channels WHERE provider_chat_id = $1', ['-54330']))
+    .rows;
+  expect(rows).toHaveLength(1);
+  expect(rows[0].id).toBe(responses.find((response) => response.status === 201)?.body.data.id);
+  expect(
+    (
+      await pool.query('SELECT id FROM config_audit WHERE table_name = $1 AND record_id = $2', [
+        'channels',
+        rows[0].id,
+      ])
+    ).rowCount,
+  ).toBe(1);
   await expectNoIngestion();
 });
