@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { beforeAll, expect, test } from 'vitest';
 import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
@@ -50,3 +51,52 @@ test('A label with a source message in evidence_message_ids can be inserted', as
   );
   expect(result.rows).toEqual([{ evidence_message_ids: [workspaceId] }]);
 });
+
+async function storeMonitoredChannel(overrides: Record<string, unknown>) {
+  const candidate = {
+    connection_status: 'active',
+    authorization_ack_at: '2026-10-10T04:01:00Z',
+    monitoring_started_at: '2026-10-10T04:01:00Z',
+    visible_indicator_message_id: '1',
+    provider_chat_type: 'supergroup',
+    ...overrides,
+  };
+  return pool.query(
+    `INSERT INTO channels (workspace_id, bot_connection_id, provider, provider_chat_id, display_name, monitored, connection_status, authorization_ack_at, monitoring_started_at, visible_indicator_message_id, provider_chat_type)
+    VALUES ($1, $1, 'telegram', $2, 'Test active channel', true, $3, $4, $5, $6, $7) RETURNING monitored`,
+    [
+      workspaceId,
+      randomUUID(),
+      candidate.connection_status,
+      candidate.authorization_ack_at,
+      candidate.monitoring_started_at,
+      candidate.visible_indicator_message_id,
+      candidate.provider_chat_type,
+    ],
+  );
+}
+
+test.each([
+  ['connection_status', 'draft'],
+  ['connection_status', 'verified'],
+  ['connection_status', 'paused'],
+  ['connection_status', 'needs_action'],
+  ['authorization_ack_at', null],
+  ['monitoring_started_at', null],
+  ['visible_indicator_message_id', null],
+  ['provider_chat_type', null],
+])('A channel cannot be stored with monitored = true when %s is %s', async (field, value) => {
+  await expect(storeMonitoredChannel({ [String(field)]: value })).rejects.toMatchObject({
+    code: '23514',
+    constraint: 'channels_monitored_only_when_active',
+  });
+});
+
+test.each(['group', 'supergroup'])(
+  'An active, acknowledged %s with an indicator and monitoring start can be monitored',
+  async (providerChatType) => {
+    expect((await storeMonitoredChannel({ provider_chat_type: providerChatType })).rows).toEqual([
+      { monitored: true },
+    ]);
+  },
+);

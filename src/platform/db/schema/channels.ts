@@ -95,7 +95,7 @@ export const channels = pgTable(
     check('channels_display_name_length', sql`char_length(${table.displayName}) BETWEEN 1 AND 120`),
     check(
       'channels_monitored_only_when_active',
-      sql`NOT ${table.monitored} OR (${table.connectionStatus} = 'active' AND ${table.authorizationAckAt} IS NOT NULL AND ${table.monitoringStartedAt} IS NOT NULL AND ${table.visibleIndicatorMessageId} IS NOT NULL AND (${table.provider} <> 'telegram' OR ${table.providerChatType} IN ('group','supergroup')))`,
+      sql`NOT ${table.monitored} OR (${table.connectionStatus} = 'active' AND ${table.authorizationAckAt} IS NOT NULL AND ${table.monitoringStartedAt} IS NOT NULL AND ${table.visibleIndicatorMessageId} IS NOT NULL AND (${table.provider} <> 'telegram' OR (${table.providerChatType} IN ('group','supergroup')) IS TRUE))`,
     ),
     uniqueIndex('channels_chat_uq').on(table.workspaceId, table.provider, table.providerChatId),
     index('channels_ws_status_idx').on(table.workspaceId, table.connectionStatus),

@@ -1,0 +1,2 @@
+ALTER TABLE "channels" DROP CONSTRAINT "channels_monitored_only_when_active";--> statement-breakpoint
+ALTER TABLE "channels" ADD CONSTRAINT "channels_monitored_only_when_active" CHECK (NOT "channels"."monitored" OR ("channels"."connection_status" = 'active' AND "channels"."authorization_ack_at" IS NOT NULL AND "channels"."monitoring_started_at" IS NOT NULL AND "channels"."visible_indicator_message_id" IS NOT NULL AND ("channels"."provider" <> 'telegram' OR ("channels"."provider_chat_type" IN ('group','supergroup')) IS TRUE)));
