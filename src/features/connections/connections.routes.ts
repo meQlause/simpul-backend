@@ -4,6 +4,8 @@ import type { SetupProvider } from '../../platform/providers/index.js';
 import { parseCredential, parseConnection, parseRequestKey } from './connections.schema.js';
 import { verifyConnection, listConnections } from './connections.service.js';
 import { createConnection, type ConnectionSetup } from './connections-create.service.js';
+import { parseSession, parseSessionId } from './connections-sessions.schema.js';
+import { issueSession, pollSession } from './connections-sessions.service.js';
 
 const CREATED = 201;
 
@@ -25,6 +27,23 @@ export function connectionsRouter(
     });
   });
   if (setup) {
+    router.post('/telegram/connections/:connectionId/sessions', async (request, response) => {
+      const scope = response.locals.scope as { workspaceId: string; actorId: string };
+      const input = {
+        ...parseSession(request.body),
+        connectionId: parseSessionId(request.params.connectionId),
+      };
+      response
+        .status(CREATED)
+        .json({ data: await issueSession(resolveConnection, scope, input, setup) });
+    });
+    router.get('/telegram/connection-sessions/:sessionId', async (request, response) => {
+      const { workspaceId } = response.locals.scope as { workspaceId: string };
+      const sessionId = parseSessionId(request.params.sessionId);
+      response.json({
+        data: await pollSession(resolveConnection, { workspaceId, sessionId }, setup.now()),
+      });
+    });
     router.post('/telegram/connections', async (request, response) => {
       const scope = response.locals.scope as { workspaceId: string; actorId: string };
       const input = parseConnection(request.body);

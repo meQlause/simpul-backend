@@ -24,6 +24,7 @@ const app = createApp('api', undefined, undefined, {
     now: () => new Date('2026-10-10T04:01:00Z'),
     newId: randomUUID,
     newWebhookSecret: () => Buffer.alloc(32, 8).toString('base64url'),
+    newCode: () => randomUUID().replaceAll('-', ''),
   },
   telegram: {
     registerWebhook: async () => {},
@@ -44,6 +45,8 @@ const app = createApp('api', undefined, undefined, {
 let adminCookie: string;
 let memberCookie: string;
 let personA: string;
+let connectionA: string;
+let sessionA: string;
 let tables: string[];
 
 type Layer = {
@@ -79,6 +82,8 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'post /telegram/connections/:connectionId/sessions': { purpose: 'identify_group' },
+  'get /telegram/connection-sessions/:sessionId': {},
   'get /telegram/connections': {},
   'post /channels': {
     botConnectionId: '00000000-0000-4000-8000-000000100031',
@@ -96,9 +101,23 @@ const bodies: Record<string, object> = {
   'patch /people/:personId': { availability: 'leave' },
 };
 const statuses: Record<string, number> = {
+  'post /telegram/connections/:connectionId/sessions': 201,
   'post /telegram/connections': 409,
   'post /channels': 201,
 };
+
+async function prepareRouteParameters() {
+  connectionA = (
+    await pool.query("SELECT id FROM bot_connections WHERE provider_account_id = '240000000'")
+  ).rows[0].id;
+  bodies['post /channels'] = { ...bodies['post /channels'], botConnectionId: connectionA };
+  const session = await supertest(app)
+    .post(`/api/v1/telegram/connections/${connectionA}/sessions`)
+    .set('Cookie', adminCookie)
+    .send({ purpose: 'identify_group' });
+  expect(session.status).toBe(201);
+  sessionA = session.body.data.id;
+}
 
 async function login(name: string, email: string) {
   const client = await pool.connect();
@@ -127,17 +146,12 @@ beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   await seedTenantRows(pool, workspaceB);
-  bodies['post /channels'] = {
-    ...bodies['post /channels'],
-    botConnectionId: (
-      await pool.query("SELECT id FROM bot_connections WHERE provider_account_id = '240000000'")
-    ).rows[0].id,
-  };
   tables = await scopedTableNames(pool);
   personA = (await pool.query<{ id: string }>("SELECT id FROM people WHERE name = 'Budi Santoso'"))
     .rows[0].id;
   adminCookie = await login('Siti Aminah', 'admin@pointstar.example');
   memberCookie = await login('Budi Santoso', 'member@pointstar.example');
+  await prepareRouteParameters();
   await pool.query('CREATE ROLE test_app NOLOGIN NOSUPERUSER NOBYPASSRLS');
   await pool.query('GRANT USAGE ON SCHEMA public TO test_app');
   await pool.query(
@@ -148,7 +162,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':personId', personId)}`;
+  const path = `/api/v1${route.path.replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA)}`;
   const agent = supertest(app);
   if (route.method === 'get') {
     return agent.get(path);
@@ -250,5 +264,26 @@ test('REG-007: a foreign person and foreign backup cannot be changed or assigned
     .send({ backupPersonId: workspaceB });
   expect(backup.status).toBe(422);
   expect(backup.body.error.code).toBe('E-VALIDATION');
+  expect(await foreignSnapshot()).toEqual(before);
+});
+
+test('REG-007: a foreign connection and session cannot identify or create a group', async () => {
+  const before = await foreignSnapshot();
+  const issue = await supertest(app)
+    .post(`/api/v1/telegram/connections/${workspaceB}/sessions`)
+    .set('Cookie', adminCookie)
+    .send({ purpose: 'identify_group' });
+  expect(issue.status).toBe(404);
+  const poll = await supertest(app)
+    .get(`/api/v1/telegram/connection-sessions/${workspaceB}`)
+    .set('Cookie', adminCookie);
+  expect(poll.status).toBe(404);
+  const create = await supertest(app).post('/api/v1/channels').set('Cookie', adminCookie).send({
+    botConnectionId: connectionA,
+    sessionId: workspaceB,
+    displayName: 'Foreign candidate',
+  });
+  expect(create.status).toBe(410);
+  expect(create.body.error.code).toBe('E-TG-SESSION-EXPIRED');
   expect(await foreignSnapshot()).toEqual(before);
 });

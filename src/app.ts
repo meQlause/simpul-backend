@@ -16,6 +16,7 @@ import { verifyMail } from './platform/mail/index.js';
 import { connectionsRouter, type ConnectionSetup } from './features/connections/index.js';
 import type { SetupProvider } from './platform/providers/index.js';
 import { channelsRouter } from './features/channels/index.js';
+import { webhookRouter, type WebhookServices } from './features/ingest/index.js';
 
 type ApiServices = {
   authentication: ReturnType<typeof createAuthentication>;
@@ -23,6 +24,7 @@ type ApiServices = {
   mail?: { masterKey: string; verifyMail?: typeof verifyMail; now: () => Date };
   telegram?: SetupProvider;
   connectionSetup?: Omit<ConnectionSetup, 'secretStore'> & { masterKey: string };
+  webhook?: WebhookServices;
 };
 
 function mountApi(app: Express, services?: ApiServices) {
@@ -44,7 +46,7 @@ function mountApi(app: Express, services?: ApiServices) {
   app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
   app.use('/api/v1', peopleRouter(services.resolveConnection));
   if (services.connectionSetup) {
-    app.use('/api/v1', channelsRouter(services.resolveConnection, services.connectionSetup.newId));
+    app.use('/api/v1', channelsRouter(services.resolveConnection, services.connectionSetup));
   }
   if (services.telegram) {
     const setup = services.connectionSetup
@@ -74,6 +76,9 @@ export function createApp(
   }
   if (role === 'api') {
     mountApi(app, services);
+  }
+  if (role === 'webhook' && services?.webhook) {
+    app.use(webhookRouter(services.webhook));
   }
   app.use(notFound);
   app.use(errorHandler);

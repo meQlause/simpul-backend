@@ -1,6 +1,7 @@
 import { z as schema } from 'zod';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../errors/domain-error.js';
-import type { SetupProvider } from '../contract.js';
+import type { SetupProvider, ReceiveProvider } from '../contract.js';
 
 const CALL_TIMEOUT_MS = 10000;
 const TOKEN_INVALID = 'E-TG-TOKEN-INVALID';
@@ -16,8 +17,19 @@ const accountSchema = schema.object({
   }),
 });
 
-export function createTelegramProvider(baseUrl: string, send: typeof fetch = fetch): SetupProvider {
-  async function call(credential: string, method: string, body?: object) {
+const setupUpdate = schema.object({
+  message: schema.object({
+    text: schema.string().regex(/^\/simpul_connect(?:@\w+)? [0-9a-f]{32}$/u),
+    chat: schema.object({
+      id: schema.number().int().safe().negative(),
+      title: schema.string(),
+      type: schema.enum(['group', 'supergroup']),
+    }),
+  }),
+});
+
+function createCall(baseUrl: string, send: typeof fetch) {
+  return async (credential: string, method: string, body?: object) => {
     try {
       const response = await send(
         `${baseUrl.replace(/\/$/u, '')}/bot${encodeURIComponent(credential)}/${method}`,
@@ -41,8 +53,39 @@ export function createTelegramProvider(baseUrl: string, send: typeof fetch = fet
       }
       throw new DomainError('E-TG-SETUP-TIMEOUT');
     }
-  }
+  };
+}
+
+export function createTelegramProvider(
+  baseUrl: string,
+  send: typeof fetch = fetch,
+): SetupProvider & ReceiveProvider {
+  const call = createCall(baseUrl, send);
   return {
+    authenticate(request, secret) {
+      const supplied = request.headers['x-telegram-bot-api-secret-token'];
+      return (
+        typeof supplied === 'string' &&
+        timingSafeEqual(
+          createHash('sha256').update(supplied).digest(),
+          createHash('sha256').update(secret).digest(),
+        )
+      );
+    },
+    parse(update) {
+      const parsed = setupUpdate.safeParse(update);
+      if (!parsed.success) {
+        return { type: 'ignore' };
+      }
+      const { message } = parsed.data;
+      return {
+        type: 'setup-command',
+        code: message.text.split(' ')[1],
+        chatId: String(message.chat.id),
+        title: message.chat.title,
+        chatType: message.chat.type,
+      };
+    },
     async verifyCredential(credential) {
       const parsed = accountSchema.safeParse(await call(credential, 'getMe'));
       if (!parsed.success) {

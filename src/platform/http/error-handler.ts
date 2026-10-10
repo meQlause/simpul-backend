@@ -16,7 +16,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _request, resp
   response.status(failure.status).json({
     error: {
       code: failure.code,
-      message: failure.message,
+      ...(failure.message ? { message: failure.message } : {}),
       requestId: response.getHeader('X-Request-ID'),
       details: failure.details,
     },

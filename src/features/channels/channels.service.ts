@@ -4,15 +4,51 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
 import { insertDraft } from './channels.repository.js';
 import type { parseChannel } from './channels.schema.js';
+import { consumeCandidate } from '../connections/index.js';
+import type { PoolClient } from 'pg';
+
+async function resolveDraft(
+  tx: PoolClient,
+  workspaceId: string,
+  input: ReturnType<typeof parseChannel>,
+  now: Date,
+) {
+  if (input.sessionId) {
+    const candidate = await consumeCandidate(tx, workspaceId, {
+      sessionId: input.sessionId,
+      connectionId: input.botConnectionId,
+      now,
+    });
+    return {
+      ...input,
+      providerChatId: candidate.chatId,
+      providerChatTitle: candidate.title,
+      providerChatType: candidate.chatType,
+    };
+  }
+  if (input.providerChatId === undefined) {
+    throw new DomainError('E-TG-INPUT-INVALID');
+  }
+  return {
+    ...input,
+    providerChatId: input.providerChatId,
+    providerChatTitle: null,
+    providerChatType: null,
+  };
+}
 
 export async function createChannel(
   resolveConnection: ConnectionResolver,
   scope: { workspaceId: string; actorId: string },
   input: ReturnType<typeof parseChannel>,
-  newId: () => string,
+  services: { newId: () => string; now: () => Date },
 ) {
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
-    const row = await insertDraft(tx, scope.workspaceId, newId(), input);
+    const draft = await resolveDraft(tx, scope.workspaceId, input, services.now());
+    const row = await insertDraft(tx, scope.workspaceId, services.newId(), {
+      ...draft,
+      providerChatId: draft.providerChatId,
+    });
     if (!row) {
       throw new DomainError('E-NOT-FOUND');
     }
@@ -21,14 +57,14 @@ export async function createChannel(
       tableName: 'channels',
       recordId: row.id,
       before: null,
-      after: { ...input, connectionStatus: 'draft', monitored: false },
+      after: { ...draft, connectionStatus: 'draft', monitored: false },
     });
     return {
       id: row.id,
       displayName: input.displayName,
-      providerChatId: input.providerChatId,
-      providerChatType: null,
-      providerChatTitle: null,
+      providerChatId: draft.providerChatId,
+      providerChatType: draft.providerChatType,
+      providerChatTitle: draft.providerChatTitle,
       memberCount: null,
       class: input.class,
       primaryLanguage: input.primaryLanguage,

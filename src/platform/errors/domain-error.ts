@@ -1,4 +1,9 @@
 const errors = {
+  'E-TG-SESSION-EXPIRED': {
+    status: 410,
+    message: 'This connection code has expired. Generate a new code.',
+  },
+  'E-WEBHOOK-FORBIDDEN': { status: 403, message: '' },
   'E-TG-CHANNEL-DUPLICATE': {
     status: 409,
     message: 'This group is already configured in this workspace.',

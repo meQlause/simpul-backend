@@ -66,6 +66,7 @@ beforeAll(async () => {
       now: () => new Date('2026-10-10T04:01:00Z'),
       newId: randomUUID,
       newWebhookSecret: () => Buffer.alloc(32, 8).toString('base64url'),
+      newCode: () => Buffer.alloc(16, 9).toString('hex'),
     },
   };
   app = createApp('api', undefined, undefined, services);
@@ -75,15 +76,17 @@ async function snapshot() {
   const result = await pool.query(
     `SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'workspace_id' ORDER BY table_name`,
   );
-  const rows: Record<string, unknown> = {};
-  for (const { table_name: table } of result.rows as { table_name: string }[]) {
-    rows[table] = (
-      await pool.query(
-        `SELECT to_jsonb(record) AS snapshot FROM "${table}" AS record ORDER BY to_jsonb(record)::text`,
+  const snapshots = await pool.query<{ table_name: string; snapshot: unknown }>(
+    (result.rows as { table_name: string }[])
+      .map(
+        ({ table_name: table }) =>
+          `SELECT '${table}' AS table_name,
+       COALESCE(jsonb_agg(jsonb_build_object('snapshot', to_jsonb(record)) ORDER BY to_jsonb(record)::text), '[]'::jsonb) AS snapshot
+       FROM "${table}" AS record`,
       )
-    ).rows;
-  }
-  return rows;
+      .join(' UNION ALL '),
+  );
+  return Object.fromEntries(snapshots.rows.map((row) => [row.table_name, row.snapshot]));
 }
 
 test('POST /telegram/connections/verify stores nothing and changes no webhook', async () => {

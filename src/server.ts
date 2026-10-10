@@ -5,11 +5,14 @@ import { createLogger } from './platform/logger/index.js';
 import { createSystemPool } from './platform/db/index.js';
 import { createConnectionResolver } from './platform/db/connection-resolver.js';
 import { createTelegramProvider } from './platform/providers/index.js';
+import { createConnectionLookup } from './platform/db/connection-lookup.js';
+import { createSecretStore } from './platform/secrets/index.js';
 
 const config = readConfig(process.env);
 
 const port = 3000;
 const WEBHOOK_SECRET_BYTES = 32;
+const CONNECTION_CODE_BYTES = 16;
 const commandArgumentsOffset = 3;
 
 if (process.argv[2] === 'create-workspace') {
@@ -18,7 +21,9 @@ if (process.argv[2] === 'create-workspace') {
 } else {
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
-  const pool = config.PROCESS_ROLE === 'api' ? createSystemPool(config.DATABASE_URL) : undefined;
+  const pool = ['api', 'webhook'].includes(config.PROCESS_ROLE)
+    ? createSystemPool(config.DATABASE_URL)
+    : undefined;
   const services = pool
     ? {
         authentication: createAuthentication(pool, {
@@ -26,6 +31,13 @@ if (process.argv[2] === 'create-workspace') {
           secret: config.AUTH_SECRET,
         }),
         resolveConnection: createConnectionResolver(pool),
+        webhook: {
+          resolveConnection: createConnectionResolver(pool),
+          lookupConnection: createConnectionLookup(pool),
+          secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
+          provider: createTelegramProvider(config.TELEGRAM_API_BASE),
+          now: () => new Date(),
+        },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: createTelegramProvider(config.TELEGRAM_API_BASE),
         connectionSetup: {
@@ -34,6 +46,7 @@ if (process.argv[2] === 'create-workspace') {
           now: () => new Date(),
           newId: randomUUID,
           newWebhookSecret: () => randomBytes(WEBHOOK_SECRET_BYTES).toString('base64url'),
+          newCode: () => randomBytes(CONNECTION_CODE_BYTES).toString('hex'),
         },
       }
     : undefined;

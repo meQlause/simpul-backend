@@ -6,13 +6,17 @@ export async function insertDraft(
   tx: PoolClient,
   workspaceId: string,
   id: string,
-  input: ReturnType<typeof parseChannel>,
+  input: ReturnType<typeof parseChannel> & {
+    providerChatId: string;
+    providerChatTitle: string | null;
+    providerChatType: string | null;
+  },
 ) {
   try {
     const result = await tx.query<{ id: string }>(
       `INSERT INTO channels
-       (id, workspace_id, provider, bot_connection_id, provider_chat_id, display_name, class, primary_language)
-       SELECT $3, $1, connection.provider, connection.id, $4, $5, $6, $7
+       (id, workspace_id, provider, bot_connection_id, provider_chat_id, display_name, class, primary_language, provider_chat_title, provider_chat_type)
+       SELECT $3, $1, connection.provider, connection.id, $4, $5, $6, $7, $8, $9
        FROM bot_connections AS connection WHERE connection.workspace_id = $1 AND connection.id = $2
        RETURNING id`,
       [
@@ -23,6 +27,8 @@ export async function insertDraft(
         input.displayName,
         input.class,
         input.primaryLanguage,
+        input.providerChatTitle,
+        input.providerChatType,
       ],
     );
     return result.rows[0];

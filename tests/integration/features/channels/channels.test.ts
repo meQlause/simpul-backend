@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { beforeAll, expect, test, vi } from 'vitest';
+import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../../../src/app.js';
 import { createAuthentication, provisionAdmin } from '../../../../src/features/auth/index.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
+import { createConnectionLookup } from '../../../../src/platform/db/connection-lookup.js';
+import { createSecretStore } from '../../../../src/platform/secrets/index.js';
+import { createTelegramProvider } from '../../../../src/platform/providers/index.js';
 import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
@@ -22,6 +25,12 @@ const provider = {
 };
 let app: ReturnType<typeof createApp>;
 let cookie: string;
+let webhookApp: ReturnType<typeof createApp>;
+let instant = new Date('2026-10-10T04:01:00Z');
+const webhookSecret = Buffer.alloc(32, 8).toString('base64url');
+afterEach(() => {
+  instant = new Date('2026-10-10T04:01:00Z');
+});
 
 async function signIn() {
   const client = await pool.connect();
@@ -59,18 +68,28 @@ beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   await pool.query('TRUNCATE bot_connections CASCADE');
-  app = createApp('api', undefined, undefined, {
+  const services = {
     authentication: await signIn(),
     resolveConnection: createConnectionResolver(pool),
     telegram: provider,
     connectionSetup: {
       masterKey: Buffer.alloc(32, 7).toString('base64'),
       publicBaseUrl: 'https://simpul.example',
-      now: () => new Date('2026-10-10T04:01:00Z'),
+      now: () => instant,
       newId: randomUUID,
       newWebhookSecret: () => Buffer.alloc(32, 8).toString('base64url'),
+      newCode: () => randomUUID().replaceAll('-', ''),
     },
-  });
+    webhook: {
+      resolveConnection: createConnectionResolver(pool),
+      lookupConnection: createConnectionLookup(pool),
+      secretStore: createSecretStore(Buffer.alloc(32, 7).toString('base64')),
+      provider: createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      now: () => instant,
+    },
+  };
+  app = createApp('api', undefined, undefined, services);
+  webhookApp = createApp('webhook', undefined, undefined, services);
 }, 120000);
 
 async function connectBot() {
@@ -116,4 +135,154 @@ test('SRS T-15: one connection serves two channels; the second channel needs no 
   expect(provider.verifyCredential).toHaveBeenCalledExactlyOnceWith(token);
   expect(provider.registerWebhook).toHaveBeenCalledTimes(1);
   await expectConnectionCard([first.body.data.id, second.body.data.id]);
+});
+
+test('SRS T-24: a connection code is shown once, stored as a hash and expires after 15 minutes', async () => {
+  const sharedConnectionId = await connectBot();
+  const issued = await request(app)
+    .post(`/api/v1/telegram/connections/${sharedConnectionId}/sessions`)
+    .set('Cookie', cookie)
+    .send({ purpose: 'identify_group' });
+  expect(issued.status).toBe(201);
+  expect(issued.body.data.command).toMatch(/^\/simpul_connect [0-9a-f]{32}$/u);
+  expect(issued.body.data.expiresAt).toBe('2026-10-10T04:16:00.000Z');
+  expect(issued.body.data.state).toBe('pending');
+  const poll = await request(app)
+    .get(`/api/v1/telegram/connection-sessions/${issued.body.data.id}`)
+    .set('Cookie', cookie);
+  expect(poll.status).toBe(200);
+  expect(poll.body.data).toMatchObject({ state: 'pending', candidate: null });
+  expect(poll.text).not.toContain(issued.body.data.command.split(' ')[1]);
+  const row = (
+    await pool.query('SELECT * FROM channel_connection_sessions WHERE id = $1', [
+      issued.body.data.id,
+    ])
+  ).rows[0];
+  expect(row.code_hash).toHaveLength(32);
+  expect(JSON.stringify(row)).not.toContain(issued.body.data.command.split(' ')[1]);
+});
+
+async function issueCode(connectionId: string) {
+  const response = await request(app)
+    .post(`/api/v1/telegram/connections/${connectionId}/sessions`)
+    .set('Cookie', cookie)
+    .send({ purpose: 'identify_group' });
+  expect(response.status).toBe(201);
+  return response.body.data as { id: string; command: string };
+}
+
+function pollCode(sessionId: string) {
+  return request(app)
+    .get(`/api/v1/telegram/connection-sessions/${sessionId}`)
+    .set('Cookie', cookie);
+}
+
+function sendCommand(connectionId: string, text: string, chatId = -54321) {
+  return request(webhookApp)
+    .post(`/api/v1/webhooks/telegram/${connectionId}`)
+    .set('X-Telegram-Bot-Api-Secret-Token', webhookSecret)
+    .send({
+      update_id: 123,
+      message: { text, chat: { id: chatId, type: 'supergroup', title: 'Candidate group' } },
+    });
+}
+
+async function expectNoIngestion() {
+  expect((await pool.query('SELECT id FROM messages_raw')).rowCount).toBe(0);
+  expect((await pool.query('SELECT id FROM channels WHERE monitored')).rowCount).toBe(0);
+}
+
+test('SRS T-24: one use identifies only a candidate; replay cannot change its group', async () => {
+  const connectionId = await connectBot();
+  const issued = await issueCode(connectionId);
+  const count = (await pool.query('SELECT id FROM channels')).rowCount;
+  expect((await sendCommand(connectionId, issued.command)).status).toBe(200);
+  const candidate = await pollCode(issued.id);
+  expect(candidate.body.data).toMatchObject({
+    state: 'identified',
+    candidate: { providerChatId: '-54321', title: 'Candidate group', chatType: 'supergroup' },
+  });
+  expect((await sendCommand(connectionId, issued.command, -99999)).status).toBe(200);
+  expect((await pollCode(issued.id)).body).toEqual(candidate.body);
+  expect((await pool.query('SELECT id FROM channels')).rowCount).toBe(count);
+  await expectNoIngestion();
+});
+
+test('SRS T-24: an identified code creates one draft and a replay creates nothing', async () => {
+  const connectionId = await connectBot();
+  const issued = await issueCode(connectionId);
+  expect((await sendCommand(connectionId, issued.command, -54322)).status).toBe(200);
+  const submit = () =>
+    request(app).post('/api/v1/channels').set('Cookie', cookie).send({
+      botConnectionId: connectionId,
+      sessionId: issued.id,
+      displayName: 'Identified group',
+    });
+  const first = await submit();
+  expect(first.status).toBe(201);
+  expect(first.body.data).toMatchObject({
+    monitored: false,
+    providerChatId: '-54322',
+    providerChatTitle: 'Candidate group',
+    providerChatType: 'supergroup',
+  });
+  const repeat = await submit();
+  expect(repeat.status).toBe(410);
+  expect(repeat.body.error.code).toBe('E-TG-SESSION-EXPIRED');
+  expect((await pollCode(issued.id)).body.data).toMatchObject({
+    state: 'expired',
+    candidate: null,
+  });
+  await expectNoIngestion();
+});
+
+test('SRS T-24: at exactly 15 minutes a code expires and connects nothing', async () => {
+  const connectionId = await connectBot();
+  const issued = await issueCode(connectionId);
+  const count = (await pool.query('SELECT id FROM channels')).rowCount;
+  instant = new Date('2026-10-10T04:16:00Z');
+  expect((await sendCommand(connectionId, issued.command, -54323)).status).toBe(200);
+  expect((await pollCode(issued.id)).body.data).toMatchObject({
+    state: 'expired',
+    candidate: null,
+  });
+  const submit = await request(app)
+    .post('/api/v1/channels')
+    .set('Cookie', cookie)
+    .send({ botConnectionId: connectionId, sessionId: issued.id, displayName: 'Expired group' });
+  expect(submit.status).toBe(410);
+  expect(submit.body.error.code).toBe('E-TG-SESSION-EXPIRED');
+  expect((await pool.query('SELECT id FROM channels')).rowCount).toBe(count);
+  await expectNoIngestion();
+});
+
+test('SRS T-24: a wrong code and ordinary text store no message or candidate', async () => {
+  const connectionId = await connectBot();
+  const issued = await issueCode(connectionId);
+  const before = (
+    await pool.query('SELECT * FROM channel_connection_sessions WHERE id = $1', [issued.id])
+  ).rows;
+  expect((await sendCommand(connectionId, `/simpul_connect ${'0'.repeat(32)}`)).status).toBe(200);
+  expect((await sendCommand(connectionId, 'private-message-marker')).status).toBe(200);
+  expect(
+    (await pool.query('SELECT * FROM channel_connection_sessions WHERE id = $1', [issued.id])).rows,
+  ).toEqual(before);
+  expect((await pollCode(issued.id)).body.data).toMatchObject({
+    state: 'pending',
+    candidate: null,
+  });
+  await expectNoIngestion();
+});
+
+test('A wrong webhook secret is rejected before the JSON body is parsed', async () => {
+  const connectionId = await connectBot();
+  const response = await request(webhookApp)
+    .post(`/api/v1/webhooks/telegram/${connectionId}`)
+    .set('X-Telegram-Bot-Api-Secret-Token', 'wrong-secret')
+    .set('Content-Type', 'application/json')
+    .send('{broken');
+  expect(response.status).toBe(403);
+  expect(response.body.error.code).toBe('E-WEBHOOK-FORBIDDEN');
+  expect(response.body.error).not.toHaveProperty('message');
+  await expectNoIngestion();
 });

@@ -17,3 +17,18 @@ export type SetupProvider = CredentialProvider & {
     secret: string,
   ) => Promise<void>;
 };
+
+type SetupEvent = {
+  type: 'setup-command';
+  code: string;
+  chatId: string;
+  title: string;
+  chatType: 'group' | 'supergroup';
+};
+export type ReceiveProvider = {
+  authenticate: (
+    request: { headers: Record<string, string | string[] | undefined> },
+    secret: string,
+  ) => boolean;
+  parse: (update: unknown) => SetupEvent | { type: 'ignore' };
+};

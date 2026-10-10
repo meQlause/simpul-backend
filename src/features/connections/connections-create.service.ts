@@ -13,6 +13,7 @@ export type ConnectionSetup = {
   now: () => Date;
   newId: () => string;
   newWebhookSecret: () => string;
+  newCode: () => string;
 };
 
 export async function createConnection(
