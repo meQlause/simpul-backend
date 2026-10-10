@@ -1,9 +1,10 @@
 import { z as schema } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../errors/domain-error.js';
-import type { SetupProvider, ReceiveProvider } from '../contract.js';
+import type { ActivationProvider, SetupProvider, ReceiveProvider } from '../contract.js';
+import { createCall } from './call.js';
+import { activationMethods } from './activation.js';
 
-const CALL_TIMEOUT_MS = 10000;
 const TOKEN_INVALID = 'E-TG-TOKEN-INVALID';
 const accountSchema = schema.object({
   ok: schema.literal(true),
@@ -28,40 +29,12 @@ const setupUpdate = schema.object({
   }),
 });
 
-function createCall(baseUrl: string, send: typeof fetch) {
-  return async (credential: string, method: string, body?: object) => {
-    try {
-      const response = await send(
-        `${baseUrl.replace(/\/$/u, '')}/bot${encodeURIComponent(credential)}/${method}`,
-        {
-          method: 'POST',
-          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-          redirect: 'error',
-          ...(body
-            ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-            : {}),
-        },
-      );
-      const data: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new DomainError(TOKEN_INVALID);
-      }
-      return data;
-    } catch (error) {
-      if (error instanceof DomainError) {
-        throw error;
-      }
-      throw new DomainError('E-TG-SETUP-TIMEOUT');
-    }
-  };
-}
-
 export function createTelegramProvider(
   baseUrl: string,
   send: typeof fetch = fetch,
-): SetupProvider & ReceiveProvider {
+): ActivationProvider & ReceiveProvider {
   const call = createCall(baseUrl, send);
-  return {
+  const setup: SetupProvider & ReceiveProvider = {
     authenticate(request, secret) {
       const supplied = request.headers['x-telegram-bot-api-secret-token'];
       return (
@@ -123,4 +96,5 @@ export function createTelegramProvider(
       }
     },
   };
+  return { ...setup, ...activationMethods(call, setup.verifyCredential) };
 }

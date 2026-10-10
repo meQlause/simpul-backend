@@ -18,6 +18,34 @@ export type SetupProvider = CredentialProvider & {
   ) => Promise<void>;
 };
 
+export type ReadinessCheck = {
+  key: string;
+  status: 'pass' | 'fail' | 'pending';
+  message: string;
+  action: string | null;
+};
+
+export type ConnectionRef = {
+  credential: string;
+  providerAccountId: string;
+  webhookUrl: string;
+};
+
+export type ActivationProvider = SetupProvider & {
+  describeChat: (
+    connection: ConnectionRef,
+    chatId: string,
+  ) => Promise<{
+    chatType: 'group' | 'supergroup';
+    title: string;
+  }>;
+  checkReadiness: (connection: ConnectionRef, chatId: string) => Promise<ReadinessCheck[]>;
+  send: (
+    connection: ConnectionRef,
+    message: { kind: 'indicator'; chatId: string; text: string },
+  ) => Promise<{ providerMessageId: string }>;
+};
+
 type SetupEvent = {
   type: 'setup-command';
   code: string;

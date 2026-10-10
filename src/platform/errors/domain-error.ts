@@ -1,4 +1,24 @@
 const errors = {
+  'E-TG-READINESS-INCOMPLETE': {
+    status: 422,
+    message: 'Complete the readiness checks before activating monitoring.',
+  },
+  'E-TG-VERIFICATION-EXPIRED': {
+    status: 409,
+    message: 'The setup changed or the check expired. Run the checks again.',
+  },
+  'E-TG-VERSION-CONFLICT': {
+    status: 409,
+    message: 'This configuration was changed. Reload before saving.',
+  },
+  'E-TG-ACTIVATION-FAILED': {
+    status: 502,
+    message: 'Monitoring could not be activated. Review the setup checks.',
+  },
+  'E-TG-GROUP-UNAVAILABLE': {
+    status: 422,
+    message: 'The group could not be accessed. Check the Chat ID and add the bot.',
+  },
   'E-TG-SESSION-EXPIRED': {
     status: 410,
     message: 'This connection code has expired. Generate a new code.',

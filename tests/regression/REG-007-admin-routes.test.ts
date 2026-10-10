@@ -27,6 +27,9 @@ const app = createApp('api', undefined, undefined, {
     newCode: () => randomUUID().replaceAll('-', ''),
   },
   telegram: {
+    checkReadiness: async () => [],
+    describeChat: async () => ({ chatType: 'supergroup', title: 'Test group' }),
+    send: async () => ({ providerMessageId: 'test-indicator' }),
     registerWebhook: async () => {},
     verifyCredential: async () => ({
       providerAccountId: 'test-bot',
@@ -47,6 +50,7 @@ let memberCookie: string;
 let personA: string;
 let connectionA: string;
 let sessionA: string;
+let channelA: string;
 let tables: string[];
 
 type Layer = {
@@ -82,6 +86,11 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'post /channels/:channelId/activate': {
+    verificationId: '00000000-0000-4000-8000-000000100099',
+    authorizationAck: true,
+    expectedConfigVersion: 1,
+  },
   'get /channels': {},
   'post /telegram/connections/:connectionId/sessions': { purpose: 'identify_group' },
   'get /telegram/connection-sessions/:sessionId': {},
@@ -102,12 +111,18 @@ const bodies: Record<string, object> = {
   'patch /people/:personId': { availability: 'leave' },
 };
 const statuses: Record<string, number> = {
+  'post /channels/:channelId/activate': 409,
   'post /telegram/connections/:connectionId/sessions': 201,
   'post /telegram/connections': 409,
   'post /channels': 201,
 };
 
 async function prepareRouteParameters() {
+  channelA = (
+    await pool.query('SELECT id FROM channels WHERE workspace_id = $1 ORDER BY id LIMIT 1', [
+      pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }).workspaceId,
+    ])
+  ).rows[0].id;
   connectionA = (
     await pool.query("SELECT id FROM bot_connections WHERE provider_account_id = '240000000'")
   ).rows[0].id;
@@ -163,7 +178,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA)}`;
+  const path = `/api/v1${route.path.replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
   if (route.method === 'get') {
     return agent.get(path);
@@ -244,7 +259,7 @@ test.each(routes.filter((route) => route.method !== 'get'))(
     expect(response.status).toBe(422);
     expect(response.body.error).toMatchObject({
       code:
-        route.path.startsWith('/telegram/') || route.path === '/channels'
+        route.path.startsWith('/telegram/') || route.path.startsWith('/channels')
           ? 'E-TG-INPUT-INVALID'
           : 'E-VALIDATION',
       details: [{ field: 'workspaceId', issue: 'unknown' }],

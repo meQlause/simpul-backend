@@ -2,12 +2,15 @@ import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { parseChannel } from './channels.schema.js';
 import { createChannel, listChannels } from './channels.service.js';
+import { activateChannel, type ActivationServices } from './activation.service.js';
+import { parseActivation } from './activation.schema.js';
 
 const CREATED = 201;
 
 export function channelsRouter(
   resolveConnection: ConnectionResolver,
   services: { newId: () => string; now: () => Date },
+  activation?: ActivationServices,
 ) {
   const router = Router();
   router.get('/channels', async (_request, response) => {
@@ -21,5 +24,16 @@ export function channelsRouter(
       .status(CREATED)
       .json({ data: await createChannel(resolveConnection, scope, input, services) });
   });
+  if (activation) {
+    router.post('/channels/:channelId/activate', async (request, response) => {
+      const scope = response.locals.scope as { workspaceId: string; actorId: string };
+      const input = parseActivation(
+        request.body,
+        request.params.channelId,
+        request.get('Idempotency-Key'),
+      );
+      response.json({ data: await activateChannel(resolveConnection, scope, input, activation) });
+    });
+  }
   return router;
 }

@@ -22,6 +22,9 @@ const account = {
 const provider = {
   verifyCredential: vi.fn(async (_credential: string) => account),
   registerWebhook: vi.fn(),
+  checkReadiness: vi.fn(async () => []),
+  describeChat: vi.fn(async () => ({ chatType: 'supergroup' as const, title: 'Test group' })),
+  send: vi.fn(async () => ({ providerMessageId: 'test-indicator' })),
 };
 let app: ReturnType<typeof createApp>;
 let cookie: string;

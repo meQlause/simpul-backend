@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../../../src/app.js';
-import { createAuthentication, provisionAdmin } from '../../../../src/features/auth/index.js';
+import { signInSeedAdmin } from '../../../helpers/admin-session.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { createConnectionLookup } from '../../../../src/platform/db/connection-lookup.js';
 import { createSecretStore } from '../../../../src/platform/secrets/index.js';
@@ -22,7 +22,9 @@ const provider = {
     privacyModeOk: true,
   })),
   registerWebhook: vi.fn(async () => {}),
-  send: vi.fn(async () => ({ messageId: 'test-indicator' })),
+  checkReadiness: vi.fn(async () => []),
+  describeChat: vi.fn(async () => ({ chatType: 'supergroup' as const, title: 'Test group' })),
+  send: vi.fn(async () => ({ providerMessageId: 'test-indicator' })),
 };
 let app: ReturnType<typeof createApp>;
 let cookie: string;
@@ -33,44 +35,17 @@ afterEach(() => {
   instant = new Date('2026-10-10T04:01:00Z');
 });
 
-async function signIn() {
-  const client = await pool.connect();
-  try {
-    await provisionAdmin(client, {
-      id: 'channels-admin',
-      name: 'Siti Aminah',
-      email: 'channels@pointstar.example',
-      token: 'channels-password-token',
-      now: new Date(),
-      expiresAt: new Date('2099-01-01T00:00:00Z'),
-    });
-    await client.query(
-      "UPDATE people SET auth_user_id = 'channels-admin' WHERE name = 'Siti Aminah'",
-    );
-  } finally {
-    client.release();
-  }
-  const authentication = createAuthentication(pool, {
-    baseUrl: 'https://simpul.example',
-    secret: 'test-only-auth-secret-with-more-than-32-characters',
-  });
-  await authentication.api.resetPassword({
-    body: { token: 'channels-password-token', newPassword: 'test-password-123' },
-  });
-  const login = await authentication.api.signInEmail({
-    body: { email: 'channels@pointstar.example', password: 'test-password-123' },
-    asResponse: true,
-  });
-  cookie = login.headers.get('set-cookie') ?? '';
-  return authentication;
-}
-
 beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   await pool.query('TRUNCATE bot_connections CASCADE');
+  const session = await signInSeedAdmin(pool, {
+    id: 'channels-admin',
+    email: 'channels@pointstar.example',
+  });
+  cookie = session.cookie;
   const services = {
-    authentication: await signIn(),
+    authentication: session.authentication,
     resolveConnection: createConnectionResolver(pool),
     telegram: provider,
     connectionSetup: {
