@@ -5,6 +5,7 @@ import { applyMigrations } from '../../../helpers/migrations.js';
 import { createApp } from '../../../../src/app.js';
 import { createAuthentication, provisionAdmin } from '../../../../src/features/auth/index.js';
 import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
+import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 
 const pool = databaseFixture();
 let auth: ReturnType<typeof createAuthentication>;
@@ -42,7 +43,10 @@ beforeAll(async () => {
     baseUrl: 'https://simpul.example',
     secret: 'test-only-auth-secret-with-more-than-32-characters',
   });
-  app = createApp('api', undefined, undefined, auth);
+  app = createApp('api', undefined, undefined, {
+    authentication: auth,
+    resolveConnection: createConnectionResolver(pool),
+  });
   await auth.api.resetPassword({
     body: { token: 'non-admin-password-token', newPassword: 'test-password-123' },
   });

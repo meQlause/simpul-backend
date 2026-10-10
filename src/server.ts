@@ -2,6 +2,7 @@ import { readConfig } from './platform/config/index.js';
 import { checkDatabase } from './platform/db/health.js';
 import { createLogger } from './platform/logger/index.js';
 import { createSystemPool } from './platform/db/index.js';
+import { createConnectionResolver } from './platform/db/connection-resolver.js';
 
 const config = readConfig(process.env);
 
@@ -14,18 +15,21 @@ if (process.argv[2] === 'create-workspace') {
 } else {
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
-  const authentication =
-    config.PROCESS_ROLE === 'api'
-      ? createAuthentication(createSystemPool(config.DATABASE_URL), {
+  const pool = config.PROCESS_ROLE === 'api' ? createSystemPool(config.DATABASE_URL) : undefined;
+  const services = pool
+    ? {
+        authentication: createAuthentication(pool, {
           baseUrl: config.PUBLIC_BASE_URL,
           secret: config.AUTH_SECRET,
-        })
-      : undefined;
+        }),
+        resolveConnection: createConnectionResolver(pool),
+      }
+    : undefined;
   const app = createApp(
     config.PROCESS_ROLE,
     () => checkDatabase(config.DATABASE_URL),
     createLogger(config.LOG_LEVEL),
-    authentication,
+    services,
   );
   app.listen(port);
 }

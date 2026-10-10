@@ -8,14 +8,22 @@ import { notFound } from './platform/http/not-found.js';
 import { requestId } from './platform/http/request-id.js';
 import { requestLogger } from './platform/http/request-logger.js';
 import { adminScope } from './platform/http/admin-scope.js';
+import type { ConnectionResolver } from './platform/db/connection-resolver.js';
+import { workspaceRouter } from './features/workspace/index.js';
 
-function mountApi(app: Express, authentication?: ReturnType<typeof createAuthentication>) {
-  if (authentication) {
-    app.all('/api/auth/*splat', toNodeHandler(authentication));
+type ApiServices = {
+  authentication: ReturnType<typeof createAuthentication>;
+  resolveConnection: ConnectionResolver;
+};
+
+function mountApi(app: Express, services?: ApiServices) {
+  if (services) {
+    app.all('/api/auth/*splat', toNodeHandler(services.authentication));
   }
   app.use(express.json());
-  if (authentication) {
-    app.use('/api/v1', adminScope(authentication.resolveAdmin));
+  if (services) {
+    app.use('/api/v1', adminScope(services.authentication.resolveAdmin));
+    app.use('/api/v1', workspaceRouter(services.resolveConnection));
   }
 }
 
@@ -23,7 +31,7 @@ export function createApp(
   role: string,
   checkDatabase?: () => Promise<unknown>,
   logger?: Logger,
-  authentication?: ReturnType<typeof createAuthentication>,
+  services?: ApiServices,
 ) {
   const app = express();
   app.disable('x-powered-by');
@@ -35,7 +43,7 @@ export function createApp(
     app.get('/health', health(checkDatabase));
   }
   if (role === 'api') {
-    mountApi(app, authentication);
+    mountApi(app, services);
   }
   app.use(notFound);
   app.use(errorHandler);

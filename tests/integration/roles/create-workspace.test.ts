@@ -30,7 +30,10 @@ async function verifySetPasswordLink(link: string) {
       headers: { 'content-type': 'application/json', origin: 'https://simpul.example' },
       body: JSON.stringify(payload),
     });
-  const app = createApp('api', undefined, undefined, auth);
+  const app = createApp('api', undefined, undefined, {
+    authentication: auth,
+    resolveConnection: createConnectionResolver(pool),
+  });
   const reset = () =>
     supertest(app)
       .post('/api/auth/reset-password')
