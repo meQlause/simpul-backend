@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from 'vitest';
 import supertest from 'supertest';
+import { randomUUID } from 'node:crypto';
 import { createApp } from '../../src/app.js';
 import { createAuthentication, provisionAdmin } from '../../src/features/auth/index.js';
 import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
@@ -17,7 +18,15 @@ const auth = createAuthentication(pool, {
 const app = createApp('api', undefined, undefined, {
   authentication: auth,
   resolveConnection: createConnectionResolver(pool),
+  connectionSetup: {
+    masterKey: Buffer.alloc(32, 7).toString('base64'),
+    publicBaseUrl: 'https://simpul.example',
+    now: () => new Date('2026-10-10T04:01:00Z'),
+    newId: randomUUID,
+    newWebhookSecret: () => Buffer.alloc(32, 8).toString('base64url'),
+  },
   telegram: {
+    registerWebhook: async () => {},
     verifyCredential: async () => ({
       providerAccountId: 'test-bot',
       botUsername: 'test_bot',
@@ -72,6 +81,7 @@ const mail = {
 const bodies: Record<string, object> = {
   'get /me': {},
   'post /telegram/connections/verify': { botToken: 'test-only-credential' },
+  'post /telegram/connections': { connectionName: 'My bot', botToken: 'test-only-credential' },
   'get /people': {},
   'get /settings': {},
   'get /settings/mail': {},
@@ -183,9 +193,10 @@ test.each(routes)('REG-007: $method $path as A reads or changes no row of B', as
   const before = await foreignSnapshot();
   const response = await request(route)
     .set('Cookie', adminCookie)
+    .set('Idempotency-Key', 'admin-route-isolation')
     .set('X-Workspace-ID', workspaceB)
     .send(bodies[`${route.method} ${route.path}`]);
-  expect(response.status).toBe(200);
+  expect(response.status).toBe(route.path === '/telegram/connections' ? 409 : 200);
   expect(JSON.stringify(response.body)).not.toContain(workspaceB);
   expect(JSON.stringify(response.body)).not.toContain('Test operator');
   expect(JSON.stringify(response.body)).not.toContain('test-only-password');

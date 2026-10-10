@@ -1,11 +1,14 @@
 import { beforeAll, expect, test, vi } from 'vitest';
 import request from 'supertest';
+import { randomUUID } from 'node:crypto';
 import { createApp } from '../../../../src/app.js';
 import { createAuthentication, provisionAdmin } from '../../../../src/features/auth/index.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
+import { seedTenantRows } from '../../../fixtures/tenant-rows.js';
+import { DomainError } from '../../../../src/platform/errors/domain-error.js';
 
 const pool = databaseFixture();
 const token = 'test-only-bot-token';
@@ -57,6 +60,13 @@ beforeAll(async () => {
     authentication,
     resolveConnection: createConnectionResolver(pool),
     telegram: provider,
+    connectionSetup: {
+      masterKey: Buffer.alloc(32, 7).toString('base64'),
+      publicBaseUrl: 'https://simpul.example',
+      now: () => new Date('2026-10-10T04:01:00Z'),
+      newId: randomUUID,
+      newWebhookSecret: () => Buffer.alloc(32, 8).toString('base64url'),
+    },
   };
   app = createApp('api', undefined, undefined, services);
 }, 120000);
@@ -125,3 +135,112 @@ test.each([{}, { botToken: ' ' }, { botToken: token, unexpected: true }])(
     expect(await snapshot()).toEqual(before);
   },
 );
+
+async function claimAsAppRole() {
+  await pool.query('CREATE ROLE test_app NOLOGIN NOSUPERUSER NOBYPASSRLS');
+  await pool.query('GRANT USAGE ON SCHEMA public TO test_app');
+  await pool.query(
+    'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO test_app',
+  );
+  await pool.query('GRANT EXECUTE ON FUNCTION workspace_for_session(text) TO test_app');
+  await pool.query('SET ROLE test_app');
+  try {
+    return await request(app)
+      .post('/api/v1/telegram/connections')
+      .set('Cookie', cookie)
+      .set('Idempotency-Key', 'duplicate-bot')
+      .send({ connectionName: 'My bot', botToken: token });
+  } finally {
+    await pool.query('RESET ROLE');
+  }
+}
+
+test('SRS T-21: a second workspace cannot claim the same bot or change its webhook', async () => {
+  const foreignWorkspace = '00000000-0000-4000-8000-000000100002';
+  await seedTenantRows(pool, foreignWorkspace);
+  provider.verifyCredential.mockResolvedValueOnce({
+    ...account,
+    providerAccountId: foreignWorkspace,
+  });
+  provider.registerWebhook.mockClear();
+  const before = await snapshot();
+  const response = await claimAsAppRole();
+  expect(response.status).toBe(409);
+  expect(response.body.error.code).toBe('E-TG-BOT-IN-USE');
+  expect(response.text).not.toContain(foreignWorkspace);
+  expect(provider.registerWebhook).not.toHaveBeenCalled();
+  expect(await snapshot()).toEqual(before);
+});
+
+async function expectSecretReferences(id: string, state: unknown) {
+  const stored = await pool.query(
+    'SELECT token_secret_ref, webhook_secret_ref FROM bot_connections WHERE id = $1',
+    [id],
+  );
+  expect(stored.rows[0].token_secret_ref).not.toBe(token);
+  expect(
+    (
+      await pool.query('SELECT id FROM secrets WHERE id = ANY($1::uuid[])', [
+        Object.values(stored.rows[0]),
+      ])
+    ).rowCount,
+  ).toBe(2);
+  expect(JSON.stringify(state)).not.toContain(token);
+  expect(JSON.stringify(state)).not.toContain(Buffer.alloc(32, 8).toString('base64url'));
+}
+
+test('SRS T-21: a foreign webhook conflict rolls back the connection and all secret writes', async () => {
+  provider.registerWebhook.mockRejectedValueOnce(new DomainError('E-TG-WEBHOOK-CONFLICT'));
+  const before = await snapshot();
+  const response = await request(app)
+    .post('/api/v1/telegram/connections')
+    .set('Cookie', cookie)
+    .set('Idempotency-Key', 'foreign-webhook')
+    .send({ connectionName: 'My bot', botToken: token });
+  expect(response.status).toBe(409);
+  expect(response.body.error.code).toBe('E-TG-WEBHOOK-CONFLICT');
+  expect(await snapshot()).toEqual(before);
+});
+
+test('Creating a connection stores encrypted references, audits safe metadata, and replays one webhook setup', async () => {
+  provider.registerWebhook.mockClear();
+  provider.verifyCredential.mockResolvedValueOnce({ ...account, privacyModeOk: false });
+  const create = (connectionName = 'My bot') =>
+    request(app)
+      .post('/api/v1/telegram/connections')
+      .set('Cookie', cookie)
+      .set('Idempotency-Key', 'successful-create')
+      .send({ connectionName, botToken: token });
+  const first = await create();
+  expect(first.status).toBe(201);
+  expect(first.body.data).toMatchObject({
+    provider: 'telegram',
+    status: 'needs_action',
+    credentialVersion: 1,
+    credentialsPresent: true,
+    groups: [],
+  });
+  const beforeReplay = await snapshot();
+  const replay = await create();
+  expect(replay.status).toBe(201);
+  expect(replay.body).toEqual(first.body);
+  expect(await snapshot()).toEqual(beforeReplay);
+  expect(provider.registerWebhook).toHaveBeenCalledExactlyOnceWith(
+    { credential: token },
+    `https://simpul.example/api/v1/webhooks/telegram/${first.body.data.id}`,
+    Buffer.alloc(32, 8).toString('base64url'),
+  );
+  await expectSecretReferences(first.body.data.id, beforeReplay);
+});
+
+test('A reused connection key with a changed payload returns an idempotency conflict', async () => {
+  const before = await snapshot();
+  const changed = await request(app)
+    .post('/api/v1/telegram/connections')
+    .set('Cookie', cookie)
+    .set('Idempotency-Key', 'successful-create')
+    .send({ connectionName: 'Changed bot name', botToken: token });
+  expect(changed.status).toBe(409);
+  expect(changed.body.error.code).toBe('E-TG-IDEMPOTENCY-CONFLICT');
+  expect(await snapshot()).toEqual(before);
+});

@@ -4,6 +4,13 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  bot_connections: zod
+    .object({
+      connectionName: zod.string(),
+      providerAccountId: zod.string(),
+      status: zod.string(),
+    })
+    .partial(),
   workspaces: zod
     .object({
       name: zod.string(),

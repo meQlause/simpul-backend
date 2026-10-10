@@ -1,4 +1,16 @@
 const errors = {
+  'E-TG-BOT-IN-USE': {
+    status: 409,
+    message: 'This bot is already assigned to another workspace.',
+  },
+  'E-TG-WEBHOOK-CONFLICT': {
+    status: 409,
+    message: 'This bot is connected to another application. Use a dedicated bot.',
+  },
+  'E-TG-IDEMPOTENCY-CONFLICT': {
+    status: 409,
+    message: 'Use a new request key for this changed operation.',
+  },
   'E-TG-INPUT-INVALID': { status: 422, message: 'Check the required fields.' },
   'E-TG-TOKEN-INVALID': {
     status: 422,

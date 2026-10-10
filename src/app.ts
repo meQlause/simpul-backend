@@ -13,14 +13,15 @@ import { workspaceRouter } from './features/workspace/index.js';
 import { peopleRouter } from './features/people/index.js';
 import { createSecretStore } from './platform/secrets/index.js';
 import { verifyMail } from './platform/mail/index.js';
-import { connectionsRouter } from './features/connections/index.js';
-import type { CredentialProvider } from './platform/providers/index.js';
+import { connectionsRouter, type ConnectionSetup } from './features/connections/index.js';
+import type { SetupProvider } from './platform/providers/index.js';
 
 type ApiServices = {
   authentication: ReturnType<typeof createAuthentication>;
   resolveConnection: ConnectionResolver;
   mail?: { masterKey: string; verifyMail?: typeof verifyMail; now: () => Date };
-  telegram?: CredentialProvider;
+  telegram?: SetupProvider;
+  connectionSetup?: Omit<ConnectionSetup, 'secretStore'> & { masterKey: string };
 };
 
 function mountApi(app: Express, services?: ApiServices) {
@@ -40,7 +41,13 @@ function mountApi(app: Express, services?: ApiServices) {
     app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
     app.use('/api/v1', peopleRouter(services.resolveConnection));
     if (services.telegram) {
-      app.use('/api/v1', connectionsRouter(services.resolveConnection, services.telegram));
+      const setup = services.connectionSetup
+        ? {
+            ...services.connectionSetup,
+            secretStore: createSecretStore(services.connectionSetup.masterKey),
+          }
+        : undefined;
+      app.use('/api/v1', connectionsRouter(services.resolveConnection, services.telegram, setup));
     }
   }
 }

@@ -9,3 +9,11 @@ type VerifiedAccount = {
 export type CredentialProvider = {
   verifyCredential: (credential: string) => Promise<VerifiedAccount>;
 };
+
+export type SetupProvider = CredentialProvider & {
+  registerWebhook: (
+    connection: { credential: string },
+    url: string,
+    secret: string,
+  ) => Promise<void>;
+};
