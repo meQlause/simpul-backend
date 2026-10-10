@@ -5,7 +5,10 @@ import { createApp } from '../../src/app.js';
 import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
 import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
-import { createTelegramProvider } from '../../src/platform/providers/index.js';
+import {
+  createTelegramProvider,
+  type ActivationProvider,
+} from '../../src/platform/providers/index.js';
 import { databaseFixture } from './database.js';
 import { applyMigrations } from './migrations.js';
 import { signInSeedAdmin } from './admin-session.js';
@@ -31,7 +34,7 @@ export const provider = {
   registerWebhook: vi.fn(async () => {}),
   checkReadiness: vi.fn(async () => checks),
   describeChat: async () => ({ chatType: 'supergroup' as const, title: 'Test group' }),
-  send: vi.fn(async () => ({ providerMessageId: 'test-indicator' })),
+  send: vi.fn<ActivationProvider['send']>(async () => ({ providerMessageId: 'test-indicator' })),
 };
 export let app: ReturnType<typeof createApp>;
 export let webhookApp: ReturnType<typeof createApp>;

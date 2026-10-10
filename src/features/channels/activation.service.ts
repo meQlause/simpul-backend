@@ -23,12 +23,22 @@ async function postIndicator(
   chatId: string,
 ) {
   try {
-    return await provider.send(connection, {
+    const result = await provider.send(connection, {
       kind: 'indicator',
       chatId,
       text: 'Simpul monitoring is active',
     });
-  } catch {
+    if ('retryAfter' in result) {
+      throw new DomainError('E-TG-RATE-LIMITED', undefined, result.retryAfter);
+    }
+    return result;
+  } catch (error) {
+    if (
+      error instanceof DomainError &&
+      ['E-TG-SETUP-TIMEOUT', 'E-TG-RATE-LIMITED'].includes(error.code)
+    ) {
+      throw error;
+    }
     throw new DomainError('E-TG-ACTIVATION-FAILED');
   }
 }

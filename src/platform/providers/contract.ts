@@ -43,7 +43,7 @@ export type ActivationProvider = SetupProvider & {
   send: (
     connection: ConnectionRef,
     message: { kind: 'indicator'; chatId: string; text: string },
-  ) => Promise<{ providerMessageId: string }>;
+  ) => Promise<{ providerMessageId: string } | { retryAfter: number }>;
 };
 
 type SetupEvent = {

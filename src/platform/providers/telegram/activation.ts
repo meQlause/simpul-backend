@@ -93,6 +93,39 @@ async function checkReadiness(
   ];
 }
 
+async function sendMessage(
+  call: Call,
+  connection: ConnectionRef,
+  message: Parameters<ActivationProvider['send']>[1],
+): ReturnType<ActivationProvider['send']> {
+  try {
+    const result = schema
+      .object({
+        ok: schema.literal(true),
+        result: schema.object({ message_id: schema.number().int().safe() }),
+      })
+      .safeParse(
+        await call(connection.credential, 'sendMessage', {
+          chat_id: message.chatId,
+          text: message.text,
+        }),
+      );
+    if (!result.success) {
+      throw new DomainError('E-TG-ACTIVATION-FAILED');
+    }
+    return { providerMessageId: String(result.data.result.message_id) };
+  } catch (error) {
+    if (
+      error instanceof DomainError &&
+      error.code === 'E-TG-RATE-LIMITED' &&
+      error.retryAfter !== undefined
+    ) {
+      return { retryAfter: error.retryAfter };
+    }
+    throw error;
+  }
+}
+
 export function activationMethods(
   call: Call,
   verify: ActivationProvider['verifyCredential'],
@@ -100,22 +133,6 @@ export function activationMethods(
   return {
     describeChat: (connection, chatId) => describeChat(call, connection, chatId),
     checkReadiness: (connection, chatId) => checkReadiness(call, verify, connection, chatId),
-    async send(connection, message) {
-      const result = schema
-        .object({
-          ok: schema.literal(true),
-          result: schema.object({ message_id: schema.number().int().safe() }),
-        })
-        .safeParse(
-          await call(connection.credential, 'sendMessage', {
-            chat_id: message.chatId,
-            text: message.text,
-          }),
-        );
-      if (!result.success) {
-        throw new DomainError('E-TG-ACTIVATION-FAILED');
-      }
-      return { providerMessageId: String(result.data.result.message_id) };
-    },
+    send: (connection, message) => sendMessage(call, connection, message),
   };
 }

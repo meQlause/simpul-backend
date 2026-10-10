@@ -1,4 +1,8 @@
 const errors = {
+  'E-TG-RATE-LIMITED': {
+    status: 429,
+    message: 'Telegram is busy. Try again after the indicated wait.',
+  },
   'E-TG-CREDENTIAL-BOT-MISMATCH': {
     status: 422,
     message: 'This token belongs to a different bot.',
@@ -83,6 +87,7 @@ export class DomainError extends Error {
       issue: 'invalid' | 'unknown' | 'required';
       message?: string;
     }[],
+    readonly retryAfter?: number,
   ) {
     super(errors[code].message);
     this.name = 'DomainError';
