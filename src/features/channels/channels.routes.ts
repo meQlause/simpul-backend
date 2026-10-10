@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { parseChannel } from './channels.schema.js';
-import { createChannel } from './channels.service.js';
+import { createChannel, listChannels } from './channels.service.js';
 
 const CREATED = 201;
 
@@ -10,6 +10,10 @@ export function channelsRouter(
   services: { newId: () => string; now: () => Date },
 ) {
   const router = Router();
+  router.get('/channels', async (_request, response) => {
+    const { workspaceId } = response.locals.scope as { workspaceId: string };
+    response.json({ data: await listChannels(resolveConnection, workspaceId) });
+  });
   router.post('/channels', async (request, response) => {
     const scope = response.locals.scope as { workspaceId: string; actorId: string };
     const input = parseChannel(request.body);

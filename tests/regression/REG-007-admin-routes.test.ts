@@ -82,6 +82,7 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'get /channels': {},
   'post /telegram/connections/:connectionId/sessions': { purpose: 'identify_group' },
   'get /telegram/connection-sessions/:sessionId': {},
   'get /telegram/connections': {},

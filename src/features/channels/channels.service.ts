@@ -2,10 +2,14 @@ import type { ConnectionResolver } from '../../platform/db/connection-resolver.j
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
-import { insertDraft } from './channels.repository.js';
+import { insertDraft, selectChannels } from './channels.repository.js';
 import type { parseChannel } from './channels.schema.js';
 import { consumeCandidate } from '../connections/index.js';
 import type { PoolClient } from 'pg';
+
+export async function listChannels(resolveConnection: ConnectionResolver, workspaceId: string) {
+  return scopedTransaction(resolveConnection, workspaceId, (tx) => selectChannels(tx, workspaceId));
+}
 
 async function resolveDraft(
   tx: PoolClient,

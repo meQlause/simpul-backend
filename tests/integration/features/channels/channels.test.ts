@@ -22,6 +22,7 @@ const provider = {
     privacyModeOk: true,
   })),
   registerWebhook: vi.fn(async () => {}),
+  send: vi.fn(async () => ({ messageId: 'test-indicator' })),
 };
 let app: ReturnType<typeof createApp>;
 let cookie: string;
@@ -330,3 +331,45 @@ test.each(['42', '+42'])(
     await expectNoIngestion();
   },
 );
+
+test('SRS T-17: a saved draft reopens with monitored false, no indicator and no sent message', async () => {
+  const connectionId = await connectBot();
+  const beforeCalls = [
+    provider.verifyCredential.mock.calls.length,
+    provider.registerWebhook.mock.calls.length,
+  ];
+  const saved = await request(app).post('/api/v1/channels').set('Cookie', cookie).send({
+    botConnectionId: connectionId,
+    providerChatId: '-54340',
+    displayName: 'Saved draft',
+    class: 'internal',
+    primaryLanguage: 'id',
+  });
+  expect(saved.status).toBe(201);
+  expect(saved.body.data).toMatchObject({
+    monitored: false,
+    connectionStatus: 'draft',
+    lastVerification: null,
+    monitoringStartedAt: null,
+  });
+  const stored = await pool.query(
+    'SELECT monitored, visible_indicator_message_id, monitoring_started_at FROM channels WHERE id = $1',
+    [saved.body.data.id],
+  );
+  expect(stored.rows[0]).toEqual({
+    monitored: false,
+    visible_indicator_message_id: null,
+    monitoring_started_at: null,
+  });
+  const reopened = await request(app).get('/api/v1/channels').set('Cookie', cookie);
+  expect(reopened.status).toBe(200);
+  expect(
+    reopened.body.data.find((channel: { id: string }) => channel.id === saved.body.data.id),
+  ).toEqual(saved.body.data);
+  expect([
+    provider.verifyCredential.mock.calls.length,
+    provider.registerWebhook.mock.calls.length,
+  ]).toEqual(beforeCalls);
+  expect(provider.send).not.toHaveBeenCalled();
+  await expectNoIngestion();
+});
