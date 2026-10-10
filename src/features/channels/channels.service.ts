@@ -1,3 +1,4 @@
+import { checksPass } from './activation.rules.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -5,6 +6,7 @@ import { recordConfigChange } from '../audit/index.js';
 import {
   insertDraft,
   selectChannels,
+  selectLatestVerification,
   setConnectionNeedsAction,
   selectChannelState,
   storePause,
@@ -13,6 +15,8 @@ import type { parseChannel, parsePause } from './channels.schema.js';
 import { consumeCandidate } from '../connections/index.js';
 import type { PoolClient } from 'pg';
 import { cancelChannelNotifications } from '../delivery/index.js';
+
+const NOT_FOUND = 'E-NOT-FOUND';
 
 export async function pauseChannel(
   resolveConnection: ConnectionResolver,
@@ -23,7 +27,7 @@ export async function pauseChannel(
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     const before = await selectChannelState(tx, scope.workspaceId, input.channelId);
     if (!before) {
-      throw new DomainError('E-NOT-FOUND');
+      throw new DomainError(NOT_FOUND);
     }
     if (before.configVersion !== input.expectedConfigVersion) {
       throw new DomainError('E-TG-VERSION-CONFLICT');
@@ -107,7 +111,7 @@ export async function createChannel(
       providerChatId: draft.providerChatId,
     });
     if (!row) {
-      throw new DomainError('E-NOT-FOUND');
+      throw new DomainError(NOT_FOUND);
     }
     await recordConfigChange(tx, {
       ...scope,
@@ -131,5 +135,31 @@ export async function createChannel(
       monitoringStartedAt: null,
       configVersion: 1,
     };
+  });
+}
+
+export async function getChannel(
+  resolveConnection: ConnectionResolver,
+  workspaceId: string,
+  channelId: string,
+) {
+  return scopedTransaction(resolveConnection, workspaceId, async (tx) => {
+    const channel = (await selectChannels(tx, workspaceId)).find(
+      (row: { id: string }) => row.id === channelId,
+    );
+    if (!channel) {
+      throw new DomainError(NOT_FOUND);
+    }
+    const check = await selectLatestVerification(tx, workspaceId, channelId);
+    const verification = check
+      ? {
+          id: check.id,
+          checkedAt: check.checkedAt,
+          expiresAt: check.expiresAt,
+          checks: check.checks,
+          activationReady: check.versionsMatch && checksPass(check.checks),
+        }
+      : null;
+    return { ...channel, verification };
   });
 }

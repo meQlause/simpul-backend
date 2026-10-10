@@ -97,6 +97,7 @@ const bodies: Record<string, object> = {
     expectedConfigVersion: 1,
   },
   'get /channels': {},
+  'get /channels/:channelId': {},
   'post /telegram/connections/:connectionId/sessions': { purpose: 'identify_group' },
   'get /telegram/connection-sessions/:sessionId': {},
   'get /telegram/connections': {},

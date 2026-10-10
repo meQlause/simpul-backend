@@ -348,3 +348,67 @@ test('SRS T-17: a saved draft reopens with monitored false, no indicator and no 
   expect(provider.send).not.toHaveBeenCalled();
   await expectNoIngestion();
 });
+
+test('Channels API section 2: GET returns the saved channel and its full latest check', async () => {
+  const connectionId = await connectBot();
+  const saved = await request(app).post('/api/v1/channels').set('Cookie', cookie).send({
+    botConnectionId: connectionId,
+    providerChatId: '-54600',
+    displayName: 'Detail group',
+  });
+  expect(saved.status).toBe(201);
+  const response = await request(app)
+    .get('/api/v1/channels/' + saved.body.data.id)
+    .set('Cookie', cookie);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual({ ...saved.body.data, verification: null });
+  const missing = await request(app)
+    .get('/api/v1/channels/' + randomUUID())
+    .set('Cookie', cookie);
+  expect(missing.status).toBe(404);
+  expect(missing.body.error.code).toBe('E-NOT-FOUND');
+});
+
+test('Channels API section 2: full latest verification carries only current readiness', async () => {
+  const connectionId = await connectBot();
+  const saved = await request(app).post('/api/v1/channels').set('Cookie', cookie).send({
+    botConnectionId: connectionId,
+    providerChatId: '-54601',
+    displayName: 'Verified detail group',
+  });
+  const checks = ['bot_identity', 'group', 'membership', 'privacy_mode', 'webhook', 'inbound'].map(
+    (key) => ({
+      key,
+      status: 'pass',
+      message: 'Provider check passed',
+      action: null,
+    }),
+  );
+  let latestId = '';
+  for (const checkedAt of ['2026-10-10T03:59:00Z', '2026-10-10T04:00:00Z']) {
+    const inserted = await pool.query(
+      `INSERT INTO channel_verifications (workspace_id, channel_id, bot_connection_id, config_version, credential_version, checks, status, checked_at, expires_at)
+       SELECT channel.workspace_id, channel.id, connection.id, channel.config_version, connection.credential_version, $2, 'pass', $3, $3::timestamptz + interval '10 minutes'
+       FROM channels AS channel JOIN bot_connections AS connection ON connection.id = channel.bot_connection_id
+       WHERE channel.id = $1 RETURNING id`,
+      [saved.body.data.id, JSON.stringify(checks), checkedAt],
+    );
+    latestId = inserted.rows[0].id;
+  }
+  const detail = () =>
+    request(app)
+      .get('/api/v1/channels/' + saved.body.data.id)
+      .set('Cookie', cookie);
+  expect((await detail()).body.data.verification).toEqual({
+    id: latestId,
+    checks,
+    checkedAt: '2026-10-10T04:00:00.000Z',
+    expiresAt: '2026-10-10T04:10:00.000Z',
+    activationReady: true,
+  });
+  await pool.query('UPDATE channels SET config_version = config_version + 1 WHERE id = $1', [
+    saved.body.data.id,
+  ]);
+  expect((await detail()).body.data.verification.activationReady).toBe(false);
+  expect((await request(app).get('/api/v1/channels/' + saved.body.data.id)).status).toBe(401);
+});

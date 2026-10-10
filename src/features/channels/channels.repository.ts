@@ -1,3 +1,4 @@
+import type { ReadinessCheck } from '../../platform/providers/index.js';
 import type { PoolClient } from 'pg';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { parseChannel } from './channels.schema.js';
@@ -99,4 +100,30 @@ export async function insertDraft(
     }
     throw error;
   }
+}
+
+export async function selectLatestVerification(
+  tx: PoolClient,
+  workspaceId: string,
+  channelId: string,
+) {
+  const result = await tx.query<{
+    id: string;
+    checkedAt: Date;
+    expiresAt: Date;
+    checks: ReadinessCheck[];
+    versionsMatch: boolean;
+  }>(
+    `SELECT verification.id, verification.checked_at AS "checkedAt", verification.expires_at AS "expiresAt",
+     verification.checks, (verification.status = 'pass' AND verification.config_version = channel.config_version
+       AND verification.credential_version = connection.credential_version) AS "versionsMatch"
+     FROM channel_verifications AS verification JOIN channels AS channel
+       ON channel.id = verification.channel_id AND channel.workspace_id = verification.workspace_id
+     JOIN bot_connections AS connection ON connection.id = channel.bot_connection_id
+       AND connection.workspace_id = channel.workspace_id
+     WHERE channel.workspace_id = $1 AND channel.id = $2
+     ORDER BY verification.checked_at DESC, verification.id DESC LIMIT 1`,
+    [workspaceId, channelId],
+  );
+  return result.rows[0];
 }

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import { parseChannel, parsePause } from './channels.schema.js';
-import { createChannel, listChannels, pauseChannel } from './channels.service.js';
+import { parseChannel, parsePause, parseChannelId } from './channels.schema.js';
+import { createChannel, listChannels, pauseChannel, getChannel } from './channels.service.js';
 import { activateChannel, type ActivationServices } from './activation.service.js';
 import { parseActivation } from './activation.schema.js';
 
@@ -13,6 +13,11 @@ export function channelsRouter(
   activation?: ActivationServices,
 ) {
   const router = Router();
+  router.get('/channels/:channelId', async (request, response) => {
+    const { workspaceId } = response.locals.scope as { workspaceId: string };
+    const channelId = parseChannelId(request.params.channelId);
+    response.json({ data: await getChannel(resolveConnection, workspaceId, channelId) });
+  });
   router.post('/channels/:channelId/pause', async (request, response) => {
     const scope = response.locals.scope as { workspaceId: string; actorId: string };
     const input = parsePause(request.body, request.params.channelId);
