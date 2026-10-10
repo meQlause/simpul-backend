@@ -1,11 +1,20 @@
 import { z as schema } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../errors/domain-error.js';
-import type { ActivationProvider, SetupProvider, ReceiveProvider } from '../contract.js';
+import type { ProviderAdapter, SetupProvider, ReceiveProvider } from '../contract.js';
 import { createCall } from './call.js';
 import { activationMethods } from './activation.js';
 
 const TOKEN_INVALID = 'E-TG-TOKEN-INVALID';
+const capabilities = {
+  replyTo: true,
+  edits: true,
+  deletions: false,
+  inlineActions: true,
+  topics: true,
+  mediaGroups: true,
+  voiceNotes: true,
+};
 const accountSchema = schema.object({
   ok: schema.literal(true),
   result: schema.object({
@@ -29,10 +38,25 @@ const setupUpdate = schema.object({
   }),
 });
 
+async function verifyCredential(call: ReturnType<typeof createCall>, credential: string) {
+  const parsed = accountSchema.safeParse(await call(credential, 'getMe'));
+  if (!parsed.success) {
+    throw new DomainError(TOKEN_INVALID);
+  }
+  const account = parsed.data.result;
+  return {
+    providerAccountId: String(account.id),
+    botUsername: account.username,
+    botName: account.first_name,
+    canJoinGroups: account.can_join_groups === true,
+    privacyModeOk: account.can_read_all_group_messages === true,
+  };
+}
+
 export function createTelegramProvider(
   baseUrl: string,
   send: typeof fetch = fetch,
-): ActivationProvider & ReceiveProvider {
+): ProviderAdapter {
   const call = createCall(baseUrl, send);
   const setup: SetupProvider & ReceiveProvider = {
     authenticate(request, secret) {
@@ -59,20 +83,7 @@ export function createTelegramProvider(
         chatType: message.chat.type,
       };
     },
-    async verifyCredential(credential) {
-      const parsed = accountSchema.safeParse(await call(credential, 'getMe'));
-      if (!parsed.success) {
-        throw new DomainError(TOKEN_INVALID);
-      }
-      const account = parsed.data.result;
-      return {
-        providerAccountId: String(account.id),
-        botUsername: account.username,
-        botName: account.first_name,
-        canJoinGroups: account.can_join_groups === true,
-        privacyModeOk: account.can_read_all_group_messages === true,
-      };
-    },
+    verifyCredential: (credential) => verifyCredential(call, credential),
     async registerWebhook(connection, url, secret) {
       const info = schema
         .object({ ok: schema.literal(true), result: schema.object({ url: schema.string() }) })
@@ -96,5 +107,11 @@ export function createTelegramProvider(
       }
     },
   };
-  return { ...setup, ...activationMethods(call, setup.verifyCredential) };
+  return {
+    provider: 'telegram',
+    capabilities,
+    limits: { callTimeoutMs: 10000, sendPerSecond: 30, sendPerChatPerMinute: 20 },
+    ...setup,
+    ...activationMethods(call, setup.verifyCredential),
+  };
 }

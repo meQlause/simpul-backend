@@ -93,6 +93,25 @@ async function checkReadiness(
   ];
 }
 
+function outboundBody(message: Parameters<ActivationProvider['send']>[1]) {
+  return {
+    chat_id: message.chatId,
+    text: message.text,
+    ...(message.actions?.length
+      ? {
+          reply_markup: {
+            inline_keyboard: message.actions.map((action) => [
+              { text: action.label, callback_data: action.id },
+            ]),
+          },
+        }
+      : {}),
+    ...(message.replyToMessageId === undefined
+      ? {}
+      : { reply_parameters: { message_id: Number(message.replyToMessageId) } }),
+  };
+}
+
 async function sendMessage(
   call: Call,
   connection: ConnectionRef,
@@ -104,12 +123,7 @@ async function sendMessage(
         ok: schema.literal(true),
         result: schema.object({ message_id: schema.number().int().safe() }),
       })
-      .safeParse(
-        await call(connection.credential, 'sendMessage', {
-          chat_id: message.chatId,
-          text: message.text,
-        }),
-      );
+      .safeParse(await call(connection.credential, 'sendMessage', outboundBody(message)));
     if (!result.success) {
       throw new DomainError('E-TG-ACTIVATION-FAILED');
     }

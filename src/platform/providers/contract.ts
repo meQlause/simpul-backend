@@ -31,6 +31,32 @@ export type ConnectionRef = {
   webhookUrl: string;
 };
 
+export type Capabilities = {
+  replyTo: boolean;
+  edits: boolean;
+  deletions: boolean;
+  inlineActions: boolean;
+  topics: boolean;
+  mediaGroups: boolean;
+  voiceNotes: boolean;
+};
+
+export type Limits = {
+  callTimeoutMs: number;
+  sendPerSecond: number;
+  sendPerChatPerMinute: number;
+};
+
+export type OutboundMessage = {
+  kind: 'notification' | 'question' | 'correction' | 'indicator' | 'notice';
+  chatId: string;
+  text: string;
+  actions?: { id: string; label: string }[];
+  replyToMessageId?: string;
+};
+
+export type SendResult = { providerMessageId: string } | { retryAfter: number };
+
 export type ActivationProvider = SetupProvider & {
   describeChat: (
     connection: ConnectionRef,
@@ -40,10 +66,7 @@ export type ActivationProvider = SetupProvider & {
     title: string;
   }>;
   checkReadiness: (connection: ConnectionRef, chatId: string) => Promise<ReadinessCheck[]>;
-  send: (
-    connection: ConnectionRef,
-    message: { kind: 'indicator'; chatId: string; text: string },
-  ) => Promise<{ providerMessageId: string } | { retryAfter: number }>;
+  send: (connection: ConnectionRef, message: OutboundMessage) => Promise<SendResult>;
 };
 
 type SetupEvent = {
@@ -60,3 +83,10 @@ export type ReceiveProvider = {
   ) => boolean;
   parse: (update: unknown) => SetupEvent | { type: 'ignore' };
 };
+
+export type ProviderAdapter = ActivationProvider &
+  ReceiveProvider & {
+    readonly provider: string;
+    readonly capabilities: Readonly<Capabilities>;
+    readonly limits: Readonly<Limits>;
+  };
