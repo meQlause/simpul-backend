@@ -31,3 +31,22 @@ test('An edit is a new row, never an update; retention can delete the new raw ro
     (await pool.query('DELETE FROM messages_raw WHERE id = $1', [result.rows[0].id])).rowCount,
   ).toBe(1);
 });
+
+test('A label with empty evidence_message_ids cannot be inserted', async () => {
+  await expect(
+    pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, type, tense, evidence_message_ids, confidence, vocab_version)
+    VALUES ($1, $1, 'progress', 'sudah_terjadi', '{}', 1, 1)`,
+      [workspaceId],
+    ),
+  ).rejects.toMatchObject({ code: '23514', constraint: 'labels_evidence_required' });
+});
+
+test('A label with a source message in evidence_message_ids can be inserted', async () => {
+  const result = await pool.query(
+    `INSERT INTO labels (workspace_id, unit_id, type, tense, evidence_message_ids, confidence, vocab_version)
+    VALUES ($1, $1, 'progress', 'sudah_terjadi', ARRAY[$1::uuid], 1, 1) RETURNING evidence_message_ids`,
+    [workspaceId],
+  );
+  expect(result.rows).toEqual([{ evidence_message_ids: [workspaceId] }]);
+});
