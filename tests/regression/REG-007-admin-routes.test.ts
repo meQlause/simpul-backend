@@ -17,6 +17,15 @@ const auth = createAuthentication(pool, {
 const app = createApp('api', undefined, undefined, {
   authentication: auth,
   resolveConnection: createConnectionResolver(pool),
+  telegram: {
+    verifyCredential: async () => ({
+      providerAccountId: 'test-bot',
+      botUsername: 'test_bot',
+      botName: 'Test bot',
+      canJoinGroups: true,
+      privacyModeOk: true,
+    }),
+  },
   mail: {
     masterKey: Buffer.alloc(32, 7).toString('base64'),
     verifyMail: async () => {},
@@ -62,6 +71,7 @@ const mail = {
 };
 const bodies: Record<string, object> = {
   'get /me': {},
+  'post /telegram/connections/verify': { botToken: 'test-only-credential' },
   'get /people': {},
   'get /settings': {},
   'get /settings/mail': {},
@@ -122,6 +132,9 @@ function request(route: Route, personId = personA) {
   }
   if (route.method === 'patch') {
     return agent.patch(path);
+  }
+  if (route.method === 'post') {
+    return agent.post(path);
   }
   throw new Error(`Add a valid request for ${route.method} ${route.path}`);
 }
@@ -188,7 +201,7 @@ test.each(routes.filter((route) => route.method !== 'get'))(
       .send({ ...bodies[`${route.method} ${route.path}`], workspaceId: workspaceB });
     expect(response.status).toBe(422);
     expect(response.body.error).toMatchObject({
-      code: 'E-VALIDATION',
+      code: route.path.startsWith('/telegram/') ? 'E-TG-INPUT-INVALID' : 'E-VALIDATION',
       details: [{ field: 'workspaceId', issue: 'unknown' }],
     });
     expect(await foreignSnapshot()).toEqual(before);

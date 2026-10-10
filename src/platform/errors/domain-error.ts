@@ -1,4 +1,13 @@
 const errors = {
+  'E-TG-INPUT-INVALID': { status: 422, message: 'Check the required fields.' },
+  'E-TG-TOKEN-INVALID': {
+    status: 422,
+    message: 'The bot token could not be verified. Check it in BotFather.',
+  },
+  'E-TG-SETUP-TIMEOUT': {
+    status: 504,
+    message: 'Telegram did not respond in time. Your group is not active.',
+  },
   'E-MAIL-CONNECTION-FAILED': {
     status: 422,
     message: 'The mail server could not be reached with these details. Nothing was saved.',

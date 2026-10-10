@@ -3,6 +3,7 @@ import { checkDatabase } from './platform/db/health.js';
 import { createLogger } from './platform/logger/index.js';
 import { createSystemPool } from './platform/db/index.js';
 import { createConnectionResolver } from './platform/db/connection-resolver.js';
+import { createTelegramProvider } from './platform/providers/index.js';
 
 const config = readConfig(process.env);
 
@@ -24,6 +25,7 @@ if (process.argv[2] === 'create-workspace') {
         }),
         resolveConnection: createConnectionResolver(pool),
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
+        telegram: createTelegramProvider(config.TELEGRAM_API_BASE),
       }
     : undefined;
   const app = createApp(
