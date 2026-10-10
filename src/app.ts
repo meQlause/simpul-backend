@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import type { createAuthentication } from './features/auth/index.js';
 import type { Logger } from 'pino';
@@ -7,6 +7,17 @@ import { health } from './platform/http/health.js';
 import { notFound } from './platform/http/not-found.js';
 import { requestId } from './platform/http/request-id.js';
 import { requestLogger } from './platform/http/request-logger.js';
+import { adminScope } from './platform/http/admin-scope.js';
+
+function mountApi(app: Express, authentication?: ReturnType<typeof createAuthentication>) {
+  if (authentication) {
+    app.all('/api/auth/*splat', toNodeHandler(authentication));
+  }
+  app.use(express.json());
+  if (authentication) {
+    app.use('/api/v1', adminScope(authentication.resolveAdmin));
+  }
+}
 
 export function createApp(
   role: string,
@@ -24,10 +35,7 @@ export function createApp(
     app.get('/health', health(checkDatabase));
   }
   if (role === 'api') {
-    if (authentication) {
-      app.all('/api/auth/*splat', toNodeHandler(authentication));
-    }
-    app.use(express.json());
+    mountApi(app, authentication);
   }
   app.use(notFound);
   app.use(errorHandler);

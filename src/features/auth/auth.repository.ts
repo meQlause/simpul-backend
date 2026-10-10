@@ -1,4 +1,4 @@
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 
 type InitialAccount = {
   id: string;
@@ -26,4 +26,22 @@ export async function insertInitialAccount(tx: PoolClient, account: InitialAccou
     VALUES ($1, $2, $3, $4, $5, $5)`,
     [account.token, `reset-password:${account.token}`, account.id, account.expiresAt, account.now],
   );
+}
+
+export async function findSessionPerson(pool: Pool, userId: string) {
+  const result = await pool.query<{
+    workspace_id: string;
+    person_id: string | null;
+  }>('SELECT * FROM workspace_for_session($1)', [userId]);
+  return result.rows[0];
+}
+
+export async function isWorkspaceAdmin(tx: PoolClient, actorId: string) {
+  const result = await tx.query(
+    `SELECT 1 FROM workspaces AS workspace JOIN people AS person
+    ON person.id = workspace.admin_person_id AND person.workspace_id = workspace.id
+    WHERE person.id = $1 AND person.active`,
+    [actorId],
+  );
+  return result.rowCount === 1;
 }

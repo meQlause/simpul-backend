@@ -1,4 +1,6 @@
 const errors = {
+  'E-AUTH-REQUIRED': { status: 401, message: 'Your session has ended. Sign in to continue.' },
+  'E-FORBIDDEN': { status: 403, message: 'Only workspace admins can open this panel.' },
   'E-NOT-FOUND': { status: 404, message: 'This page is unavailable. Return to Home to continue.' },
   'E-INTERNAL': {
     status: 500,
