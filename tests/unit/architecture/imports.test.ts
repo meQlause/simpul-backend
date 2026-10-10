@@ -56,6 +56,21 @@ test.each([
     "import { adapter } from '../other/index.js';",
   ],
   [
+    'I-9',
+    'src/features/connections/connections.service.ts',
+    "import type { ProviderAdapter } from '../../platform/providers/contract.js';",
+  ],
+  [
+    'I-9',
+    'src/features/connections/connections.service.ts',
+    "const provider = import('../../platform/providers/telegram/index.js');",
+  ],
+  [
+    'I-10',
+    'src/platform/providers/fake/receive/message.ts',
+    "const feature = import('../../../../features/channels/index.js');",
+  ],
+  [
     'I-11',
     'src/features/work/work.repository.ts',
     "import { Pool as PgPool } from 'pg'; new PgPool();",
@@ -66,6 +81,14 @@ test.each([
 });
 
 test.each([
+  [
+    'src/features/connections/connections.service.ts',
+    "import type { ProviderAdapter } from '../../platform/providers/index.js';",
+  ],
+  [
+    'src/platform/providers/telegram/setup.ts',
+    "import type { ProviderAdapter } from '../contract.js';",
+  ],
   ['src/features/work/work.service.ts', "import { service } from '../people/index.js';"],
   ['src/features/triage/triage.service.ts', "import { model } from '../../platform/llm/index.js';"],
   ['src/features/work/work.repository.ts', "import { eq } from 'drizzle-orm';"],
