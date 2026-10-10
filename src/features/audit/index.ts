@@ -1,1 +1,1 @@
-export { recordAudit } from './audit.service.js';
+export { recordConfigChange } from './audit.service.js';

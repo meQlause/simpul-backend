@@ -3,7 +3,7 @@ import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
 import type { verifyMail } from '../../platform/mail/index.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import { recordAudit } from '../audit/index.js';
+import { recordConfigChange } from '../audit/index.js';
 import {
   selectMail,
   saveMailRow,
@@ -67,7 +67,7 @@ export async function saveMail(
           });
     await saveMailRow(tx, scope.workspaceId, { ...input, secretRef, verifiedAt: services.now() });
     const after = await selectMail(tx, scope.workspaceId);
-    await recordAudit(tx, {
+    await recordConfigChange(tx, {
       ...scope,
       tableName: 'mail_connections',
       recordId: after.id,

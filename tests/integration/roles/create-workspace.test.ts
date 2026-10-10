@@ -67,6 +67,34 @@ async function verifySetPasswordLink(link: string) {
   ]);
 }
 
+async function verifyInitialConfiguration(link: string) {
+  const audit = await pool.query(
+    'SELECT actor_id, table_name, record_id, "before", "after" FROM config_audit',
+  );
+  expect(audit.rows).toHaveLength(1);
+  expect(audit.rows[0]).toMatchObject({
+    table_name: 'workspaces',
+    before: null,
+    after: { name: 'Point Star', timezone: 'Asia/Jakarta' },
+  });
+  expect(JSON.stringify(audit.rows)).not.toContain(new URL(link).searchParams.get('token'));
+  expect(
+    (
+      await pool.query(
+        'SELECT quiet_start, quiet_end, budget_per_hour, digest_time, hold_seconds FROM policies',
+      )
+    ).rows,
+  ).toEqual([
+    {
+      quiet_start: '21:00:00',
+      quiet_end: '07:00:00',
+      budget_per_hour: 6,
+      digest_time: '08:30:00',
+      hold_seconds: 60,
+    },
+  ]);
+}
+
 test('create-workspace creates a workspace, an admin person and a sign-in account, and prints a single-use set-password link', async () => {
   const databaseUrl = pool.options.connectionString;
   const result = await execute(
@@ -112,6 +140,7 @@ test('create-workspace creates a workspace, an admin person and a sign-in accoun
     { name: 'Point Star', admin: 'Siti Aminah', email: 'siti@pointstar.example', linked: true },
   ]);
   await verifySetPasswordLink(result.stdout.trim());
+  await verifyInitialConfiguration(result.stdout.trim());
 });
 
 test('A rejected workspace insert rolls back its admin account and set-password link', async () => {

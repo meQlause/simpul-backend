@@ -1,2 +1,2 @@
 export { peopleRouter } from './people.routes.js';
-export { resolveRoleRecipient } from './people.service.js';
+export { createAdminPerson, resolveRoleRecipient } from './people.service.js';

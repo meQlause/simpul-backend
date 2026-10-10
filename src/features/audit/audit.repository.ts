@@ -1,9 +1,10 @@
 import type { PoolClient } from 'pg';
+import type { configAuditSchemas } from './audit.schema.js';
 
 export type AuditEntry = {
   workspaceId: string;
   actorId: string;
-  tableName: string;
+  tableName: keyof typeof configAuditSchemas;
   recordId: string;
   before: object | null;
   after: object | null;

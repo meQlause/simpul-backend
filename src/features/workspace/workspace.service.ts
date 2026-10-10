@@ -1,15 +1,17 @@
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { provisionAdmin } from '../auth/index.js';
+import { createAdminPerson } from '../people/index.js';
 import {
   insertWorkspace,
+  finishWorkspaceProvision,
   selectMe,
   selectSettings,
   updateSettings,
   type WorkspaceProvision,
 } from './workspace.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import { recordAudit } from '../audit/index.js';
+import { recordConfigChange } from '../audit/index.js';
 import type { z as zod } from 'zod';
 import type { settingsSchema } from './workspace.schema.js';
 
@@ -27,6 +29,27 @@ export async function createWorkspace(
       now: provision.now,
     });
     await insertWorkspace(tx, provision);
+    await createAdminPerson(tx, {
+      id: provision.adminId,
+      workspaceId: provision.workspaceId,
+      name: provision.input['admin-name'],
+      email: provision.input['admin-email'],
+      authUserId: provision.authUserId,
+      now: provision.now,
+    });
+    await finishWorkspaceProvision(tx, provision.workspaceId, provision.adminId);
+    await recordConfigChange(tx, {
+      workspaceId: provision.workspaceId,
+      actorId: provision.adminId,
+      tableName: 'workspaces',
+      recordId: provision.workspaceId,
+      before: null,
+      after: {
+        name: provision.input.name,
+        timezone: provision.input.timezone,
+        adminPersonId: provision.adminId,
+      },
+    });
   });
 }
 
@@ -43,7 +66,7 @@ export async function saveSettings(
     const { id, ...before } = row;
     const after = { ...before, ...input };
     await updateSettings(tx, scope.workspaceId, input);
-    await recordAudit(tx, { ...scope, tableName: 'policies', recordId: id, before, after });
+    await recordConfigChange(tx, { ...scope, tableName: 'policies', recordId: id, before, after });
     return after;
   });
 }

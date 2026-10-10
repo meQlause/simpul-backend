@@ -2,6 +2,8 @@ import type { PoolClient } from 'pg';
 import type { z as zod } from 'zod';
 import type { createWorkspaceSchema, settingsSchema } from './workspace.schema.js';
 
+const DEFAULT_DIGEST_TIME = '08:30';
+
 export type WorkspaceProvision = {
   input: zod.infer<typeof createWorkspaceSchema>;
   workspaceId: string;
@@ -18,21 +20,20 @@ export async function insertWorkspace(tx: PoolClient, provision: WorkspaceProvis
     VALUES ($1, $2, $3, $4)`,
     [provision.workspaceId, provision.input.name, provision.input.timezone, provision.now],
   );
-  await tx.query(
-    `INSERT INTO people (id, workspace_id, name, email, auth_user_id, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6)`,
-    [
-      provision.adminId,
-      provision.workspaceId,
-      provision.input['admin-name'],
-      provision.input['admin-email'],
-      provision.authUserId,
-      provision.now,
-    ],
-  );
+}
+
+export async function finishWorkspaceProvision(
+  tx: PoolClient,
+  workspaceId: string,
+  adminId: string,
+) {
   await tx.query('UPDATE workspaces SET admin_person_id = $1 WHERE id = $2', [
-    provision.adminId,
-    provision.workspaceId,
+    adminId,
+    workspaceId,
+  ]);
+  await tx.query('INSERT INTO policies (workspace_id, digest_time) VALUES ($1, $2)', [
+    workspaceId,
+    DEFAULT_DIGEST_TIME,
   ]);
 }
 

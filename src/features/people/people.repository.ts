@@ -14,6 +14,24 @@ type PersonDetail = NamedPerson & {
 };
 type Patch = zod.infer<typeof personPatchSchema>;
 
+export async function insertAdminPerson(
+  tx: PoolClient,
+  input: {
+    id: string;
+    workspaceId: string;
+    name: string;
+    email: string;
+    authUserId: string;
+    now: Date;
+  },
+) {
+  await tx.query(
+    `INSERT INTO people (id, workspace_id, name, email, auth_user_id, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6)`,
+    [input.id, input.workspaceId, input.name, input.email, input.authUserId, input.now],
+  );
+}
+
 export async function selectPeople(
   tx: PoolClient,
   workspaceId: string,

@@ -1,8 +1,9 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import { recordAudit } from '../audit/index.js';
+import { recordConfigChange } from '../audit/index.js';
 import {
+  insertAdminPerson,
   lockPerson,
   selectPeople,
   selectActiveIds,
@@ -12,6 +13,10 @@ import {
 } from './people.repository.js';
 import { resolveRecipient, invalidPatchFields } from './people.rules.js';
 import type { PersonPatch } from './people.schema.js';
+
+export async function createAdminPerson(...parameters: Parameters<typeof insertAdminPerson>) {
+  await insertAdminPerson(...parameters);
+}
 
 export async function listPeople(resolveConnection: ConnectionResolver, workspaceId: string) {
   return scopedTransaction(resolveConnection, workspaceId, (tx) => selectPeople(tx, workspaceId));
@@ -43,7 +48,13 @@ export async function patchPerson(
       await updateRole(tx, scope.workspaceId, before.role.id, input);
     }
     const after = (await selectPeople(tx, scope.workspaceId, personId))[0];
-    await recordAudit(tx, { ...scope, tableName: 'people', recordId: personId, before, after });
+    await recordConfigChange(tx, {
+      ...scope,
+      tableName: 'people',
+      recordId: personId,
+      before,
+      after,
+    });
     return after;
   });
 }
