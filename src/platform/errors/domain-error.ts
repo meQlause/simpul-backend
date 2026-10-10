@@ -16,7 +16,11 @@ export class DomainError extends Error {
 
   constructor(
     readonly code: keyof typeof errors,
-    readonly details?: { field: string; issue: 'invalid' | 'unknown' | 'required' }[],
+    readonly details?: {
+      field: string;
+      issue: 'invalid' | 'unknown' | 'required';
+      message?: string;
+    }[],
   ) {
     super(errors[code].message);
     this.name = 'DomainError';

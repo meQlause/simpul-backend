@@ -1,5 +1,6 @@
 import { z as zod } from 'zod';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { validationError } from '../../platform/errors/validation-error.js';
 
 export const createWorkspaceSchema = zod
   .object({
@@ -41,14 +42,7 @@ export function parseSettings(input: unknown) {
   if (parsed.success) {
     return parsed.data;
   }
-  const details = parsed.error.issues.flatMap<{ field: string; issue: 'unknown' | 'invalid' }>(
-    (issue) => {
-      if (issue.code === 'unrecognized_keys') {
-        return issue.keys.map((field) => ({ field, issue: 'unknown' as const }));
-      }
-      return [{ field: issue.path.join('.'), issue: 'invalid' as const }];
-    },
-  );
+  const failure = validationError(parsed.error);
   const equal = parsed.error.issues.some((issue) => issue.message === QUIET_HOURS_EQUAL);
-  throw new DomainError(equal ? QUIET_HOURS_EQUAL : 'E-VALIDATION', details);
+  throw equal ? new DomainError(QUIET_HOURS_EQUAL, failure.details) : failure;
 }

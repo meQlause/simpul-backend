@@ -10,6 +10,7 @@ import { requestLogger } from './platform/http/request-logger.js';
 import { adminScope } from './platform/http/admin-scope.js';
 import type { ConnectionResolver } from './platform/db/connection-resolver.js';
 import { workspaceRouter } from './features/workspace/index.js';
+import { peopleRouter } from './features/people/index.js';
 
 type ApiServices = {
   authentication: ReturnType<typeof createAuthentication>;
@@ -24,6 +25,7 @@ function mountApi(app: Express, services?: ApiServices) {
   if (services) {
     app.use('/api/v1', adminScope(services.authentication.resolveAdmin));
     app.use('/api/v1', workspaceRouter(services.resolveConnection));
+    app.use('/api/v1', peopleRouter(services.resolveConnection));
   }
 }
 
