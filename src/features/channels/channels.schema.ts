@@ -8,7 +8,7 @@ const channelSchema = schema
     providerChatId: schema
       .string()
       .trim()
-      .regex(/^-?\d+$/u)
+      .regex(/^[+-]?\d+$/u)
       .optional(),
     sessionId: schema.guid().optional(),
     displayName: schema.string().trim().min(1).max(120),

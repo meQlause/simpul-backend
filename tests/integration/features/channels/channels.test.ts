@@ -314,3 +314,19 @@ test('SRS T-20: POST /channels twice with the same chat id produces one row and 
   ).toBe(1);
   await expectNoIngestion();
 });
+
+test.each(['42', '+42'])(
+  'SRS T-29: a positive chat id %s returns 422 E-TG-CHAT-TYPE-UNSUPPORTED and stores nothing',
+  async (providerChatId) => {
+    const connectionId = await connectBot();
+    const before = (await pool.query('SELECT * FROM channels ORDER BY id')).rows;
+    const response = await request(app)
+      .post('/api/v1/channels')
+      .set('Cookie', cookie)
+      .send({ botConnectionId: connectionId, providerChatId, displayName: 'Private chat' });
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('E-TG-CHAT-TYPE-UNSUPPORTED');
+    expect((await pool.query('SELECT * FROM channels ORDER BY id')).rows).toEqual(before);
+    await expectNoIngestion();
+  },
+);
