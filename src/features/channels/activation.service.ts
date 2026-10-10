@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
+import { reconciledIdempotent } from '../../platform/db/idempotency.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { ActivationProvider } from '../../platform/providers/index.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
@@ -8,7 +8,7 @@ import { recordConfigChange } from '../audit/index.js';
 import { activationFailure, checksPass } from './activation.rules.js';
 import { selectActivation, storeActivation } from './activation.repository.js';
 import { selectChannels } from './channels.repository.js';
-import type { parseActivation } from './activation.schema.js';
+import { parseActivationOutcome, type parseActivation } from './activation.schema.js';
 
 export type ActivationServices = {
   provider: ActivationProvider;
@@ -31,6 +31,64 @@ async function postIndicator(
   } catch {
     throw new DomainError('E-TG-ACTIVATION-FAILED');
   }
+}
+
+async function completeActivation(
+  tx: PoolClient,
+  request: {
+    scope: { workspaceId: string; actorId: string };
+    input: ReturnType<typeof parseActivation>;
+    now: Date;
+  },
+  outcome: unknown,
+) {
+  const activation = parseActivationOutcome(outcome);
+  const row = await selectActivation(tx, request.scope.workspaceId, request.input);
+  if (!row) {
+    throw new DomainError('E-NOT-FOUND');
+  }
+  assertVerification(row, request.input, request.now);
+  const scope = { ...request.scope, actorId: activation.actorId };
+  await storeActivation(tx, scope, activation);
+  await recordConfigChange(tx, {
+    ...scope,
+    tableName: 'channels',
+    recordId: request.input.channelId,
+    before: { monitored: false },
+    after: { connectionStatus: 'active', monitored: true },
+  });
+  return (await selectChannels(tx, scope.workspaceId)).find(
+    (channel: { id: string }) => channel.id === request.input.channelId,
+  );
+}
+
+export async function activateChannel(
+  resolveConnection: ConnectionResolver,
+  scope: { workspaceId: string; actorId: string },
+  input: ReturnType<typeof parseActivation>,
+  services: ActivationServices,
+) {
+  return reconciledIdempotent(
+    resolveConnection,
+    {
+      workspaceId: scope.workspaceId,
+      endpoint: `/channels/${input.channelId}/activate`,
+      key: input.key,
+      payload: {
+        verificationId: input.verificationId,
+        authorizationAck: input.authorizationAck,
+        expectedConfigVersion: input.expectedConfigVersion,
+      },
+    },
+    {
+      prepare: async (tx) => ({
+        ...(await prepareActivation(tx, scope.workspaceId, input, services)),
+        actorId: scope.actorId,
+      }),
+      complete: (tx, outcome) =>
+        completeActivation(tx, { scope, input, now: services.now() }, outcome),
+    },
+  );
 }
 
 function assertVerification(
@@ -73,27 +131,5 @@ async function prepareActivation(
   }
   const chat = await services.provider.describeChat(connection, row.providerChatId);
   const indicator = await postIndicator(services.provider, connection, row.providerChatId);
-  return { ...chat, ...indicator, channelId: input.channelId, now: services.now() };
-}
-
-export async function activateChannel(
-  resolveConnection: ConnectionResolver,
-  scope: { workspaceId: string; actorId: string },
-  input: ReturnType<typeof parseActivation>,
-  services: ActivationServices,
-) {
-  return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
-    const activation = await prepareActivation(tx, scope.workspaceId, input, services);
-    await storeActivation(tx, scope, activation);
-    await recordConfigChange(tx, {
-      ...scope,
-      tableName: 'channels',
-      recordId: input.channelId,
-      before: { monitored: false },
-      after: { connectionStatus: 'active', monitored: true },
-    });
-    return (await selectChannels(tx, scope.workspaceId)).find(
-      (row: { id: string }) => row.id === input.channelId,
-    );
-  });
+  return { ...chat, ...indicator, channelId: input.channelId, now: services.now().toISOString() };
 }

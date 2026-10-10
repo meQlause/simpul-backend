@@ -180,6 +180,7 @@ export const idempotencyKeys = pgTable(
     endpoint: text('endpoint').notNull(),
     fingerprint: bytes('fingerprint').notNull(),
     response: jsonb('response'),
+    outcome: jsonb('outcome'),
   },
   (table) => [uniqueIndex('idem_uq').on(table.workspaceId, table.endpoint, table.key)],
 );

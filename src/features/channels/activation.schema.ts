@@ -21,8 +21,22 @@ export function parseActivation(input: unknown, channelId: unknown, key: unknown
   if (!id.success) {
     throw new DomainError('E-NOT-FOUND');
   }
-  if (!schema.string().trim().min(1).max(200).safeParse(key).success) {
+  const requestKey = schema.string().trim().min(1).max(200).safeParse(key);
+  if (!requestKey.success) {
     throw new DomainError('E-TG-INPUT-INVALID', [{ field: 'Idempotency-Key', issue: 'required' }]);
   }
-  return { ...parsed.data, channelId: id.data };
+  return { ...parsed.data, channelId: id.data, key: requestKey.data };
+}
+
+export function parseActivationOutcome(input: unknown) {
+  return schema
+    .strictObject({
+      channelId: schema.guid(),
+      actorId: schema.guid(),
+      providerMessageId: schema.string().min(1),
+      chatType: schema.enum(['group', 'supergroup']),
+      title: schema.string(),
+      now: schema.iso.datetime().transform((value) => new Date(value)),
+    })
+    .parse(input);
 }
