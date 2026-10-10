@@ -7,9 +7,9 @@ const dockerExecutable =
     ? 'C:/Program Files/Docker/Docker/resources/bin/docker.exe'
     : '/usr/bin/docker';
 
-export function databaseFixture() {
+export function databaseFixture(maxConnections = 1) {
   let containerId = '';
-  const pool = new postgres.Pool({ max: 1 });
+  const pool = new postgres.Pool({ max: maxConnections });
   beforeAll(async () => {
     containerId = execFileSync(
       dockerExecutable,
