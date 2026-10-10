@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "db:generate": "drizzle-kit generate",
     "test": "npm run build && vitest run tests/unit",
-    "test:integration": "npm run build && vitest run tests/integration",
+    "test:integration": "npm run build && vitest run tests/integration tests/regression",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint --max-warnings=0 .",
