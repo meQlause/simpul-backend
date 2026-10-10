@@ -1,5 +1,7 @@
 node_modules/
 dist/
 coverage/
-.env
-.env.secret
+.env*
+!.env.example
+!.env.sample
+!.env.template
