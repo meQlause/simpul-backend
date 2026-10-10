@@ -2,10 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { beforeAll, expect, test } from 'vitest';
 import { databaseFixture } from '../helpers/database.js';
 import { applyMigrations } from '../helpers/migrations.js';
+import { transactionFixture } from '../helpers/transactions.js';
 import { seedTenantRows } from '../fixtures/tenant-rows.js';
 
 const pool = databaseFixture();
 const workspaceId = '00000000-0000-4000-8000-000000000008';
+const transaction = transactionFixture(pool);
 
 beforeAll(async () => {
   await applyMigrations(pool);
@@ -13,7 +15,7 @@ beforeAll(async () => {
 });
 
 function insertTemplate(body: string) {
-  return pool.query(
+  return transaction().query(
     "INSERT INTO templates (workspace_id, key, audience, body) VALUES ($1, $2, 'internal', $3) RETURNING body",
     [workspaceId, randomUUID(), body],
   );

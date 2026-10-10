@@ -1,9 +1,16 @@
 import { globSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { expect, test } from 'vitest';
+import { beforeEach, expect, test } from 'vitest';
 import { databaseFixture } from '../../../helpers/database.js';
+import { applyMigrations } from '../../../helpers/migrations.js';
 
 const pool = databaseFixture();
+// DDL commits need a fresh schema in this file's disposable container per case.
+beforeEach(async () => {
+  await pool.query(
+    'DROP EXTENSION IF EXISTS vector CASCADE; DROP SCHEMA public CASCADE; CREATE SCHEMA public',
+  );
+});
 const tables = [
   'workspaces',
   'people',
@@ -79,6 +86,7 @@ test('Migrations apply to an empty PostgreSQL 15 with pgvector and are reversibl
 }, 30000);
 
 test('System-side workspace keys and secrets exist without a local workspaces row, retaining the secret-to-key foreign key', async () => {
+  await applyMigrations(pool);
   const workspaceId = '00000000-0000-4000-8000-000000000001';
   await pool.query('INSERT INTO workspace_keys (workspace_id, wrapped_key) VALUES ($1, $2)', [
     workspaceId,
