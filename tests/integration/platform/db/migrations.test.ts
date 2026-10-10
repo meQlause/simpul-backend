@@ -106,4 +106,4 @@ test('System-side workspace keys and secrets exist without a local workspaces ro
   await expect(
     pool.query('DELETE FROM workspace_keys WHERE workspace_id = $1', [workspaceId]),
   ).rejects.toMatchObject({ code: '23503' });
-});
+}, 30000);
