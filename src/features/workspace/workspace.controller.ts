@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import { getMe, saveSettings } from './workspace.service.js';
+import { getMe, getSettings, saveSettings } from './workspace.service.js';
 import { parseSettings } from './workspace.schema.js';
 
 export function meController(resolveConnection: ConnectionResolver): RequestHandler {
@@ -15,5 +15,12 @@ export function settingsController(resolveConnection: ConnectionResolver): Reque
     const scope = response.locals.scope as { workspaceId: string; actorId: string };
     const input = parseSettings(request.body);
     response.json({ data: await saveSettings(resolveConnection, scope, input) });
+  };
+}
+
+export function getSettingsController(resolveConnection: ConnectionResolver): RequestHandler {
+  return async (_request, response) => {
+    const scope = response.locals.scope as { workspaceId: string };
+    response.json({ data: await getSettings(resolveConnection, scope.workspaceId) });
   };
 }

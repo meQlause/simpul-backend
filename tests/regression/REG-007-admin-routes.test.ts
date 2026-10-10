@@ -63,6 +63,7 @@ const mail = {
 const bodies: Record<string, object> = {
   'get /me': {},
   'get /people': {},
+  'get /settings': {},
   'get /settings/mail': {},
   'put /settings': settings,
   'put /settings/mail': mail,

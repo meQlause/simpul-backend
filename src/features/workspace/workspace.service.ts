@@ -14,6 +14,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
 import type { z as zod } from 'zod';
 import type { settingsSchema } from './workspace.schema.js';
+const NOT_FOUND = 'E-NOT-FOUND';
 
 export async function createWorkspace(
   resolveConnection: ConnectionResolver,
@@ -61,13 +62,30 @@ export async function saveSettings(
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     const row = await selectSettings(tx, scope.workspaceId);
     if (!row) {
-      throw new DomainError('E-NOT-FOUND');
+      throw new DomainError(NOT_FOUND);
     }
     const { id, ...before } = row;
     const after = { ...before, ...input };
     await updateSettings(tx, scope.workspaceId, input);
     await recordConfigChange(tx, { ...scope, tableName: 'policies', recordId: id, before, after });
     return after;
+  });
+}
+
+export async function getSettings(resolveConnection: ConnectionResolver, workspaceId: string) {
+  return scopedTransaction(resolveConnection, workspaceId, async (tx) => {
+    const row = await selectSettings(tx, workspaceId);
+    if (!row) {
+      throw new DomainError(NOT_FOUND);
+    }
+    return {
+      quietStart: row.quietStart,
+      quietEnd: row.quietEnd,
+      budgetPerHour: row.budgetPerHour,
+      digestTime: row.digestTime,
+      holdSeconds: row.holdSeconds,
+      timezone: row.timezone,
+    };
   });
 }
 
@@ -78,7 +96,7 @@ export async function getMe(
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     const row = await selectMe(tx, scope);
     if (!row) {
-      throw new DomainError('E-NOT-FOUND');
+      throw new DomainError(NOT_FOUND);
     }
     return {
       person: { id: row.person_id, name: row.person_name, roleName: row.role_name },

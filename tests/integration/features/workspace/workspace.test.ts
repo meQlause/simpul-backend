@@ -87,6 +87,19 @@ test('GET /me for the seed returns counts members: 4, channels: 3, activeRules: 
   });
 });
 
+test('GET /settings returns the workspace delivery preferences without internal ids', async () => {
+  const response = await supertest(app).get('/api/v1/settings').set('Cookie', cookie);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual({
+    quietStart: '21:00',
+    quietEnd: '07:00',
+    budgetPerHour: 6,
+    digestTime: '08:30',
+    holdSeconds: 60,
+    timezone: 'Asia/Jakarta',
+  });
+});
+
 test('PUT /settings with quietStart equal to quietEnd returns 422 E-SETTINGS-QUIET-HOURS-EQUAL', async () => {
   const response = await supertest(app)
     .put('/api/v1/settings')

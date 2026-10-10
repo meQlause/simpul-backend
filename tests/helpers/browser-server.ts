@@ -1,0 +1,73 @@
+import { Pool } from 'pg';
+import { createApp } from '../../src/app.js';
+import { createAuthentication, provisionAdmin } from '../../src/features/auth/index.js';
+import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
+import { applyMigrations } from './migrations.js';
+import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
+
+async function waitForDatabase(pool: Pool) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      await pool.query('SELECT 1');
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  throw new Error('Browser fixture database did not start');
+}
+
+async function browserAuthentication(pool: Pool) {
+  const client = await pool.connect();
+  try {
+    await provisionAdmin(client, {
+      id: 'browser-admin',
+      name: 'Siti Aminah',
+      email: 'admin@pointstar.example',
+      token: 'browser-password-token',
+      now: new Date(),
+      expiresAt: new Date('2099-01-01T00:00:00Z'),
+    });
+    await client.query(
+      "UPDATE people SET auth_user_id = 'browser-admin' WHERE name = 'Siti Aminah'",
+    );
+  } finally {
+    client.release();
+  }
+  const authentication = createAuthentication(pool, {
+    baseUrl: 'http://127.0.0.1:4173',
+    secret: 'browser-test-only-secret-with-more-than-32-characters',
+  });
+  await authentication.api.resetPassword({
+    body: { token: 'browser-password-token', newPassword: 'test-password-123' },
+  });
+  return authentication;
+}
+
+export async function startBrowserServer(pool: Pool, port: number) {
+  await waitForDatabase(pool);
+  await applyMigrations(pool);
+  await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
+  const authentication = await browserAuthentication(pool);
+  const app = createApp('api', undefined, undefined, {
+    authentication,
+    resolveConnection: createConnectionResolver(pool),
+  });
+  const server = app.listen(port, '127.0.0.1');
+  await new Promise<void>((accept, reject) => {
+    server.once('listening', accept);
+    server.once('error', reject);
+  });
+  return server;
+}
+
+if (process.env.SIMPUL_BROWSER_FIXTURE === '1') {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const server = await startBrowserServer(pool, 3000);
+  process.stdout.write('BROWSER_FIXTURE_READY\n');
+  process.once('SIGTERM', () => {
+    server.close(() => {
+      void pool.end();
+    });
+  });
+}
