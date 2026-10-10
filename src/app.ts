@@ -11,10 +11,13 @@ import { adminScope } from './platform/http/admin-scope.js';
 import type { ConnectionResolver } from './platform/db/connection-resolver.js';
 import { workspaceRouter } from './features/workspace/index.js';
 import { peopleRouter } from './features/people/index.js';
+import { createSecretStore } from './platform/secrets/index.js';
+import { verifyMail } from './platform/mail/index.js';
 
 type ApiServices = {
   authentication: ReturnType<typeof createAuthentication>;
   resolveConnection: ConnectionResolver;
+  mail?: { masterKey: string; verifyMail?: typeof verifyMail; now: () => Date };
 };
 
 function mountApi(app: Express, services?: ApiServices) {
@@ -24,7 +27,14 @@ function mountApi(app: Express, services?: ApiServices) {
   app.use(express.json());
   if (services) {
     app.use('/api/v1', adminScope(services.authentication.resolveAdmin));
-    app.use('/api/v1', workspaceRouter(services.resolveConnection));
+    const mail = services.mail
+      ? {
+          secretStore: createSecretStore(services.mail.masterKey),
+          verifyMail: services.mail.verifyMail ?? verifyMail,
+          now: services.mail.now,
+        }
+      : undefined;
+    app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
     app.use('/api/v1', peopleRouter(services.resolveConnection));
   }
 }

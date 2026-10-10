@@ -23,6 +23,7 @@ if (process.argv[2] === 'create-workspace') {
           secret: config.AUTH_SECRET,
         }),
         resolveConnection: createConnectionResolver(pool),
+        mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
       }
     : undefined;
   const app = createApp(

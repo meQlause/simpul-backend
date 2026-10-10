@@ -1,4 +1,5 @@
-import { beforeAll, expect, test } from 'vitest';
+import { afterEach, beforeAll, expect, test, vi } from 'vitest';
+import { Client } from 'pg';
 import supertest from 'supertest';
 import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
@@ -10,6 +11,25 @@ import { createConnectionResolver } from '../../../../src/platform/db/connection
 const pool = databaseFixture();
 let app: ReturnType<typeof createApp>;
 let cookie: string;
+const verifyMail =
+  vi.fn<
+    (credentials: {
+      host: string;
+      port: number;
+      username: string;
+      password: string;
+    }) => Promise<void>
+  >();
+const mailPassword = 'test-only-mail-password';
+const mailInput = {
+  host: 'smtp.pointstar.example',
+  port: 587,
+  username: 'simpul@pointstar.example',
+  password: mailPassword,
+  fromAddress: 'simpul@pointstar.example',
+};
+
+afterEach(() => vi.restoreAllMocks());
 
 beforeAll(async () => {
   await applyMigrations(pool);
@@ -43,6 +63,11 @@ beforeAll(async () => {
   app = createApp('api', undefined, undefined, {
     authentication: auth,
     resolveConnection: createConnectionResolver(pool),
+    mail: {
+      masterKey: Buffer.alloc(32, 1).toString('base64'),
+      verifyMail,
+      now: () => new Date('2026-10-10T04:01:00Z'),
+    },
   });
 }, 120000);
 
@@ -132,3 +157,134 @@ test.each(['id', 'workspaceId', 'level'])(
     expect((await pool.query('SELECT id FROM config_audit ORDER BY id')).rows).toEqual(audit.rows);
   },
 );
+
+test('GET /settings/mail reports waiting digest items before a mail server is configured', async () => {
+  const response = await supertest(app).get('/api/v1/settings/mail').set('Cookie', cookie);
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({ data: null, pendingDigestItems: 4 });
+});
+
+test('the first mail save requires a password before attempting SMTP verification', async () => {
+  const response = await supertest(app).put('/api/v1/settings/mail').set('Cookie', cookie).send({
+    host: mailInput.host,
+    port: mailInput.port,
+    username: mailInput.username,
+    fromAddress: mailInput.fromAddress,
+  });
+  expect(response.status).toBe(422);
+  expect(response.body.error).toMatchObject({
+    code: 'E-VALIDATION',
+    details: [{ field: 'password', issue: 'invalid' }],
+  });
+  expect(verifyMail).not.toHaveBeenCalled();
+});
+
+test('PUT /settings/mail returns E-MAIL-CONNECTION-FAILED and stores nothing when login is refused', async () => {
+  verifyMail.mockRejectedValueOnce(new Error(`SMTP refused ${mailPassword}`));
+  const response = await supertest(app)
+    .put('/api/v1/settings/mail')
+    .set('Cookie', cookie)
+    .send(mailInput);
+  expect(response.status).toBe(422);
+  expect(response.body.error.code).toBe('E-MAIL-CONNECTION-FAILED');
+  expect(JSON.stringify(response.body)).not.toContain(mailPassword);
+  expect((await pool.query('SELECT id FROM mail_connections')).rows).toEqual([]);
+  expect((await pool.query("SELECT id FROM secrets WHERE purpose = 'mail_password'")).rows).toEqual(
+    [],
+  );
+});
+
+test('PUT /settings/mail verifies the login, encrypts the password and returns only safe fields', async () => {
+  const queries = vi.spyOn(Client.prototype, 'query');
+  verifyMail.mockResolvedValueOnce(undefined);
+  const response = await supertest(app)
+    .put('/api/v1/settings/mail')
+    .set('Cookie', cookie)
+    .send(mailInput);
+  expect(response.status).toBe(200);
+  expect(verifyMail).toHaveBeenLastCalledWith({
+    host: mailInput.host,
+    port: mailInput.port,
+    username: mailInput.username,
+    password: mailPassword,
+  });
+  const insert = queries.mock.calls.findIndex(
+    ([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO secrets'),
+  );
+  expect(insert).toBeGreaterThanOrEqual(0);
+  expect(queries.mock.invocationCallOrder[insert]).toBeGreaterThan(
+    verifyMail.mock.invocationCallOrder.at(-1) ?? 0,
+  );
+  expect(response.body.data).toEqual({
+    host: mailInput.host,
+    port: mailInput.port,
+    username: mailInput.username,
+    fromAddress: mailInput.fromAddress,
+    passwordPresent: true,
+    verifiedAt: '2026-10-10T04:01:00.000Z',
+  });
+  const secret = (
+    await pool.query<{ ciphertext: Buffer }>(
+      "SELECT ciphertext FROM secrets WHERE purpose = 'mail_password'",
+    )
+  ).rows[0];
+  expect(secret.ciphertext.includes(Buffer.from(mailPassword))).toBe(false);
+  expect(
+    (
+      await pool.query(
+        "SELECT count(*)::int AS count FROM config_audit WHERE table_name = 'mail_connections'",
+      )
+    ).rows,
+  ).toEqual([{ count: 1 }]);
+});
+
+test('a later mail save retains the stored password when it is omitted', async () => {
+  const before = await pool.query(
+    "SELECT id, ciphertext, nonce FROM secrets WHERE purpose = 'mail_password'",
+  );
+  verifyMail.mockResolvedValueOnce(undefined);
+  const input = {
+    host: mailInput.host,
+    port: mailInput.port,
+    username: mailInput.username,
+    fromAddress: 'dispatch@pointstar.example',
+  };
+  const response = await supertest(app)
+    .put('/api/v1/settings/mail')
+    .set('Cookie', cookie)
+    .send(input);
+  expect(response.status).toBe(200);
+  expect(verifyMail).toHaveBeenLastCalledWith({
+    host: input.host,
+    port: input.port,
+    username: input.username,
+    password: mailPassword,
+  });
+  expect(
+    (await pool.query("SELECT id, ciphertext, nonce FROM secrets WHERE purpose = 'mail_password'"))
+      .rows,
+  ).toEqual(before.rows);
+  const read = await supertest(app).get('/api/v1/settings/mail').set('Cookie', cookie);
+  expect(read.body.data).toEqual({
+    ...input,
+    passwordPresent: true,
+    verifiedAt: '2026-10-10T04:01:00.000Z',
+  });
+});
+
+test('a refused replacement preserves the existing configuration and encrypted secret', async () => {
+  const before = await pool.query('SELECT * FROM mail_connections');
+  const secret = await pool.query("SELECT * FROM secrets WHERE purpose = 'mail_password'");
+  const audit = await pool.query('SELECT id FROM config_audit ORDER BY id');
+  verifyMail.mockRejectedValueOnce(new Error('test-only SMTP refusal'));
+  const response = await supertest(app)
+    .put('/api/v1/settings/mail')
+    .set('Cookie', cookie)
+    .send({ ...mailInput, password: 'replacement-test-password' });
+  expect(response.status).toBe(422);
+  expect((await pool.query('SELECT * FROM mail_connections')).rows).toEqual(before.rows);
+  expect((await pool.query("SELECT * FROM secrets WHERE purpose = 'mail_password'")).rows).toEqual(
+    secret.rows,
+  );
+  expect((await pool.query('SELECT id FROM config_audit ORDER BY id')).rows).toEqual(audit.rows);
+});

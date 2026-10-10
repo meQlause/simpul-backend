@@ -1,4 +1,8 @@
 const errors = {
+  'E-MAIL-CONNECTION-FAILED': {
+    status: 422,
+    message: 'The mail server could not be reached with these details. Nothing was saved.',
+  },
   'E-VALIDATION': { status: 422, message: 'Check the highlighted fields.' },
   'E-SETTINGS-QUIET-HOURS-EQUAL': { status: 422, message: 'Choose different start and end times.' },
   'E-AUTH-REQUIRED': { status: 401, message: 'Your session has ended. Sign in to continue.' },

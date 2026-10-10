@@ -1,10 +1,16 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { meController, settingsController } from './workspace.controller.js';
+import { mailController, saveMailController } from './workspace-mail.controller.js';
+import type { MailServices } from './workspace-mail.service.js';
 
-export function workspaceRouter(resolveConnection: ConnectionResolver) {
+export function workspaceRouter(resolveConnection: ConnectionResolver, mail?: MailServices) {
   const router = Router();
   router.get('/me', meController(resolveConnection));
   router.put('/settings', settingsController(resolveConnection));
+  router.get('/settings/mail', mailController(resolveConnection));
+  if (mail) {
+    router.put('/settings/mail', saveMailController(resolveConnection, mail));
+  }
   return router;
 }
