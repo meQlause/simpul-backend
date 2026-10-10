@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { SetupProvider } from '../../platform/providers/index.js';
 import { parseCredential, parseConnection, parseRequestKey } from './connections.schema.js';
-import { verifyConnection } from './connections.service.js';
+import { verifyConnection, listConnections } from './connections.service.js';
 import { createConnection, type ConnectionSetup } from './connections-create.service.js';
 
 const CREATED = 201;
@@ -13,6 +13,10 @@ export function connectionsRouter(
   setup?: ConnectionSetup,
 ) {
   const router = Router();
+  router.get('/telegram/connections', async (_request, response) => {
+    const { workspaceId } = response.locals.scope as { workspaceId: string };
+    response.json({ data: await listConnections(resolveConnection, workspaceId) });
+  });
   router.post('/telegram/connections/verify', async (request, response) => {
     const { workspaceId } = response.locals.scope as { workspaceId: string };
     const { botToken } = parseCredential(request.body);

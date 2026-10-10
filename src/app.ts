@@ -15,6 +15,7 @@ import { createSecretStore } from './platform/secrets/index.js';
 import { verifyMail } from './platform/mail/index.js';
 import { connectionsRouter, type ConnectionSetup } from './features/connections/index.js';
 import type { SetupProvider } from './platform/providers/index.js';
+import { channelsRouter } from './features/channels/index.js';
 
 type ApiServices = {
   authentication: ReturnType<typeof createAuthentication>;
@@ -29,26 +30,30 @@ function mountApi(app: Express, services?: ApiServices) {
     app.all('/api/auth/*splat', toNodeHandler(services.authentication));
   }
   app.use(express.json());
-  if (services) {
-    app.use('/api/v1', adminScope(services.authentication.resolveAdmin));
-    const mail = services.mail
+  if (!services) {
+    return;
+  }
+  app.use('/api/v1', adminScope(services.authentication.resolveAdmin));
+  const mail = services.mail
+    ? {
+        secretStore: createSecretStore(services.mail.masterKey),
+        verifyMail: services.mail.verifyMail ?? verifyMail,
+        now: services.mail.now,
+      }
+    : undefined;
+  app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
+  app.use('/api/v1', peopleRouter(services.resolveConnection));
+  if (services.connectionSetup) {
+    app.use('/api/v1', channelsRouter(services.resolveConnection, services.connectionSetup.newId));
+  }
+  if (services.telegram) {
+    const setup = services.connectionSetup
       ? {
-          secretStore: createSecretStore(services.mail.masterKey),
-          verifyMail: services.mail.verifyMail ?? verifyMail,
-          now: services.mail.now,
+          ...services.connectionSetup,
+          secretStore: createSecretStore(services.connectionSetup.masterKey),
         }
       : undefined;
-    app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
-    app.use('/api/v1', peopleRouter(services.resolveConnection));
-    if (services.telegram) {
-      const setup = services.connectionSetup
-        ? {
-            ...services.connectionSetup,
-            secretStore: createSecretStore(services.connectionSetup.masterKey),
-          }
-        : undefined;
-      app.use('/api/v1', connectionsRouter(services.resolveConnection, services.telegram, setup));
-    }
+    app.use('/api/v1', connectionsRouter(services.resolveConnection, services.telegram, setup));
   }
 }
 

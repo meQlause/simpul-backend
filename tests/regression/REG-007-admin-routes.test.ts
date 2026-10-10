@@ -79,6 +79,12 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'get /telegram/connections': {},
+  'post /channels': {
+    botConnectionId: '00000000-0000-4000-8000-000000100031',
+    providerChatId: '-12345',
+    displayName: 'Test draft',
+  },
   'get /me': {},
   'post /telegram/connections/verify': { botToken: 'test-only-credential' },
   'post /telegram/connections': { connectionName: 'My bot', botToken: 'test-only-credential' },
@@ -88,6 +94,10 @@ const bodies: Record<string, object> = {
   'put /settings': settings,
   'put /settings/mail': mail,
   'patch /people/:personId': { availability: 'leave' },
+};
+const statuses: Record<string, number> = {
+  'post /telegram/connections': 409,
+  'post /channels': 201,
 };
 
 async function login(name: string, email: string) {
@@ -117,6 +127,12 @@ beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   await seedTenantRows(pool, workspaceB);
+  bodies['post /channels'] = {
+    ...bodies['post /channels'],
+    botConnectionId: (
+      await pool.query("SELECT id FROM bot_connections WHERE provider_account_id = '240000000'")
+    ).rows[0].id,
+  };
   tables = await scopedTableNames(pool);
   personA = (await pool.query<{ id: string }>("SELECT id FROM people WHERE name = 'Budi Santoso'"))
     .rows[0].id;
@@ -196,7 +212,7 @@ test.each(routes)('REG-007: $method $path as A reads or changes no row of B', as
     .set('Idempotency-Key', 'admin-route-isolation')
     .set('X-Workspace-ID', workspaceB)
     .send(bodies[`${route.method} ${route.path}`]);
-  expect(response.status).toBe(route.path === '/telegram/connections' ? 409 : 200);
+  expect(response.status).toBe(statuses[`${route.method} ${route.path}`] ?? 200);
   expect(JSON.stringify(response.body)).not.toContain(workspaceB);
   expect(JSON.stringify(response.body)).not.toContain('Test operator');
   expect(JSON.stringify(response.body)).not.toContain('test-only-password');
@@ -212,7 +228,10 @@ test.each(routes.filter((route) => route.method !== 'get'))(
       .send({ ...bodies[`${route.method} ${route.path}`], workspaceId: workspaceB });
     expect(response.status).toBe(422);
     expect(response.body.error).toMatchObject({
-      code: route.path.startsWith('/telegram/') ? 'E-TG-INPUT-INVALID' : 'E-VALIDATION',
+      code:
+        route.path.startsWith('/telegram/') || route.path === '/channels'
+          ? 'E-TG-INPUT-INVALID'
+          : 'E-VALIDATION',
       details: [{ field: 'workspaceId', issue: 'unknown' }],
     });
     expect(await foreignSnapshot()).toEqual(before);

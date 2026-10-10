@@ -1,4 +1,12 @@
 const errors = {
+  'E-TG-CHANNEL-DUPLICATE': {
+    status: 409,
+    message: 'This group is already configured in this workspace.',
+  },
+  'E-TG-CHAT-TYPE-UNSUPPORTED': {
+    status: 422,
+    message: 'Only Telegram groups and supergroups are supported.',
+  },
   'E-TG-BOT-IN-USE': {
     status: 409,
     message: 'This bot is already assigned to another workspace.',

@@ -4,6 +4,17 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  channels: zod
+    .object({
+      botConnectionId: zod.guid(),
+      providerChatId: zod.string(),
+      displayName: zod.string(),
+      class: zod.string(),
+      primaryLanguage: zod.string(),
+      connectionStatus: zod.string(),
+      monitored: zod.boolean(),
+    })
+    .partial(),
   bot_connections: zod
     .object({
       connectionName: zod.string(),

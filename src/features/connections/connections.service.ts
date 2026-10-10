@@ -1,7 +1,13 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { CredentialProvider } from '../../platform/providers/index.js';
-import { storedAccount } from './connections.repository.js';
+import { storedAccount, selectConnections } from './connections.repository.js';
+
+export async function listConnections(resolveConnection: ConnectionResolver, workspaceId: string) {
+  return scopedTransaction(resolveConnection, workspaceId, (tx) =>
+    selectConnections(tx, workspaceId),
+  );
+}
 
 export async function verifyConnection(
   resolveConnection: ConnectionResolver,
