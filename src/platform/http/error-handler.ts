@@ -20,7 +20,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _request, resp
   }
   if (!(error instanceof DomainError)) {
     const logger = response.locals.logger as Logger | undefined;
-    logger?.error({ errorType: error instanceof Error ? error.name : typeof error });
+    logger?.error({ errorType: error instanceof Error ? 'Error' : typeof error });
   }
   const failure = error instanceof DomainError ? error : new DomainError('E-INTERNAL');
   if (failure.retryAfter !== undefined) {
