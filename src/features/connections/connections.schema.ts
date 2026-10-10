@@ -6,6 +6,18 @@ const INPUT_INVALID = 'E-TG-INPUT-INVALID';
 
 const inputSchema = schema.strictObject({ botToken: schema.string().trim().min(1) });
 const createSchema = inputSchema.extend({ connectionName: schema.string().trim().min(1).max(80) });
+const replacementSchema = inputSchema.extend({
+  expectedCredentialVersion: schema.number().int().positive(),
+  connectionName: schema.string().trim().min(1).max(80).optional(),
+});
+
+export function parseReplacement(input: unknown) {
+  const parsed = replacementSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new DomainError(INPUT_INVALID, validationError(parsed.error).details);
+  }
+  return parsed.data;
+}
 
 export function parseConnection(input: unknown) {
   const parsed = createSchema.safeParse(input);

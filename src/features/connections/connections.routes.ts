@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { SetupProvider } from '../../platform/providers/index.js';
-import { parseCredential, parseConnection, parseRequestKey } from './connections.schema.js';
+import {
+  parseCredential,
+  parseConnection,
+  parseRequestKey,
+  parseReplacement,
+} from './connections.schema.js';
 import { verifyConnection, listConnections } from './connections.service.js';
 import { createConnection, type ConnectionSetup } from './connections-create.service.js';
 import { parseSession, parseSessionId } from './connections-sessions.schema.js';
 import { issueSession, pollSession } from './connections-sessions.service.js';
+import { rotateCredential } from './connections-credentials.service.js';
 
 const CREATED = 201;
 
@@ -27,6 +33,20 @@ export function connectionsRouter(
     });
   });
   if (setup) {
+    router.put('/telegram/connections/:connectionId/credentials', async (request, response) => {
+      const scope = response.locals.scope as { workspaceId: string; actorId: string };
+      const input = parseReplacement(request.body);
+      const key = parseRequestKey(request.get('Idempotency-Key'));
+      const connectionId = parseSessionId(request.params.connectionId);
+      response.json({
+        data: await rotateCredential(
+          resolveConnection,
+          scope,
+          { input, key, connectionId },
+          { ...setup, provider },
+        ),
+      });
+    });
     router.post('/telegram/connections/:connectionId/sessions', async (request, response) => {
       const scope = response.locals.scope as { workspaceId: string; actorId: string };
       const input = {

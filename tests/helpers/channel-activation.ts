@@ -18,14 +18,14 @@ const checks = keys.map((key) => ({
   action: null,
 }));
 export const provider = {
-  verifyCredential: async () => ({
+  verifyCredential: vi.fn(async (_credential: string) => ({
     providerAccountId: 'activation-test-bot',
     botUsername: 'test_bot',
     botName: 'Test bot',
     canJoinGroups: true,
     privacyModeOk: true,
-  }),
-  registerWebhook: async () => {},
+  })),
+  registerWebhook: vi.fn(async () => {}),
   checkReadiness: vi.fn(async () => checks),
   describeChat: async () => ({ chatType: 'supergroup' as const, title: 'Test group' }),
   send: vi.fn(async () => ({ providerMessageId: 'test-indicator' })),

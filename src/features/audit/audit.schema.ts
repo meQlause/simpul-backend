@@ -19,6 +19,7 @@ export const configAuditSchemas = {
     .object({
       connectionName: zod.string(),
       providerAccountId: zod.string(),
+      credentialVersion: zod.number().int().positive(),
       status: zod.string(),
     })
     .partial(),

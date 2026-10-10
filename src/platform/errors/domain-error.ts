@@ -1,4 +1,8 @@
 const errors = {
+  'E-TG-CREDENTIAL-BOT-MISMATCH': {
+    status: 422,
+    message: 'This token belongs to a different bot.',
+  },
   'E-TG-READINESS-INCOMPLETE': {
     status: 422,
     message: 'Complete the readiness checks before activating monitoring.',
