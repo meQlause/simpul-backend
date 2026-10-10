@@ -1,3 +1,5 @@
+import { editChannel } from './channels-edit.service.js';
+import { parseChannelEdit } from './channels-edit.schema.js';
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { parseChannel, parsePause, parseChannelId } from './channels.schema.js';
@@ -13,6 +15,11 @@ export function channelsRouter(
   activation?: ActivationServices,
 ) {
   const router = Router();
+  router.patch('/channels/:channelId', async (request, response) => {
+    const scope = response.locals.scope as { workspaceId: string; actorId: string };
+    const input = parseChannelEdit(request.body, request.params.channelId);
+    response.json({ data: await editChannel(resolveConnection, scope, input, services.now()) });
+  });
   router.get('/channels/:channelId', async (request, response) => {
     const { workspaceId } = response.locals.scope as { workspaceId: string };
     const channelId = parseChannelId(request.params.channelId);

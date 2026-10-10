@@ -86,6 +86,7 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'patch /channels/:channelId': { displayName: 'Updated group', expectedConfigVersion: 99 },
   'post /channels/:channelId/pause': { expectedConfigVersion: 99 },
   'put /telegram/connections/:connectionId/credentials': {
     botToken: 'test-only-replacement-token',
@@ -117,6 +118,7 @@ const bodies: Record<string, object> = {
   'patch /people/:personId': { availability: 'leave' },
 };
 const statuses: Record<string, number> = {
+  'patch /channels/:channelId': 409,
   'post /channels/:channelId/pause': 409,
   'put /telegram/connections/:connectionId/credentials': 422,
   'post /channels/:channelId/activate': 409,

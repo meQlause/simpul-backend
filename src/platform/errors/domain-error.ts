@@ -1,4 +1,8 @@
 const errors = {
+  'E-CHANNEL-IDENTITY-FIXED': {
+    status: 409,
+    message: 'Saved group identity cannot be changed. Add and verify a new group instead.',
+  },
   'E-TG-RATE-LIMITED': {
     status: 429,
     message: 'Telegram is busy. Try again after the indicated wait.',
