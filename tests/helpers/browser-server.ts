@@ -63,8 +63,12 @@ export async function startBrowserServer(pool: Pool, port: number) {
 
 if (process.env.SIMPUL_BROWSER_FIXTURE === '1') {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-  const server = await startBrowserServer(pool, 3000);
-  process.stdout.write('BROWSER_FIXTURE_READY\n');
+  const server = await startBrowserServer(pool, 0);
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Browser fixture has no TCP address');
+  }
+  process.stdout.write(`BROWSER_FIXTURE_READY http://127.0.0.1:${address.port}\n`);
   process.once('SIGTERM', () => {
     server.close(() => {
       void pool.end();
