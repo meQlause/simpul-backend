@@ -3,6 +3,9 @@ import { beforeAll, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
+import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
+import { createSecretStore } from '../../src/platform/secrets/index.js';
+import { createTelegramProvider } from '../../src/platform/providers/index.js';
 import { databaseFixture } from './database.js';
 import { applyMigrations } from './migrations.js';
 import { signInSeedAdmin } from './admin-session.js';
@@ -31,6 +34,8 @@ export const provider = {
   send: vi.fn(async () => ({ providerMessageId: 'test-indicator' })),
 };
 export let app: ReturnType<typeof createApp>;
+export let webhookApp: ReturnType<typeof createApp>;
+export const webhookSecret = randomBytes(32).toString('base64url');
 export let cookie: string;
 let connectionId: string;
 
@@ -52,11 +57,21 @@ beforeAll(async () => {
       publicBaseUrl: 'https://simpul.example',
       now: () => now,
       newId: randomUUID,
-      newWebhookSecret: () => randomBytes(32).toString('base64url'),
+      newWebhookSecret: () => webhookSecret,
       newCode: () => randomBytes(16).toString('hex'),
     },
   };
   app = createApp('api', undefined, undefined, services);
+  webhookApp = createApp('webhook', undefined, undefined, {
+    ...services,
+    webhook: {
+      resolveConnection: services.resolveConnection,
+      lookupConnection: createConnectionLookup(pool),
+      secretStore: createSecretStore(services.connectionSetup.masterKey),
+      provider: createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      now: () => now,
+    },
+  });
   const connection = await request(app)
     .post('/api/v1/telegram/connections')
     .set('Cookie', cookie)

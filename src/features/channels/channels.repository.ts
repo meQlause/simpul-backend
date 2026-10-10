@@ -2,6 +2,27 @@ import type { PoolClient } from 'pg';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import type { parseChannel } from './channels.schema.js';
 
+export async function selectChannelState(tx: PoolClient, workspaceId: string, channelId: string) {
+  const result = await tx.query<{
+    id: string;
+    configVersion: number;
+    connectionStatus: string;
+    monitored: boolean;
+  }>(
+    `SELECT id, config_version AS "configVersion", connection_status AS "connectionStatus", monitored
+     FROM channels WHERE workspace_id = $1 AND id = $2 FOR UPDATE`,
+    [workspaceId, channelId],
+  );
+  return result.rows[0];
+}
+
+export async function storePause(tx: PoolClient, workspaceId: string, channelId: string) {
+  await tx.query(
+    "UPDATE channels SET monitored = false, connection_status = 'paused', config_version = config_version + 1 WHERE workspace_id = $1 AND id = $2",
+    [workspaceId, channelId],
+  );
+}
+
 export async function setConnectionNeedsAction(
   tx: PoolClient,
   workspaceId: string,

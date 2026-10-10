@@ -2,10 +2,46 @@ import type { ConnectionResolver } from '../../platform/db/connection-resolver.j
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
-import { insertDraft, selectChannels, setConnectionNeedsAction } from './channels.repository.js';
-import type { parseChannel } from './channels.schema.js';
+import {
+  insertDraft,
+  selectChannels,
+  setConnectionNeedsAction,
+  selectChannelState,
+  storePause,
+} from './channels.repository.js';
+import type { parseChannel, parsePause } from './channels.schema.js';
 import { consumeCandidate } from '../connections/index.js';
 import type { PoolClient } from 'pg';
+import { cancelChannelNotifications } from '../delivery/index.js';
+
+export async function pauseChannel(
+  resolveConnection: ConnectionResolver,
+  scope: { workspaceId: string; actorId: string },
+  input: ReturnType<typeof parsePause>,
+  now: Date,
+) {
+  return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
+    const before = await selectChannelState(tx, scope.workspaceId, input.channelId);
+    if (!before) {
+      throw new DomainError('E-NOT-FOUND');
+    }
+    if (before.configVersion !== input.expectedConfigVersion) {
+      throw new DomainError('E-TG-VERSION-CONFLICT');
+    }
+    await storePause(tx, scope.workspaceId, input.channelId);
+    await cancelChannelNotifications(tx, scope.workspaceId, { channelId: input.channelId, now });
+    await recordConfigChange(tx, {
+      ...scope,
+      tableName: 'channels',
+      recordId: input.channelId,
+      before: { connectionStatus: before.connectionStatus, monitored: before.monitored },
+      after: { connectionStatus: 'paused', monitored: false },
+    });
+    return (await selectChannels(tx, scope.workspaceId)).find(
+      (row: { id: string }) => row.id === input.channelId,
+    );
+  });
+}
 
 export async function markConnectionNeedsAction(
   tx: PoolClient,

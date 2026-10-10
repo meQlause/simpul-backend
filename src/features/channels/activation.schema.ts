@@ -1,6 +1,7 @@
 import { z as schema } from 'zod';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { validationError } from '../../platform/errors/validation-error.js';
+import { parseChannelId } from './channels.schema.js';
 
 const activationSchema = schema.strictObject({
   verificationId: schema.guid(),
@@ -17,15 +18,12 @@ export function parseActivation(input: unknown, channelId: unknown, key: unknown
       validationError(parsed.error).details,
     );
   }
-  const id = schema.guid().safeParse(channelId);
-  if (!id.success) {
-    throw new DomainError('E-NOT-FOUND');
-  }
+  const id = parseChannelId(channelId);
   const requestKey = schema.string().trim().min(1).max(200).safeParse(key);
   if (!requestKey.success) {
     throw new DomainError('E-TG-INPUT-INVALID', [{ field: 'Idempotency-Key', issue: 'required' }]);
   }
-  return { ...parsed.data, channelId: id.data, key: requestKey.data };
+  return { ...parsed.data, channelId: id, key: requestKey.data };
 }
 
 export function parseActivationOutcome(input: unknown) {
