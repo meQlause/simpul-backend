@@ -12,6 +12,10 @@ beforeEach(async () => {
   );
 });
 const tables = [
+  'user',
+  'session',
+  'account',
+  'verification',
   'workspaces',
   'people',
   'person_identities',
