@@ -10,3 +10,4 @@ export type {
   SendResult,
 } from './contract.js';
 export { createTelegramProvider } from './telegram/index.js';
+export { createProviderRegistry } from './registry.js';

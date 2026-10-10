@@ -4,7 +4,8 @@ import { checkDatabase } from './platform/db/health.js';
 import { createLogger } from './platform/logger/index.js';
 import { createSystemPool } from './platform/db/index.js';
 import { createConnectionResolver } from './platform/db/connection-resolver.js';
-import { createTelegramProvider } from './platform/providers/index.js';
+import { createProviderRegistry } from './platform/providers/index.js';
+import { createTelegramProvider } from './platform/providers/telegram/index.js';
 import { createConnectionLookup } from './platform/db/connection-lookup.js';
 import { createSecretStore } from './platform/secrets/index.js';
 
@@ -19,12 +20,27 @@ if (process.argv[2] === 'create-workspace') {
   const { runCreateWorkspace } = await import('./roles/create-workspace.js');
   await runCreateWorkspace(config, process.argv.slice(commandArgumentsOffset));
 } else {
+  const pool = createSystemPool(config.DATABASE_URL);
+  const providers = createProviderRegistry();
+  providers.register(
+    createTelegramProvider(config.TELEGRAM_API_BASE, undefined, {
+      callTimeoutMs: config.TELEGRAM_CALL_TIMEOUT_MS,
+      sendPerSecond: config.TELEGRAM_SEND_PER_SECOND,
+      sendPerChatPerMinute: config.TELEGRAM_SEND_PER_CHAT_PER_MINUTE,
+    }),
+  );
+  try {
+    const inventory = await pool.query<{ provider: string }>(
+      'SELECT provider FROM providers_in_use()',
+    );
+    providers.assertCovers(inventory.rows.map((row) => row.provider));
+  } catch (error) {
+    await pool.end();
+    throw error;
+  }
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
-  const pool = ['api', 'webhook'].includes(config.PROCESS_ROLE)
-    ? createSystemPool(config.DATABASE_URL)
-    : undefined;
-  const services = pool
+  const services = ['api', 'webhook'].includes(config.PROCESS_ROLE)
     ? {
         authentication: createAuthentication(pool, {
           baseUrl: config.PUBLIC_BASE_URL,
@@ -35,11 +51,11 @@ if (process.argv[2] === 'create-workspace') {
           resolveConnection: createConnectionResolver(pool),
           lookupConnection: createConnectionLookup(pool),
           secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
-          provider: createTelegramProvider(config.TELEGRAM_API_BASE),
+          provider: providers.adapterFor('telegram'),
           now: () => new Date(),
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
-        telegram: createTelegramProvider(config.TELEGRAM_API_BASE),
+        telegram: providers.adapterFor('telegram'),
         connectionSetup: {
           masterKey: config.SECRETS_MASTER_KEY,
           publicBaseUrl: config.PUBLIC_BASE_URL,
@@ -50,6 +66,9 @@ if (process.argv[2] === 'create-workspace') {
         },
       }
     : undefined;
+  if (!services) {
+    await pool.end();
+  }
   const app = createApp(
     config.PROCESS_ROLE,
     () => checkDatabase(config.DATABASE_URL),

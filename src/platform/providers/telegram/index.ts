@@ -1,7 +1,7 @@
 import { z as schema } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../errors/domain-error.js';
-import type { ProviderAdapter, SetupProvider, ReceiveProvider } from '../contract.js';
+import type { ProviderAdapter, SetupProvider, ReceiveProvider, Limits } from '../contract.js';
 import { createCall } from './call.js';
 import { activationMethods } from './activation.js';
 
@@ -56,8 +56,9 @@ async function verifyCredential(call: ReturnType<typeof createCall>, credential:
 export function createTelegramProvider(
   baseUrl: string,
   send: typeof fetch = fetch,
+  limits: Limits = { callTimeoutMs: 10000, sendPerSecond: 30, sendPerChatPerMinute: 20 },
 ): ProviderAdapter {
-  const call = createCall(baseUrl, send);
+  const call = createCall(baseUrl, send, limits.callTimeoutMs);
   const setup: SetupProvider & ReceiveProvider = {
     authenticate(request, secret) {
       const supplied = request.headers['x-telegram-bot-api-secret-token'];
@@ -110,7 +111,7 @@ export function createTelegramProvider(
   return {
     provider: 'telegram',
     capabilities,
-    limits: { callTimeoutMs: 10000, sendPerSecond: 30, sendPerChatPerMinute: 20 },
+    limits,
     ...setup,
     ...activationMethods(call, setup.verifyCredential),
   };

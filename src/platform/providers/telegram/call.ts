@@ -39,14 +39,14 @@ function responseFailure(response: Response, data: unknown) {
   return response.ok ? null : new DomainError('E-TG-TOKEN-INVALID');
 }
 
-export function createCall(baseUrl: string, send: typeof fetch) {
+export function createCall(baseUrl: string, send: typeof fetch, callTimeoutMs = CALL_TIMEOUT_MS) {
   return async (credential: string, method: string, body?: object) => {
     try {
       const response = await send(
         `${baseUrl.replace(/\/$/u, '')}/bot${encodeURIComponent(credential)}/${method}`,
         {
           method: 'POST',
-          signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+          signal: AbortSignal.timeout(callTimeoutMs),
           redirect: 'error',
           ...(body
             ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
