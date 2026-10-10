@@ -109,3 +109,26 @@ test('PUT /settings accepts a window crossing midnight, returns saved settings a
     ).rows,
   ).toEqual([{ count: 1 }]);
 });
+
+test.each(['id', 'workspaceId', 'level'])(
+  'PUT /settings refuses server-owned %s',
+  async (field) => {
+    const audit = await pool.query('SELECT id FROM config_audit ORDER BY id');
+    const response = await supertest(app)
+      .put('/api/v1/settings')
+      .set('Cookie', cookie)
+      .send({
+        quietStart: '21:00',
+        quietEnd: '07:00',
+        budgetPerHour: 6,
+        digestTime: '08:30',
+        [field]: 'client-owned-value',
+      });
+    expect(response.status).toBe(422);
+    expect(response.body.error).toMatchObject({
+      code: 'E-VALIDATION',
+      details: [{ field, issue: 'unknown' }],
+    });
+    expect((await pool.query('SELECT id FROM config_audit ORDER BY id')).rows).toEqual(audit.rows);
+  },
+);

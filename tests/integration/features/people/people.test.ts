@@ -166,3 +166,20 @@ test('role, supervisor and backup edits persist together without changing the ro
     ).rows,
   ).toEqual([{ person_id: siti }]);
 });
+
+test.each(['id', 'workspaceId', 'level'])(
+  'PATCH /people refuses server-owned %s',
+  async (field) => {
+    const audit = await pool.query('SELECT id FROM config_audit ORDER BY id');
+    const response = await supertest(app)
+      .patch(`/api/v1/people/${budi}`)
+      .set('Cookie', cookie)
+      .send({ availability: 'available', [field]: 'client-owned-value' });
+    expect(response.status).toBe(422);
+    expect(response.body.error).toMatchObject({
+      code: 'E-VALIDATION',
+      details: [{ field, issue: 'unknown' }],
+    });
+    expect((await pool.query('SELECT id FROM config_audit ORDER BY id')).rows).toEqual(audit.rows);
+  },
+);
