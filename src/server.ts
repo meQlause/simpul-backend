@@ -1,10 +1,9 @@
-import express from 'express';
+import { createApp } from './app.js';
 import { readConfig } from './platform/config/index.js';
 
-readConfig(process.env);
+const config = readConfig(process.env);
 
 const port = 3000;
-const app = express();
+const app = createApp(config.PROCESS_ROLE);
 
-app.disable('x-powered-by');
 app.listen(port);
