@@ -61,3 +61,51 @@ test('GET /me for the seed returns counts members: 4, channels: 3, activeRules: 
     },
   });
 });
+
+test('PUT /settings with quietStart equal to quietEnd returns 422 E-SETTINGS-QUIET-HOURS-EQUAL', async () => {
+  const response = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ quietStart: '21:00', quietEnd: '21:00', budgetPerHour: 6, digestTime: '08:30' });
+  expect(response.status).toBe(422);
+  expect(response.body.error).toMatchObject({
+    code: 'E-SETTINGS-QUIET-HOURS-EQUAL',
+    message: 'Choose different start and end times.',
+    details: [{ field: 'quietEnd', issue: 'invalid' }],
+  });
+});
+
+test('PUT /settings with budgetPerHour: 0 returns 422 E-VALIDATION', async () => {
+  const response = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ quietStart: '21:00', quietEnd: '07:00', budgetPerHour: 0, digestTime: '08:30' });
+  expect(response.status).toBe(422);
+  expect(response.body.error).toMatchObject({
+    code: 'E-VALIDATION',
+    details: [{ field: 'budgetPerHour', issue: 'invalid' }],
+  });
+});
+
+test('PUT /settings accepts a window crossing midnight, returns saved settings and writes one config audit row', async () => {
+  const response = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ quietStart: '22:00', quietEnd: '06:00', budgetPerHour: 8, digestTime: '09:00' });
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual({
+    quietStart: '22:00',
+    quietEnd: '06:00',
+    budgetPerHour: 8,
+    digestTime: '09:00',
+    holdSeconds: 60,
+    timezone: 'Asia/Jakarta',
+  });
+  expect(
+    (
+      await pool.query(
+        "SELECT count(*)::int AS count FROM config_audit WHERE table_name = 'policies'",
+      )
+    ).rows,
+  ).toEqual([{ count: 1 }]);
+});

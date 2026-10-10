@@ -13,6 +13,7 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _request, resp
       code: failure.code,
       message: failure.message,
       requestId: response.getHeader('X-Request-ID'),
+      details: failure.details,
     },
   });
 };

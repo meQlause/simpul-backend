@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { z as zod } from 'zod';
-import type { createWorkspaceSchema } from './workspace.schema.js';
+import type { createWorkspaceSchema, settingsSchema } from './workspace.schema.js';
 
 export type WorkspaceProvision = {
   input: zod.infer<typeof createWorkspaceSchema>;
@@ -65,4 +65,30 @@ export async function selectMe(tx: PoolClient, scope: { workspaceId: string; act
     [scope.workspaceId, scope.actorId],
   );
   return result.rows[0];
+}
+
+type Settings = zod.infer<typeof settingsSchema> & { holdSeconds: number; timezone: string };
+
+export async function selectSettings(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query<Settings & { id: string }>(
+    `SELECT policy.id, to_char(quiet_start, 'HH24:MI') AS "quietStart",
+    to_char(quiet_end, 'HH24:MI') AS "quietEnd", budget_per_hour AS "budgetPerHour",
+    to_char(digest_time, 'HH24:MI') AS "digestTime", hold_seconds AS "holdSeconds", workspace.timezone
+    FROM policies AS policy JOIN workspaces AS workspace ON workspace.id = policy.workspace_id
+    WHERE policy.workspace_id = $1 FOR UPDATE OF policy`,
+    [workspaceId],
+  );
+  return result.rows[0];
+}
+
+export async function updateSettings(
+  tx: PoolClient,
+  workspaceId: string,
+  input: zod.infer<typeof settingsSchema>,
+) {
+  await tx.query(
+    `UPDATE policies SET quiet_start = $2, quiet_end = $3, budget_per_hour = $4,
+    digest_time = $5 WHERE workspace_id = $1`,
+    [workspaceId, input.quietStart, input.quietEnd, input.budgetPerHour, input.digestTime],
+  );
 }

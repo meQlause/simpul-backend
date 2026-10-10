@@ -1,8 +1,17 @@
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { provisionAdmin } from '../auth/index.js';
-import { insertWorkspace, selectMe, type WorkspaceProvision } from './workspace.repository.js';
+import {
+  insertWorkspace,
+  selectMe,
+  selectSettings,
+  updateSettings,
+  type WorkspaceProvision,
+} from './workspace.repository.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { recordAudit } from '../audit/index.js';
+import type { z as zod } from 'zod';
+import type { settingsSchema } from './workspace.schema.js';
 
 export async function createWorkspace(
   resolveConnection: ConnectionResolver,
@@ -18,6 +27,24 @@ export async function createWorkspace(
       now: provision.now,
     });
     await insertWorkspace(tx, provision);
+  });
+}
+
+export async function saveSettings(
+  resolveConnection: ConnectionResolver,
+  scope: { workspaceId: string; actorId: string },
+  input: zod.infer<typeof settingsSchema>,
+) {
+  return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
+    const row = await selectSettings(tx, scope.workspaceId);
+    if (!row) {
+      throw new DomainError('E-NOT-FOUND');
+    }
+    const { id, ...before } = row;
+    const after = { ...before, ...input };
+    await updateSettings(tx, scope.workspaceId, input);
+    await recordAudit(tx, { ...scope, tableName: 'policies', recordId: id, before, after });
+    return after;
   });
 }
 

@@ -1,4 +1,6 @@
 const errors = {
+  'E-VALIDATION': { status: 422, message: 'Check the highlighted fields.' },
+  'E-SETTINGS-QUIET-HOURS-EQUAL': { status: 422, message: 'Choose different start and end times.' },
   'E-AUTH-REQUIRED': { status: 401, message: 'Your session has ended. Sign in to continue.' },
   'E-FORBIDDEN': { status: 403, message: 'Only workspace admins can open this panel.' },
   'E-NOT-FOUND': { status: 404, message: 'This page is unavailable. Return to Home to continue.' },
@@ -12,7 +14,10 @@ const errors = {
 export class DomainError extends Error {
   readonly status: number;
 
-  constructor(readonly code: keyof typeof errors) {
+  constructor(
+    readonly code: keyof typeof errors,
+    readonly details?: { field: string; issue: 'invalid' | 'unknown' | 'required' }[],
+  ) {
     super(errors[code].message);
     this.name = 'DomainError';
     this.status = errors[code].status;
