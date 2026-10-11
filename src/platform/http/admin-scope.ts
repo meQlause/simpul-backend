@@ -5,6 +5,7 @@ import { DomainError } from '../errors/domain-error.js';
 type ResolveAdmin = (
   headers: Headers,
   databaseSetup?: boolean,
+  identityOnly?: boolean,
 ) => Promise<{
   workspaceId: string;
   actorId: string;
@@ -15,7 +16,13 @@ export function adminScope(resolveAdmin: ResolveAdmin): RequestHandler {
   return async (request, response, next) => {
     const setupRoute = request.path === '/database' && ['GET', 'PUT'].includes(request.method);
 
-    response.locals.scope = await resolveAdmin(fromNodeHeaders(request.headers), setupRoute);
+    const identityOnly = request.method === 'GET' && request.path === '/me';
+
+    response.locals.scope = await resolveAdmin(
+      fromNodeHeaders(request.headers),
+      setupRoute,
+      identityOnly,
+    );
 
     if (response.locals.scope.databaseSetupRequired && !setupRoute) {
       throw new DomainError('E-DB-SETUP-REQUIRED');

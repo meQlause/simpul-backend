@@ -21,21 +21,29 @@ async function waitForDatabase(pool: Pool) {
   throw new Error('Browser fixture database did not start');
 }
 
+const PASSWORD = 'test-password-123';
+const browserUsers = [
+  { id: 'browser-admin', name: 'Siti Aminah', email: 'admin@pointstar.example' },
+  // Not the workspace admin: signs in, then every admin endpoint answers 403.
+  { id: 'browser-staff', name: 'Budi Santoso', email: 'budi@pointstar.example' },
+];
+
 async function browserAuthentication(pool: Pool) {
   const client = await pool.connect();
 
   try {
-    await provisionAdmin(client, {
-      id: 'browser-admin',
-      name: 'Siti Aminah',
-      email: 'admin@pointstar.example',
-      token: 'browser-password-token',
-      now: new Date(),
-      expiresAt: new Date('2099-01-01T00:00:00Z'),
-    });
-    await client.query(
-      "UPDATE people SET auth_user_id = 'browser-admin' WHERE name = 'Siti Aminah'",
-    );
+    for (const user of browserUsers) {
+      await provisionAdmin(client, {
+        ...user,
+        token: `${user.id}-password-token`,
+        now: new Date(),
+        expiresAt: new Date('2099-01-01T00:00:00Z'),
+      });
+      await client.query('UPDATE people SET auth_user_id = $1 WHERE name = $2', [
+        user.id,
+        user.name,
+      ]);
+    }
   } finally {
     client.release();
   }
@@ -45,9 +53,11 @@ async function browserAuthentication(pool: Pool) {
     secret: 'browser-test-only-secret-with-more-than-32-characters',
   });
 
-  await authentication.api.resetPassword({
-    body: { token: 'browser-password-token', newPassword: 'test-password-123' },
-  });
+  for (const user of browserUsers) {
+    await authentication.api.resetPassword({
+      body: { token: `${user.id}-password-token`, newPassword: PASSWORD },
+    });
+  }
 
   return authentication;
 }

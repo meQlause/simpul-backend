@@ -64,7 +64,7 @@ test('GET /api/v1/me returns 401 E-AUTH-REQUIRED without a session', async () =>
   expect(response.body.error.code).toBe('E-AUTH-REQUIRED');
 });
 
-test('GET /api/v1/me returns 403 E-FORBIDDEN for a signed-in non-admin', async () => {
+test('GET /api/v1/me names a signed-in non-admin, and every other endpoint answers 403', async () => {
   const login = await auth.api.signInEmail({
     body: { email: 'budi@pointstar.example', password: 'test-password-123' },
     asResponse: true,
@@ -73,8 +73,14 @@ test('GET /api/v1/me returns 403 E-FORBIDDEN for a signed-in non-admin', async (
     .get('/api/v1/me')
     .set('Cookie', login.headers.get('set-cookie') ?? '');
 
-  expect(response.status).toBe(403);
-  expect(response.body.error.code).toBe('E-FORBIDDEN');
+  expect(response.status).toBe(200);
+  expect(response.body.data.person.name).toBe('Budi Santoso');
+  const rules = await supertest(app)
+    .get('/api/v1/rules')
+    .set('Cookie', login.headers.get('set-cookie') ?? '');
+
+  expect(rules.status).toBe(403);
+  expect(rules.body.error.code).toBe('E-FORBIDDEN');
 });
 
 test('The workspace admin resolves to their own workspace and actor scope', async () => {

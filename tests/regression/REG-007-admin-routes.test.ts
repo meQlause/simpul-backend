@@ -371,6 +371,13 @@ test.each(routes)('REG-007: $method $path requires an admin session', async (rou
   expect(anonymous.body.error.code).toBe('E-AUTH-REQUIRED');
   const member = await request(route).set('Cookie', memberCookie).send(body);
 
+  if (route.method === 'get' && route.path === '/me') {
+    // The one identity endpoint: a member reads their own name, nothing else.
+    expect(member.status).toBe(200);
+
+    return;
+  }
+
   expect(member.status).toBe(403);
   expect(member.body.error.code).toBe('E-FORBIDDEN');
 });

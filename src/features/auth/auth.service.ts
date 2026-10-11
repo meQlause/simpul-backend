@@ -19,7 +19,7 @@ export function createAdminResolver(
   pool: Pool,
   resolveConnection: ConnectionResolver,
 ) {
-  return async (headers: Headers, databaseSetup = false) => {
+  return async (headers: Headers, databaseSetup = false, identityOnly = false) => {
     const session = await readSession(headers);
 
     if (!session) {
@@ -34,18 +34,23 @@ export function createAdminResolver(
 
     if (!person.person_id) {
       return resolveOwnAdmin(
-        { pool, resolveConnection, databaseSetup },
+        { pool, resolveConnection, databaseSetup, identityOnly },
         person.workspace_id,
         session.user.id,
       );
     }
 
-    return authorizeAdmin(resolveConnection, person.workspace_id, person.person_id);
+    return authorizeAdmin(resolveConnection, person.workspace_id, person.person_id, identityOnly);
   };
 }
 
 async function resolveOwnAdmin(
-  context: { pool: Pool; resolveConnection: ConnectionResolver; databaseSetup: boolean },
+  context: {
+    pool: Pool;
+    resolveConnection: ConnectionResolver;
+    databaseSetup: boolean;
+    identityOnly: boolean;
+  },
   workspaceId: string,
   authUserId: string,
 ) {
@@ -71,19 +76,26 @@ async function resolveOwnAdmin(
     throw new DomainError(FORBIDDEN);
   }
 
-  return authorizeAdmin(context.resolveConnection, workspaceId, person.person_id);
+  return authorizeAdmin(
+    context.resolveConnection,
+    workspaceId,
+    person.person_id,
+    context.identityOnly,
+  );
 }
 
 async function authorizeAdmin(
   resolveConnection: ConnectionResolver,
   workspaceId: string,
   actorId: string,
+  identityOnly: boolean,
 ) {
   const allowed = await scopedTransaction(resolveConnection, workspaceId, (tx) =>
     isWorkspaceAdmin(tx, actorId),
   );
 
-  if (!allowed) {
+  // GET /me is the one endpoint a signed-in non-admin may read: the no-access screen names them.
+  if (!allowed && !identityOnly) {
     throw new DomainError(FORBIDDEN);
   }
 
