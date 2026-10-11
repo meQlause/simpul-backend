@@ -66,6 +66,12 @@ if (process.argv[2] === 'create-workspace') {
           secret: config.AUTH_SECRET,
         }),
         resolveConnection: createConnectionResolver(pool),
+        database: {
+          systemPool: pool,
+          systemHost: new URL(config.DATABASE_URL).hostname,
+          masterKey: config.SECRETS_MASTER_KEY,
+          now: () => new Date(),
+        },
         review: {
           now: () => new Date(),
           publishMatcher: queue ? publishMatching(queue) : undefined,

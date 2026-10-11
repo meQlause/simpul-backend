@@ -25,6 +25,7 @@ import { channelsRouter } from './features/channels/index.js';
 import { webhookRouter, type WebhookServices } from './features/ingest/index.js';
 
 type ApiServices = {
+  database?: import('./platform/db/database-setup.js').DatabaseServices;
   authentication: ReturnType<typeof createAuthentication>;
   resolveConnection: ConnectionResolver;
   mail?: { masterKey: string; verifyMail?: typeof verifyMail; now: () => Date };
@@ -70,7 +71,10 @@ function mountFeatures(
   services: ApiServices,
   mail: Parameters<typeof workspaceRouter>[1],
 ) {
-  app.use('/api/v1', workspaceRouter(services.resolveConnection, mail, services.overview?.now));
+  app.use(
+    '/api/v1',
+    workspaceRouter(services.resolveConnection, mail, services.overview?.now, services.database),
+  );
   app.use('/api/v1', peopleRouter(services.resolveConnection));
   app.use('/api/v1', auditRouter(services.resolveConnection));
   app.use(

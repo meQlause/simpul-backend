@@ -5,16 +5,26 @@ import { mailController, saveMailController } from './workspace-mail.controller.
 import type { MailServices } from './workspace-mail.service.js';
 import { overviewController } from './workspace-overview.controller.js';
 import { onboardingController } from './workspace-onboarding.controller.js';
-import { databaseSetupValidation } from './workspace-database.controller.js';
+import {
+  databaseSetupValidation,
+  databasePreflightController,
+} from './workspace-database.controller.js';
+import type { DatabaseServices } from '../../platform/db/database-setup.js';
 
 export function workspaceRouter(
   resolveConnection: ConnectionResolver,
   mail?: MailServices,
   now: () => Date = () => new Date(),
+  database?: DatabaseServices,
 ) {
   const router = Router();
 
   router.use('/database', databaseSetupValidation);
+
+  if (database) {
+    router.put('/database', databasePreflightController(database));
+  }
+
   router.get('/me', meController(resolveConnection));
   router.get('/overview', overviewController(resolveConnection, now));
   router.post('/onboarding/complete', onboardingController(resolveConnection, now));

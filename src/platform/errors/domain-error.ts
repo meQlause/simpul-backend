@@ -1,4 +1,28 @@
 const errors = {
+  'E-DB-VERSION-UNSUPPORTED': {
+    status: 422,
+    message:
+      'This database server is too old. PostgreSQL 15 or later is required. Nothing was saved.',
+  },
+  'E-DB-PERMISSION-MISSING': {
+    status: 422,
+    message:
+      'This database user cannot create tables or extensions. Grant those permissions and try again. Nothing was saved.',
+  },
+  'E-DB-VECTOR-MISSING': {
+    status: 422,
+    message:
+      'The pgvector extension is not available on this server. Install it and try again. Nothing was saved.',
+  },
+  'E-DB-IN-USE': {
+    status: 409,
+    message: 'This database already belongs to another workspace. Use an empty database.',
+  },
+  'E-DB-WORKSPACE-MISMATCH': {
+    status: 422,
+    message:
+      'This database does not contain this workspace’s data. The connection was not changed.',
+  },
   'E-DB-CONNECTION-FAILED': {
     status: 422,
     message:

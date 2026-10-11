@@ -7,8 +7,12 @@ const dockerExecutable =
     ? 'C:/Program Files/Docker/Docker/resources/bin/docker.exe'
     : '/usr/bin/docker';
 
-export function databaseFixture(maxConnections = 1) {
+export function databaseFixture(
+  maxConnections = 1,
+  options: { image?: string; tls?: boolean; passwordAuth?: boolean } = {},
+) {
   let containerId = '';
+  let certificate = '';
   const pool = new postgres.Pool({ max: maxConnections });
 
   beforeAll(async () => {
@@ -25,10 +29,14 @@ export function databaseFixture(maxConnections = 1) {
         '--tmpfs',
         '/var/lib/postgresql/data:rw,size=256m',
         '-e',
-        'POSTGRES_HOST_AUTH_METHOD=trust',
+        options.passwordAuth
+          ? 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256'
+          : 'POSTGRES_HOST_AUTH_METHOD=trust',
+        '-e',
+        'POSTGRES_PASSWORD=test-only-db-password',
         '-p',
         '127.0.0.1::5432',
-        'pgvector/pgvector:0.8.7-pg15-trixie',
+        options.image ?? 'pgvector/pgvector:0.8.7-pg15-trixie',
       ],
       { encoding: 'utf8' },
     ).trim();
@@ -36,7 +44,9 @@ export function databaseFixture(maxConnections = 1) {
       encoding: 'utf8',
     }).trim();
 
-    pool.options.connectionString = `postgresql://postgres@${address}/postgres`;
+    const credentials = options.passwordAuth ? 'postgres:test-only-db-password' : 'postgres';
+
+    pool.options.connectionString = `postgresql://${credentials}@${address}/postgres`;
     await vi.waitFor(
       () =>
         expect(
@@ -48,6 +58,10 @@ export function databaseFixture(maxConnections = 1) {
         ).toContain('accepting connections'),
       { timeout: 15000 },
     );
+
+    if (options.tls) {
+      certificate = await enableTestTls(containerId, pool);
+    }
   }, 30000);
   afterAll(async () => {
     try {
@@ -59,5 +73,41 @@ export function databaseFixture(maxConnections = 1) {
     }
   });
 
-  return pool;
+  return Object.assign(pool, { certificate: () => certificate });
+}
+
+async function enableTestTls(containerId: string, pool: postgres.Pool) {
+  const command = (args: string[]) =>
+    execFileSync(dockerExecutable, ['exec', containerId, ...args], {
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+  command([
+    'openssl',
+    'req',
+    '-new',
+    '-x509',
+    '-nodes',
+    '-newkey',
+    'rsa:2048',
+    '-keyout',
+    '/var/lib/postgresql/data/simpul-test.key',
+    '-out',
+    '/var/lib/postgresql/data/simpul-test.crt',
+    '-days',
+    '1',
+    '-subj',
+    '/CN=customer.example',
+    '-addext',
+    'subjectAltName=DNS:customer.example',
+  ]);
+  command(['chmod', '600', '/var/lib/postgresql/data/simpul-test.key']);
+  command(['chown', 'postgres:postgres', '/var/lib/postgresql/data/simpul-test.key']);
+  await pool.query("ALTER SYSTEM SET ssl_cert_file = '/var/lib/postgresql/data/simpul-test.crt'");
+  await pool.query("ALTER SYSTEM SET ssl_key_file = '/var/lib/postgresql/data/simpul-test.key'");
+  await pool.query("ALTER SYSTEM SET ssl = 'on'");
+  await pool.query('SELECT pg_reload_conf()');
+
+  return command(['cat', '/var/lib/postgresql/data/simpul-test.crt']);
 }
