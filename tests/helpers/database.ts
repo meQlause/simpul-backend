@@ -94,7 +94,7 @@ function databaseCopy(containerId: () => string) {
       execFileSync(
         dockerExecutable,
         ['exec', containerId(), 'pg_dump', '-U', 'postgres', '--no-owner', '--no-acl', 'postgres'],
-        { encoding: 'utf8' },
+        { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
       ),
     restore: (sql: string) =>
       execFileSync(
