@@ -11,6 +11,7 @@ import {
 import { registerUnderstandingJobs } from '../features/understanding/index.js';
 import { registerDeliveryJobs } from '../features/delivery/index.js';
 import { registerWorkJobs } from '../features/work/index.js';
+import { registerErasureJobs } from '../features/workspace/index.js';
 import {
   publishUnit,
   publishResolution,
@@ -34,6 +35,7 @@ export type PipelineServices = {
 
 export async function registerPipelineJobs(queue: PgBoss, services: PipelineServices) {
   await registerWorkJobs(queue, services);
+  await registerErasureJobs(queue, services.resolveConnection);
   await registerRetentionJobs(queue, services);
   await registerIngestJobs(queue, { ...services, publishUnit: publishUnit(queue) });
   await registerMediaJobs(queue, { ...services, publishUnit: publishUnit(queue) });

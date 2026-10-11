@@ -24,6 +24,7 @@ export async function createQueue(pool: Pool, scheduling = false) {
     'scheduler.tick',
     'scheduler.retention',
     'work.lifecycle',
+    'workspace.erase',
   ]) {
     await boss.createQueue(name, { retryLimit: 5, retryBackoff: true });
   }

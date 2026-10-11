@@ -9,3 +9,5 @@ export { createWorkspaceSchema } from './workspace.schema.js';
 export { workspaceRouter } from './workspace.routes.js';
 
 export { mailConfiguration } from './workspace-mail.service.js';
+
+export { registerErasureJobs } from './workspace-erasure.jobs.js';
