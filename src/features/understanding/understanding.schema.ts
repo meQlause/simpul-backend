@@ -14,3 +14,14 @@ export const comprehensionOutput = z.strictObject({
     }),
   ),
 });
+
+export const candidatesInput = z.strictObject({
+  quantity: z.number().finite().nullable(),
+  candidates: z.array(
+    z.strictObject({
+      id: z.guid(),
+      score: z.number().min(0).max(1),
+      quantity: z.number().finite().nullable(),
+    }),
+  ),
+});

@@ -80,6 +80,7 @@ export const openQuestions = pgTable(
   'open_questions',
   {
     ...tenantColumns(),
+    unitId: reference('unit_id', () => units.id, 'cascade'),
     threadIds: uuid('thread_ids').array().notNull(),
     channelId: reference('channel_id', () => channels.id).notNull(),
     askedAt: instant('asked_at').defaultNow().notNull(),
@@ -88,6 +89,7 @@ export const openQuestions = pgTable(
     answer: text('answer'),
   },
   (table) => [
+    uniqueIndex('oq_unit_uq').on(table.unitId),
     check('oq_candidates_valid', sql`cardinality(${table.threadIds}) BETWEEN 1 AND 3`),
     check('oq_expiry_valid', sql`${table.expiresAt} > ${table.askedAt}`),
     index('oq_channel_day_idx').on(table.channelId, table.askedAt.desc()),
