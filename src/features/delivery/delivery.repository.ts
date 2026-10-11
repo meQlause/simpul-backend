@@ -13,3 +13,14 @@ export async function cancelChannelUnsent(
     [workspaceId, input.channelId, input.now],
   );
 }
+
+export async function cancelWorkUnsent(
+  tx: PoolClient,
+  workspaceId: string,
+  input: { threadId: string; now: Date },
+) {
+  await tx.query(
+    'UPDATE notifications SET cancelled_at = $3 WHERE workspace_id = $1 AND thread_id = $2 AND sent_at IS NULL AND cancelled_at IS NULL',
+    [workspaceId, input.threadId, input.now],
+  );
+}

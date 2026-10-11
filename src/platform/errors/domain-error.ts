@@ -1,4 +1,5 @@
 const errors = {
+  'E-WORK-NOT-OPEN': { status: 409, message: 'This work item is already closed.' },
   'E-VOCAB-PREFIX-FIXED': {
     status: 409,
     message: 'This prefix is already used by work items and cannot be changed.',

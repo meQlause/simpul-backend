@@ -68,3 +68,18 @@ export function parseGenesis(input: unknown) {
 
   return parsed.data;
 }
+
+export function parseClosure(input: unknown) {
+  const parsed = schema
+    .strictObject({
+      closure: schema.enum(['completed', 'cancelled', 'outside_chat']),
+      reason: schema.string().trim().min(5).max(300),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}

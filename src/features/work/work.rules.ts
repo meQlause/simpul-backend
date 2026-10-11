@@ -26,3 +26,21 @@ export function genesisState(confidence: number, now: number) {
     ? { status: 'active', expiresAt: null }
     : { status: 'tentative', expiresAt: now + tentativeLifetime };
 }
+
+export function closureStatus(kind: string) {
+  return kind === 'completed' ? 'completed' : 'cancelled';
+}
+
+export function undoAvailable(item: {
+  status: string;
+  closedBy: string | null;
+  closedAt: number | null;
+  lastActivityAt: number;
+}) {
+  return (
+    (item.status === 'completed' || item.status === 'cancelled') &&
+    item.closedBy !== null &&
+    item.closedAt !== null &&
+    item.lastActivityAt <= item.closedAt
+  );
+}

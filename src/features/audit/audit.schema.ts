@@ -4,6 +4,20 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  threads: zod
+    .object({
+      displayId: zod.string(),
+      status: zod.string(),
+      closure: zod
+        .object({
+          kind: zod.string().nullable(),
+          reason: zod.string().nullable(),
+          closedAt: zod.date(),
+          closedByName: zod.string().nullable(),
+        })
+        .nullable(),
+    })
+    .partial(),
   templates: zod.object({ id: zod.guid(), body: zod.string() }).partial(),
   vocab_domains: zod
     .object({

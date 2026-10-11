@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { parseWorkQuery, parseGenesis } from './work.schema.js';
+import type { parseWorkQuery, parseGenesis, parseClosure } from './work.schema.js';
 import type { displayStatus } from './work.rules.js';
 
 type WorkRow = {
@@ -25,6 +25,14 @@ const filteredWork = `FROM threads AS item
   AND ($3::text IS NULL OR CASE WHEN item.status = 'active' AND item.last_activity_at < $2::timestamptz - rhythm.value * interval '1 hour' THEN 'stalled' ELSE item.status END = $3)
   AND ($4::text IS NULL OR strpos(lower(concat_ws(' ', item.display_id, item.customer_label, item.summary, owner.name, channel.display_name)), lower($4)) > 0)`;
 
+const summaryColumns = `SELECT item.id, item.display_id AS "displayId", item.customer_label AS customer, item.summary, item.status,
+    domain.name AS category, item.last_activity_at AS "lastActivityAt", rhythm.value::float AS "thresholdHours",
+    CASE WHEN owner.id IS NULL THEN NULL ELSE jsonb_build_object('id', owner.id, 'name', owner.name, 'team',
+      (SELECT role.team FROM roles AS role JOIN role_members AS member ON member.role_id = role.id
+        WHERE role.workspace_id = $1 AND member.workspace_id = $1 AND member.person_id = owner.id AND member.kind = 'member' ORDER BY role.name LIMIT 1)) END AS owner,
+    jsonb_build_object('id', channel.id, 'displayName', channel.display_name) AS channel
+`;
+
 export async function selectWork(
   tx: PoolClient,
   workspaceId: string,
@@ -37,12 +45,7 @@ export async function selectWork(
     filters,
   );
   const rows = await tx.query<WorkRow>(
-    `SELECT item.id, item.display_id AS "displayId", item.customer_label AS customer, item.summary, item.status,
-    domain.name AS category, item.last_activity_at AS "lastActivityAt", rhythm.value::float AS "thresholdHours",
-    CASE WHEN owner.id IS NULL THEN NULL ELSE jsonb_build_object('id', owner.id, 'name', owner.name, 'team',
-      (SELECT role.team FROM roles AS role JOIN role_members AS member ON member.role_id = role.id
-        WHERE role.workspace_id = $1 AND member.workspace_id = $1 AND member.person_id = owner.id AND member.kind = 'member' ORDER BY role.name LIMIT 1)) END AS owner,
-    jsonb_build_object('id', channel.id, 'displayName', channel.display_name) AS channel
+    `${summaryColumns}
     ${filteredWork} AND ($5::timestamptz IS NULL OR (item.last_activity_at, item.id) < ($5, $6::uuid))
     ORDER BY item.last_activity_at DESC, item.id DESC LIMIT $7`,
     [...filters, input.cursor?.at ?? null, input.cursor?.id ?? null, input.limit + 1],
@@ -73,4 +76,71 @@ export async function insertGenesis(
       ],
     )
   ).rows[0];
+}
+
+type DetailRow = WorkRow & {
+  nextStep: string | null;
+  createdAt: Date;
+  closedAt: Date | null;
+  closedBy: string | null;
+  closureKind: string | null;
+  closureReason: string | null;
+  closedByName: string | null;
+  latestUpdate: { text: string; at: string } | null;
+  reminderCount: number;
+  ruleApplied: string | null;
+  backupName: string | null;
+};
+
+export async function selectWorkDetail(
+  tx: PoolClient,
+  workspaceId: string,
+  displayId: string,
+  now: Date,
+) {
+  return (
+    await tx.query<DetailRow>(
+      `${summaryColumns},
+    item.next_step AS "nextStep", item.created_at AS "createdAt", item.closed_at AS "closedAt",
+    item.closed_by AS "closedBy", item.closure_kind AS "closureKind", item.closure_reason AS "closureReason",
+    (SELECT name FROM people WHERE workspace_id = $1 AND id = item.closed_by) AS "closedByName",
+    (SELECT jsonb_build_object('text', text, 'at', ts) FROM progress_markers WHERE workspace_id = $1 AND thread_id = item.id ORDER BY ts DESC, id DESC LIMIT 1) AS "latestUpdate",
+    (SELECT count(*)::int FROM notifications WHERE workspace_id = $1 AND thread_id = item.id AND kind = 'reminder' AND sent_at IS NOT NULL) AS "reminderCount",
+    (SELECT rule.name FROM label_rule_matches AS matched JOIN labels AS label ON label.id = matched.label_id AND label.workspace_id = $1 JOIN rules AS rule ON rule.id = matched.rule_id AND rule.workspace_id = $1 WHERE matched.workspace_id = $1 AND label.thread_id = item.id ORDER BY matched.matched_at DESC, rule.id DESC LIMIT 1) AS "ruleApplied",
+    (SELECT backup.name FROM role_members AS member JOIN role_members AS replacement ON replacement.role_id = member.role_id AND replacement.workspace_id = $1 AND replacement.kind = 'backup' JOIN people AS backup ON backup.id = replacement.person_id AND backup.workspace_id = $1 JOIN roles AS role ON role.id = member.role_id AND role.workspace_id = $1 WHERE member.workspace_id = $1 AND member.person_id = owner.id AND member.kind = 'member' ORDER BY role.name, backup.name LIMIT 1) AS "backupName"
+    ${filteredWork} AND item.display_id = $5`,
+      [workspaceId, now, null, null, displayId],
+    )
+  ).rows[0];
+}
+
+export async function lockWork(tx: PoolClient, workspaceId: string, displayId: string, now: Date) {
+  await tx.query(
+    "SELECT id FROM threads WHERE workspace_id = $1 AND display_id = $2 AND (status <> 'tentative' OR expires_at > $3) FOR UPDATE",
+    [workspaceId, displayId, now],
+  );
+
+  return selectWorkDetail(tx, workspaceId, displayId, now);
+}
+
+export async function storeClosure(
+  tx: PoolClient,
+  scope: { workspaceId: string; actorId: string },
+  itemId: string,
+  input: ReturnType<typeof parseClosure> & { status: string; now: Date },
+) {
+  return (
+    await tx.query(
+      "UPDATE threads SET status = $3, closure_kind = $4, closure_reason = $5, closed_at = $6, closed_by = $7 WHERE workspace_id = $1 AND id = $2 AND status = 'active' RETURNING id",
+      [
+        scope.workspaceId,
+        itemId,
+        input.status,
+        input.closure,
+        input.reason,
+        input.now,
+        scope.actorId,
+      ],
+    )
+  ).rowCount;
 }
