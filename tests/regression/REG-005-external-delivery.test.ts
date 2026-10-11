@@ -100,3 +100,93 @@ test('REG-005 / SRS T-10: external sending always renders the fixed template, ev
     ).rows.every((row: { body_rendered: string }) => row.body_rendered === expected),
   ).toBe(true);
 });
+
+test('Delivery L5.7: a holder on leave during the hold is replaced by the backup at send time', async () => {
+  exchange.mockClear();
+  await pool.query(
+    `INSERT INTO rules (workspace_id, name, domain_id, condition_text, event_type, recipient_role_id, template_id)
+    VALUES ($1, 'Hold backup', md5('point-star-domain-Order')::uuid, 'Confirmed update', 'progress',
+      md5('point-star-role-2')::uuid, md5('point-star-template-internal')::uuid)`,
+    [seed.workspaceId],
+  );
+  const labelId = (
+    await pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, created_at)
+    SELECT workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, $2
+    FROM labels WHERE workspace_id = $1 AND id = md5('point-star-label-1')::uuid RETURNING id`,
+      [seed.workspaceId, instant],
+    )
+  ).rows[0].id as string;
+
+  await routeLabel({ ...services, now: () => instant }, { workspaceId: seed.workspaceId, labelId });
+  const notification = (
+    await pool.query(
+      `SELECT n.id FROM notifications n JOIN people p ON p.id = n.recipient_person_id
+    WHERE n.label_id = $1 AND p.name = 'Budi Santoso'`,
+      [labelId],
+    )
+  ).rows[0];
+
+  await pool.query(
+    "UPDATE people SET availability = 'leave' WHERE workspace_id = $1 AND name = 'Budi Santoso'",
+    [seed.workspaceId],
+  );
+  await sendNotification(services, {
+    workspaceId: seed.workspaceId,
+    notificationId: notification.id,
+  });
+
+  const replacement = (
+    await pool.query(
+      `SELECT p.name, identity.handle FROM notifications n
+    JOIN people p ON p.id = n.recipient_person_id JOIN person_identities identity ON identity.person_id = p.id
+    WHERE n.id = $1`,
+      [notification.id],
+    )
+  ).rows[0];
+
+  expect(replacement.name).toBe('Siti Aminah');
+  expect(exchange).toHaveBeenCalledWith(expect.objectContaining({ room: replacement.handle }));
+});
+
+test('D-2 / SRS T-11: nobody available falls back to one origin-channel notification', async () => {
+  exchange.mockClear();
+  await pool.query("UPDATE people SET availability = 'leave' WHERE workspace_id = $1", [
+    seed.workspaceId,
+  ]);
+  const labelId = (
+    await pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, created_at)
+    SELECT workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, $2
+    FROM labels WHERE workspace_id = $1 AND id = md5('point-star-label-1')::uuid RETURNING id`,
+      [seed.workspaceId, instant],
+    )
+  ).rows[0].id as string;
+
+  await routeLabel({ ...services, now: () => instant }, { workspaceId: seed.workspaceId, labelId });
+  const rows = (
+    await pool.query(
+      'SELECT id, recipient_person_id, destination_channel_id FROM notifications WHERE label_id = $1',
+      [labelId],
+    )
+  ).rows;
+
+  expect(rows).toHaveLength(1);
+  expect(rows[0].recipient_person_id).toBeNull();
+  expect(rows[0].destination_channel_id).toBeTruthy();
+  await sendNotification(services, { workspaceId: seed.workspaceId, notificationId: rows[0].id });
+  expect(exchange).toHaveBeenCalledTimes(1);
+  const channel = await pool.query('SELECT provider_chat_id FROM channels WHERE id = $1', [
+    rows[0].destination_channel_id,
+  ]);
+
+  expect(exchange).toHaveBeenCalledWith(
+    expect.objectContaining({ room: channel.rows[0].provider_chat_id }),
+  );
+  await expect(
+    pool.query(
+      "UPDATE notifications SET recipient_person_id = md5('point-star-person-2')::uuid WHERE id = $1",
+      [rows[0].id],
+    ),
+  ).rejects.toMatchObject({ constraint: 'notifications_exactly_one_destination' });
+});

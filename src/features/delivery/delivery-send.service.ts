@@ -6,8 +6,12 @@ import {
   lockPendingNotification,
   recordSentAt,
   deferNotification,
+  replaceDestination,
 } from './delivery-send.repository.js';
 import { renderNotification } from './delivery.rules.js';
+import { resolveRoleRecipientInTransaction } from '../people/index.js';
+import type { PoolClient } from 'pg';
+import { DomainError } from '../../platform/errors/domain-error.js';
 
 type Services = {
   resolveConnection: ConnectionResolver;
@@ -29,6 +33,12 @@ export async function sendNotification(
       return;
     }
 
+    const chatId = await resolveDestination(tx, scope, pending, now);
+
+    if (!chatId) {
+      return;
+    }
+
     const credential = await services.secretStore.get(
       tx,
       scope.workspaceId,
@@ -46,7 +56,7 @@ export async function sendNotification(
         providerAccountId: pending.providerAccountId,
         webhookUrl: `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/${pending.provider}/${pending.connectionId}`,
       },
-      { kind: 'notification', chatId: pending.chatId, text: body },
+      { kind: 'notification', chatId, text: body },
     );
 
     if ('retryAfter' in result) {
@@ -57,4 +67,34 @@ export async function sendNotification(
 
     await recordSentAt(tx, scope, { now, body });
   });
+}
+
+async function resolveDestination(
+  tx: PoolClient,
+  scope: { workspaceId: string; notificationId: string },
+  pending: NonNullable<Awaited<ReturnType<typeof lockPendingNotification>>>,
+  now: Date,
+) {
+  if (!pending.roleId) {
+    return pending.chatId;
+  }
+
+  const recipient = await resolveRoleRecipientInTransaction(
+    tx,
+    scope.workspaceId,
+    pending.roleId,
+    pending.originChannelId,
+  );
+  const chatId = await replaceDestination(tx, scope, {
+    personId: recipient.personId ?? null,
+    channelId: recipient.channelId ?? null,
+    provider: pending.provider,
+    now,
+  });
+
+  if (chatId === undefined) {
+    throw new DomainError('E-INTERNAL');
+  }
+
+  return chatId;
 }

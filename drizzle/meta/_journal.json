@@ -43,6 +43,13 @@
       "when": 1791699741893,
       "tag": "0005_operation_retractions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791701026109,
+      "tag": "0006_notification_destinations",
+      "breakpoints": true
     }
   ]
 }

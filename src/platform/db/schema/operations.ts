@@ -29,7 +29,8 @@ export const notifications = pgTable(
     labelId: reference('label_id', () => labels.id).notNull(),
     threadId: reference('thread_id', () => threads.id, 'set null'),
     ruleId: reference('rule_id', () => rules.id),
-    recipientPersonId: reference('recipient_person_id', () => people.id).notNull(),
+    recipientPersonId: reference('recipient_person_id', () => people.id),
+    destinationChannelId: reference('destination_channel_id', () => channels.id),
     kind: text('kind').default('update').notNull(),
     channel: text('channel').notNull(),
     bodyRendered: text('body_rendered').notNull(),
@@ -40,6 +41,10 @@ export const notifications = pgTable(
     correctedAt: instant('corrected_at'),
   },
   (table) => [
+    check(
+      'notifications_exactly_one_destination',
+      sql`(${table.recipientPersonId} IS NULL) <> (${table.destinationChannelId} IS NULL)`,
+    ),
     check(
       'notifications_kind_valid',
       sql`${table.kind} IN ('update','reminder','escalation','correction')`,
@@ -56,6 +61,9 @@ export const notifications = pgTable(
     index('notif_rule_idx').on(table.ruleId, table.sentAt.desc()),
     uniqueIndex('notif_one_per_label_uq')
       .on(table.labelId, table.recipientPersonId, table.kind)
+      .where(sql`${table.cancelledAt} IS NULL`),
+    uniqueIndex('notif_one_per_label_channel_uq')
+      .on(table.labelId, table.destinationChannelId, table.kind)
       .where(sql`${table.cancelledAt} IS NULL`),
   ],
 );

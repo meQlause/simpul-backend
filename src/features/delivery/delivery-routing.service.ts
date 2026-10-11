@@ -1,7 +1,6 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
-import { DomainError } from '../../platform/errors/domain-error.js';
 import { resolveRoleRecipientInTransaction } from '../people/index.js';
 import { raiseUnrouted } from '../review-queue/index.js';
 import { recordDecision } from '../audit/index.js';
@@ -50,12 +49,14 @@ export async function routeLabel(services: Services, scope: Scope) {
     );
 
     for (const recipient of mergeRecipientRules(matches)) {
-      const digestId = await budgetDigest(
-        tx,
-        { workspaceId: scope.workspaceId, personId: recipient.personId },
-        now,
-        recipient.urgency,
-      );
+      const digestId = recipient.personId
+        ? await budgetDigest(
+            tx,
+            { workspaceId: scope.workspaceId, personId: recipient.personId },
+            now,
+            recipient.urgency,
+          )
+        : null;
 
       await prepareNotification(tx, scope, { label, recipient, body, digestId }, now);
     }
@@ -80,11 +81,11 @@ async function resolveRecipients(
       channelId,
     );
 
-    if (recipient.kind !== 'person' || !recipient.personId) {
-      throw new DomainError('E-INTERNAL');
-    }
-
-    resolved.push({ ...rule, personId: recipient.personId });
+    resolved.push({
+      ...rule,
+      personId: recipient.personId ?? null,
+      destinationChannelId: recipient.channelId ?? null,
+    });
   }
 
   return resolved;

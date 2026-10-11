@@ -1,0 +1,5 @@
+ALTER TABLE "notifications" ALTER COLUMN "recipient_person_id" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "notifications" ADD COLUMN "destination_channel_id" uuid;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_destination_channel_id_channels_id_fk" FOREIGN KEY ("destination_channel_id") REFERENCES "public"."channels"("id") ON DELETE restrict ON UPDATE restrict;--> statement-breakpoint
+CREATE UNIQUE INDEX "notif_one_per_label_channel_uq" ON "notifications" USING btree ("label_id","destination_channel_id","kind") WHERE "notifications"."cancelled_at" IS NULL;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_exactly_one_destination" CHECK (("notifications"."recipient_person_id" IS NULL) <> ("notifications"."destination_channel_id" IS NULL));

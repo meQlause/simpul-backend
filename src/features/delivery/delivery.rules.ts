@@ -19,16 +19,23 @@ export function exceedsBudget(used: number, budget: number) {
   return used >= budget;
 }
 
-type RoutedRule = { ruleId: string; personId: string; urgency: string; priority: number };
+type RoutedRule = {
+  ruleId: string;
+  personId: string | null;
+  destinationChannelId: string | null;
+  urgency: string;
+  priority: number;
+};
 
 export function mergeRecipientRules(matches: RoutedRule[]) {
   const recipients = new Map<string, RoutedRule>();
 
   for (const match of matches) {
-    const previous = recipients.get(match.personId);
+    const key = match.personId ?? match.destinationChannelId!;
+    const previous = recipients.get(key);
 
     if (!previous || (match.urgency === 'high' && previous.urgency !== 'high')) {
-      recipients.set(match.personId, match);
+      recipients.set(key, match);
     }
   }
 

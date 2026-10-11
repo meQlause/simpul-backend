@@ -75,7 +75,7 @@ export async function prepareNotification(
     digestId,
   }: {
     label: RoutingLabel;
-    recipient: { ruleId: string; personId: string };
+    recipient: { ruleId: string; personId: string | null; destinationChannelId: string | null };
     body: string;
     digestId: string | null;
   },
@@ -83,8 +83,8 @@ export async function prepareNotification(
 ) {
   await tx.query(
     `INSERT INTO notifications (workspace_id, label_id, thread_id, rule_id, recipient_person_id,
-      channel, body_rendered, held_until, created_at, digest_id)
-    VALUES ($1, $2, $3, $4, $5, 'telegram', $6, $7::timestamptz + $8 * interval '1 second', $7, $9)
+      channel, body_rendered, held_until, created_at, digest_id, destination_channel_id)
+    VALUES ($1, $2, $3, $4, $5, 'telegram', $6, $7::timestamptz + $8 * interval '1 second', $7, $9, $10)
     ON CONFLICT DO NOTHING`,
     [
       scope.workspaceId,
@@ -96,6 +96,7 @@ export async function prepareNotification(
       now,
       label.holdSeconds,
       digestId,
+      recipient.destinationChannelId,
     ],
   );
 }
