@@ -1,3 +1,4 @@
+import { redactPii } from './ingest.rules.js';
 import { lockSender } from './ingest.coalesce.repository.js';
 import type { PoolClient } from 'pg';
 import type { InboundMessage } from '../../platform/providers/index.js';
@@ -44,13 +45,14 @@ export async function storeMessage(
   }
 
   const message = await tx.query(
-    'INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts) VALUES ($1, $2, $3, $4, $5, $5, $6, $7) ON CONFLICT (workspace_id, channel_id, provider_msg_id) DO NOTHING RETURNING id',
+    'INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (workspace_id, channel_id, provider_msg_id) DO NOTHING RETURNING id',
     [
       scope.workspaceId,
       channel.rows[0].id,
       event.messageId,
       event.senderExternalId,
       event.body,
+      redactPii(event.body),
       new Date(event.serverTs),
       receivedAt,
     ],

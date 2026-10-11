@@ -1,3 +1,5 @@
+import { coalesce } from '../../../../src/features/ingest/index.js';
+import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { fork } from 'node:child_process';
 import { once } from 'node:events';
 import { beforeAll, expect, test, vi } from 'vitest';
@@ -126,4 +128,44 @@ test('A message and its job commit together: killing the process between them le
   expect(
     (await pool.query("SELECT id FROM pgboss.job WHERE data->>'channelId' = $1", [channelId])).rows,
   ).toHaveLength(1);
+});
+
+test('body_safe has NIK, bank-account and card patterns redacted while body is unchanged', async () => {
+  const body =
+    'NIK 3173010101900001 rekening 1234567890 kartu 4111 1111 1111 1111. ORD-1234567890 tambah 2 dus';
+  const safe = 'NIK [REDACTED] rekening [REDACTED] kartu [REDACTED]. ORD-1234567890 tambah 2 dus';
+  const response = await request(webhookApp)
+    .post('/api/v1/webhooks/telegram/' + connectionId)
+    .set('X-Telegram-Bot-Api-Secret-Token', webhookSecret)
+    .send({
+      update_id: 5001,
+      message: {
+        message_id: 5001,
+        date: 1791604860,
+        text: body,
+        from: { id: 604, is_bot: false },
+        chat: { id: chatId, title: 'Crash transaction group', type: 'supergroup' },
+      },
+    });
+
+  expect(response.status).toBe(200);
+  expect(
+    (
+      await pool.query(
+        "SELECT body, body_safe FROM messages_raw WHERE channel_id = $1 AND provider_msg_id = '5001'",
+        [channelId],
+      )
+    ).rows,
+  ).toEqual([{ body, body_safe: safe }]);
+  await coalesce(
+    {
+      resolveConnection: createConnectionResolver(pool),
+      now: () => new Date('2026-10-10T04:02:00Z'),
+      debounceSeconds: 12,
+    },
+    { workspaceId, channelId, senderExternalId: '604' },
+  );
+  expect(
+    (await pool.query('SELECT text FROM units WHERE channel_id = $1', [channelId])).rows,
+  ).toEqual([{ text: safe }]);
 });
