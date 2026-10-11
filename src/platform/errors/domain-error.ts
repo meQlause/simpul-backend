@@ -1,4 +1,5 @@
 const errors = {
+  'E-WORK-UNDO-UNAVAILABLE': { status: 409, message: 'This change can no longer be undone.' },
   'E-WORK-NOT-OPEN': { status: 409, message: 'This work item is already closed.' },
   'E-VOCAB-PREFIX-FIXED': {
     status: 409,

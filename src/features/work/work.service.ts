@@ -11,6 +11,7 @@ import {
   selectWorkDetail,
   lockWork,
   storeClosure,
+  clearClosure,
 } from './work.repository.js';
 import { displayStatus, genesisState, closureStatus, undoAvailable } from './work.rules.js';
 import {
@@ -177,6 +178,44 @@ export async function closeWork(
       { displayId: input.displayId, action: input.closure },
     );
     const after = await detailInTransaction(tx, scope.workspaceId, input.displayId, now);
+
+    await recordConfigChange(tx, {
+      ...scope,
+      tableName: 'threads',
+      recordId: before.id,
+      before: workDetail(before, now),
+      after,
+    });
+
+    return after;
+  });
+}
+
+export async function undoCloseWork(
+  resolveConnection: ConnectionResolver,
+  scope: { workspaceId: string; actorId: string },
+  displayId: string,
+  now: Date,
+) {
+  return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
+    const before = await lockWork(tx, scope.workspaceId, displayId, now);
+
+    if (!before) {
+      throw new DomainError(NOT_FOUND);
+    }
+
+    const updated = await clearClosure(tx, scope.workspaceId, before.id);
+
+    if (!updated) {
+      throw new DomainError('E-WORK-UNDO-UNAVAILABLE');
+    }
+
+    await recordDecision(
+      tx,
+      { workspaceId: scope.workspaceId, threadId: before.id, now },
+      { displayId, action: 'undo' },
+    );
+    const after = await detailInTransaction(tx, scope.workspaceId, displayId, now);
 
     await recordConfigChange(tx, {
       ...scope,

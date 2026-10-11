@@ -83,3 +83,13 @@ export function parseClosure(input: unknown) {
 
   return parsed.data;
 }
+
+export function parseUndo(input: unknown) {
+  const parsed = schema.strictObject({}).safeParse(input ?? {});
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}

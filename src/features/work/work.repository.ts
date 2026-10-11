@@ -144,3 +144,12 @@ export async function storeClosure(
     )
   ).rowCount;
 }
+
+export async function clearClosure(tx: PoolClient, workspaceId: string, itemId: string) {
+  return (
+    await tx.query(
+      "UPDATE threads SET status = 'active', closure_kind = NULL, closure_reason = NULL, closed_at = NULL, closed_by = NULL WHERE workspace_id = $1 AND id = $2 AND status IN ('completed', 'cancelled') AND closed_by IS NOT NULL AND last_activity_at <= closed_at RETURNING id",
+      [workspaceId, itemId],
+    )
+  ).rowCount;
+}

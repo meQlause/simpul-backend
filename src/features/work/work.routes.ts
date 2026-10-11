@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import { parseWorkQuery, parseClosure } from './work.schema.js';
-import { listWork, getWork, closeWork } from './work.service.js';
+import { parseWorkQuery, parseClosure, parseUndo } from './work.schema.js';
+import { listWork, getWork, closeWork, undoCloseWork } from './work.service.js';
 
 type Scope = { workspaceId: string; actorId: string };
 
@@ -19,6 +19,14 @@ export function workRouter(resolveConnection: ConnectionResolver, now: () => Dat
 
       response.json({
         data: await getWork(resolveConnection, workspaceId, request.params.displayId, now()),
+      });
+    })
+    .post('/work/:displayId/close/undo', async (request, response) => {
+      const scope = response.locals.scope as Scope;
+
+      parseUndo(request.body);
+      response.json({
+        data: await undoCloseWork(resolveConnection, scope, request.params.displayId, now()),
       });
     })
     .post('/work/:displayId/close', async (request, response) => {
