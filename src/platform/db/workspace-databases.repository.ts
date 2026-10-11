@@ -20,3 +20,19 @@ export async function databaseStatus(tx: PoolClient, workspaceId: string) {
 
   return result.rows[0]?.status;
 }
+
+export type WorkspaceDatabase = {
+  workspace_id: string;
+  status: 'pending' | 'connected' | 'unreachable' | 'migration_failed';
+  url_secret_ref: string | null;
+  schema_version: string | null;
+};
+
+export async function selectWorkspaceDatabase(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query<WorkspaceDatabase>(
+    'SELECT * FROM workspace_databases WHERE workspace_id = $1',
+    [workspaceId],
+  );
+
+  return result.rows[0];
+}

@@ -1,4 +1,14 @@
 const errors = {
+  'E-DB-CONNECTION-FAILED': {
+    status: 422,
+    message:
+      'The database could not be reached with these details. Check the host, the password and that encryption is enabled. Nothing was saved.',
+  },
+  'E-DB-UNAVAILABLE': {
+    status: 503,
+    message:
+      'Your database cannot be reached. Nothing is lost on our side, but new messages are not being recorded. Retry when it is back.',
+  },
   'E-DB-SETUP-REQUIRED': {
     status: 409,
     message: 'Connect your database to start using this workspace.',
