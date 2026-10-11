@@ -18,7 +18,7 @@ export {
   providerUpdates,
 } from './channels.js';
 
-export { messagesRaw, units, unitMessages, unitEmbeddings } from './messages.js';
+export { messagesRaw, units, unitMessages, unitEmbeddings, mediaOutcomes } from './messages.js';
 
 export {
   nodes,

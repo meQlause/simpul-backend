@@ -114,6 +114,7 @@ function messageRows(workspaceId: string) {
       },
     ],
     ['unit_messages', { unit_id: workspaceId, message_id: workspaceId }],
+    ['media_outcomes', { message_id: workspaceId, outcome: 'transcript' }],
     [
       'unit_embeddings',
       {

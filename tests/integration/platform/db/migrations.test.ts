@@ -10,7 +10,7 @@ const pool = databaseFixture();
 test('B8: upgrading existing reminder history preserves rows and enforces one silence notification per cycle', async () => {
   for (const migration of globSync('drizzle/*.sql')
     .sort()
-    .filter((path) => !path.includes('0010_'))) {
+    .filter((path) => basename(path) < '0010_')) {
     await pool.query(readFileSync(migration, 'utf8'));
   }
 
@@ -59,6 +59,7 @@ const tables = [
   'provider_updates',
   'channels',
   'messages_raw',
+  'media_outcomes',
   'units',
   'unit_messages',
   'labels',

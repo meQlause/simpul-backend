@@ -67,7 +67,7 @@ export async function storeMessage(
   }
 
   const message = await tx.query(
-    'INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (workspace_id, channel_id, provider_msg_id) DO NOTHING RETURNING id',
+    'INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts, media_ref) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT (workspace_id, channel_id, provider_msg_id) DO NOTHING RETURNING id',
     [
       scope.workspaceId,
       channel.rows[0].id,
@@ -77,8 +77,22 @@ export async function storeMessage(
       redactPii(event.body),
       new Date(event.serverTs),
       receivedAt,
+      event.mediaRef ?? null,
     ],
   );
 
   return message.rowCount ? channel.rows[0].id : null;
+}
+
+export async function storedMediaId(
+  tx: PoolClient,
+  scope: { workspaceId: string; channelId: string },
+  providerMsgId: string,
+) {
+  return (
+    await tx.query<{ id: string }>(
+      'SELECT id FROM messages_raw WHERE workspace_id = $1 AND channel_id = $2 AND provider_msg_id = $3 AND media_ref IS NOT NULL',
+      [scope.workspaceId, scope.channelId, providerMsgId],
+    )
+  ).rows[0]?.id;
 }

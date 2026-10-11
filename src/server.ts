@@ -3,6 +3,7 @@ import {
   publishCoalesce,
   publishMatching,
   publishNotification,
+  publishMedia,
 } from './platform/queue/index.js';
 import { readConfig } from './platform/config/index.js';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -77,6 +78,7 @@ if (process.argv[2] === 'create-workspace') {
           now: () => new Date(),
           publish: queue ? publishCoalesce(queue, config.INGEST_DEBOUNCE_SECONDS) : undefined,
           publishNotification: queue ? publishNotification(queue) : undefined,
+          publishMedia: queue ? publishMedia(queue) : undefined,
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: providers.adapterFor('telegram'),
@@ -94,6 +96,7 @@ if (process.argv[2] === 'create-workspace') {
   if (queue && config.PROCESS_ROLE === 'worker') {
     const { registerPipelineJobs } = await import('./roles/worker.js');
     const { createGeminiModel } = await import('./platform/llm/gemini.js');
+    const { createGeminiTranscriber } = await import('./platform/llm/transcription.js');
     const logger = createLogger(config.LOG_LEVEL);
 
     await registerPipelineJobs(queue, {
@@ -110,6 +113,10 @@ if (process.argv[2] === 'create-workspace') {
           standard: config.GEMINI_MODEL_STANDARD,
           strong: config.GEMINI_MODEL_STRONG,
         },
+      }),
+      transcriber: createGeminiTranscriber({
+        apiKey: config.GEMINI_API_KEY,
+        model: config.GEMINI_MODEL_STANDARD,
       }),
       audit: (event) => logger.warn(event, 'Pipeline injection screen'),
       alert: (event) => logger.error(event, 'Pipeline operator alert'),

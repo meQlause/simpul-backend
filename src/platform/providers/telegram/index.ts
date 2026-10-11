@@ -5,6 +5,7 @@ import { DomainError } from '../../errors/domain-error.js';
 import type { ProviderAdapter, SetupProvider, ReceiveProvider, Limits } from '../contract.js';
 import { createCall } from './call.js';
 import { activationMethods } from './activation.js';
+import { voiceDownloader } from './voice.js';
 
 const TOKEN_INVALID = 'E-TG-TOKEN-INVALID';
 const capabilities = {
@@ -98,6 +99,7 @@ export function createTelegramProvider(
     provider: 'telegram',
     capabilities,
     limits,
+    downloadVoice: voiceDownloader(baseUrl, send, call, limits.callTimeoutMs),
     async acknowledgeAction(connection, receiptId) {
       const result = await call(connection.credential, 'answerCallbackQuery', {
         callback_query_id: receiptId,

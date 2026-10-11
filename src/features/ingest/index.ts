@@ -4,4 +4,4 @@ export type { WebhookServices } from './ingest.service.js';
 
 export { coalesce } from './ingest.coalesce.service.js';
 
-export { registerIngestJobs } from './ingest.jobs.js';
+export { registerIngestJobs, registerMediaJobs } from './ingest.jobs.js';

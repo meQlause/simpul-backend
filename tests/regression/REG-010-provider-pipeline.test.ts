@@ -31,6 +31,7 @@ const services = {
   secretStore,
   providers: createProviderRegistry([adapter]),
   publicBaseUrl: 'https://simpul.example',
+  transcriber: { transcribe: vi.fn(async () => '') },
 };
 const model: ModelPort = {
   generate: vi.fn(async (input: Parameters<ModelPort['generate']>[0]) => {

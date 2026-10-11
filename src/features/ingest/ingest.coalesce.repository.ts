@@ -18,7 +18,7 @@ export async function pendingMessages(tx: PoolClient, scope: Scope) {
     server_ts: Date;
     received_ts: Date;
   }>(
-    'SELECT m.id, m.body_safe, m.server_ts, m.received_ts FROM messages_raw AS m WHERE m.workspace_id = $1 AND m.channel_id = $2 AND m.sender_external_id = $3 AND NOT EXISTS (SELECT 1 FROM unit_messages WHERE message_id = m.id) ORDER BY m.server_ts, m.id',
+    "SELECT m.id, m.body_safe, m.server_ts, m.received_ts FROM messages_raw AS m WHERE m.workspace_id = $1 AND m.channel_id = $2 AND m.sender_external_id = $3 AND (m.media_ref IS NULL OR m.body_safe <> '') AND NOT EXISTS (SELECT 1 FROM unit_messages member JOIN units u ON u.id = member.unit_id AND u.source = 'text' WHERE member.message_id = m.id) ORDER BY m.server_ts, m.id",
     [scope.workspaceId, scope.channelId, scope.senderExternalId],
   );
 

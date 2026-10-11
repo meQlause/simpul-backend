@@ -10,6 +10,7 @@ export async function createQueue(pool: Pool, scheduling = false) {
 
   await boss.start();
   await boss.createQueue('ingest.coalesce', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('ingest.media', { retryLimit: 5, retryBackoff: true });
 
   await boss.createQueue('understanding.triage', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('understanding.resolve', { retryLimit: 5, retryBackoff: true });
@@ -21,6 +22,13 @@ export async function createQueue(pool: Pool, scheduling = false) {
   await boss.createQueue('scheduler.tick', { retryLimit: 5, retryBackoff: true });
 
   return boss;
+}
+
+export function publishMedia(boss: PgBoss) {
+  return (tx: PoolClient, payload: { workspaceId: string; messageId: string }) =>
+    boss.send('ingest.media', payload, {
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
 }
 
 export function publishComprehension(boss: PgBoss) {

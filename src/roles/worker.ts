@@ -3,7 +3,7 @@ import type { ConnectionResolver } from '../platform/db/connection-resolver.js';
 import type { ModelPort } from '../platform/llm/port.js';
 import type { createSecretStore } from '../platform/secrets/index.js';
 import type { createProviderRegistry } from '../platform/providers/index.js';
-import { registerIngestJobs } from '../features/ingest/index.js';
+import { registerIngestJobs, registerMediaJobs } from '../features/ingest/index.js';
 import { registerUnderstandingJobs } from '../features/understanding/index.js';
 import { registerDeliveryJobs } from '../features/delivery/index.js';
 import {
@@ -17,6 +17,7 @@ import {
 export type PipelineServices = {
   resolveConnection: ConnectionResolver;
   model: ModelPort;
+  transcriber: { transcribe: (audio: { data: Uint8Array; mimeType: string }) => Promise<string> };
   now: () => Date;
   secretStore: ReturnType<typeof createSecretStore>;
   providers: ReturnType<typeof createProviderRegistry>;
@@ -28,6 +29,7 @@ export type PipelineServices = {
 
 export async function registerPipelineJobs(queue: PgBoss, services: PipelineServices) {
   await registerIngestJobs(queue, { ...services, publishUnit: publishUnit(queue) });
+  await registerMediaJobs(queue, { ...services, publishUnit: publishUnit(queue) });
   await registerUnderstandingJobs(queue, {
     ...services,
     publishResolve: publishResolution(queue),

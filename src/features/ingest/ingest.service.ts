@@ -4,14 +4,24 @@ import {
   connectionTokenRef,
   isOwnBot,
   storeMessage,
+  storedMediaId,
 } from './ingest.repository.js';
 import { receiveRecipientAction } from '../delivery/index.js';
-import type { publishCoalesce, publishNotification } from '../../platform/queue/index.js';
+import type {
+  publishCoalesce,
+  publishNotification,
+  publishMedia,
+} from '../../platform/queue/index.js';
+import type { PoolClient } from 'pg';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createConnectionLookup } from '../../platform/db/connection-lookup.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
-import type { createProviderRegistry, ReceiveProvider } from '../../platform/providers/index.js';
+import type {
+  createProviderRegistry,
+  ReceiveProvider,
+  InboundMessage,
+} from '../../platform/providers/index.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
 
@@ -25,6 +35,7 @@ export type WebhookServices = {
   now: () => Date;
   publish?: ReturnType<typeof publishCoalesce>;
   publishNotification?: ReturnType<typeof publishNotification>;
+  publishMedia?: ReturnType<typeof publishMedia>;
 };
 
 export async function authenticateWebhook(
@@ -163,6 +174,12 @@ async function ingestMessage(
       return;
     }
 
+    await enqueueMedia(tx, services, { workspaceId: scope.workspaceId, channelId, event });
+
+    if (!event.body) {
+      return;
+    }
+
     if (!services.publish) {
       throw new DomainError('E-INTERNAL');
     }
@@ -173,4 +190,28 @@ async function ingestMessage(
       senderExternalId: event.senderExternalId,
     });
   });
+}
+
+async function enqueueMedia(
+  tx: PoolClient,
+  services: WebhookServices,
+  input: {
+    workspaceId: string;
+    channelId: string;
+    event: InboundMessage;
+  },
+) {
+  if (!input.event.mediaRef) {
+    return;
+  }
+
+  if (!services.publishMedia) {
+    throw new DomainError('E-INTERNAL');
+  }
+
+  const messageId = await storedMediaId(tx, input, input.event.messageId);
+
+  if (messageId) {
+    await services.publishMedia(tx, { workspaceId: input.workspaceId, messageId });
+  }
 }

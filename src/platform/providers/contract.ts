@@ -84,6 +84,7 @@ export type InboundMessage = {
   messageId: string;
   senderExternalId: string;
   body: string;
+  mediaRef?: string;
   serverTs: number;
   setupProof: boolean;
 };
@@ -114,4 +115,8 @@ export type ProviderAdapter = ActivationProvider &
     readonly capabilities: Readonly<Capabilities>;
     readonly limits: Readonly<Limits>;
     acknowledgeAction?: (connection: { credential: string }, receiptId: string) => Promise<void>;
+    downloadVoice?: (
+      connection: ConnectionRef,
+      mediaRef: string,
+    ) => Promise<{ data: Uint8Array; mimeType: string }>;
   };

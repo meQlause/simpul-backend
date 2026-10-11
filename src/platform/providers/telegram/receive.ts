@@ -60,19 +60,28 @@ const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
 
 const incomingMessage = schema.object({
   update_id: schema.number().int().safe(),
-  message: schema.object({
-    message_id: schema.number().int().safe(),
-    date: schema.number().int().positive(),
-    text: schema.string(),
-    from: schema.object({ id: schema.number().int().safe(), is_bot: schema.boolean() }),
-    chat: schema.union([
-      chat,
-      schema.object({
-        id: schema.number().int().safe().positive(),
-        type: schema.literal('private'),
-      }),
-    ]),
-  }),
+  message: schema
+    .object({
+      message_id: schema.number().int().safe(),
+      date: schema.number().int().positive(),
+      text: schema.string().optional(),
+      caption: schema.string().optional(),
+      voice: schema
+        .object({
+          file_id: schema.string().min(1),
+          mime_type: schema.string().default('audio/ogg'),
+        })
+        .optional(),
+      from: schema.object({ id: schema.number().int().safe(), is_bot: schema.boolean() }),
+      chat: schema.union([
+        chat,
+        schema.object({
+          id: schema.number().int().safe().positive(),
+          type: schema.literal('private'),
+        }),
+      ]),
+    })
+    .refine((message) => message.text !== undefined || message.voice !== undefined),
 });
 
 const callback = schema.object({
@@ -129,7 +138,15 @@ export const parseInboundUpdate: ReceiveProvider['parse'] = (update) => {
     chatId: String(message.chat.id),
     messageId: String(message.message_id),
     senderExternalId: String(message.from.id),
-    body: message.text,
+    body: message.text ?? message.caption ?? '',
+    ...(message.voice
+      ? {
+          mediaRef: JSON.stringify({
+            fileId: message.voice.file_id,
+            mimeType: message.voice.mime_type,
+          }),
+        }
+      : {}),
     serverTs: message.date * MILLISECONDS_PER_SECOND,
     setupProof: setup.type === 'setup-message',
   };

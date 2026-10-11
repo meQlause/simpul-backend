@@ -70,6 +70,16 @@ export const units = pgTable(
   ],
 );
 
+export const mediaOutcomes = pgTable(
+  'media_outcomes',
+  {
+    ...joinColumns(),
+    messageId: reference('message_id', () => messagesRaw.id, 'cascade').primaryKey(),
+    outcome: text('outcome').notNull(),
+  },
+  (table) => [check('media_outcome_valid', sql`${table.outcome} IN ('transcript','unread')`)],
+);
+
 export const unitMessages = pgTable(
   'unit_messages',
   {
