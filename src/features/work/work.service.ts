@@ -14,6 +14,7 @@ import {
   clearClosure,
   openWorkExport,
   fetchWorkExport,
+  deleteExpiredTentative,
 } from './work.repository.js';
 import { displayStatus, genesisState, closureStatus, undoAvailable, csvRow } from './work.rules.js';
 import {
@@ -265,4 +266,14 @@ export async function exportWork(
       rows = await fetchWorkExport(tx);
     }
   });
+}
+
+export async function expireTentative(
+  resolveConnection: ConnectionResolver,
+  workspaceId: string,
+  now: Date,
+) {
+  return scopedTransaction(resolveConnection, workspaceId, (tx) =>
+    deleteExpiredTentative(tx, workspaceId, now),
+  );
 }

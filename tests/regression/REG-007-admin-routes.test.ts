@@ -52,6 +52,7 @@ let personA: string;
 let connectionA: string;
 let sessionA: string;
 let channelA: string;
+let categoryA: string;
 let tables: string[];
 
 type Layer = {
@@ -89,6 +90,21 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'get /work': {},
+  'get /work/export': {},
+  'get /work/:displayId': {},
+  'post /work/:displayId/close/undo': {},
+  'post /work/:displayId/close': { closure: 'completed', reason: 'Delivered to the customer.' },
+  'get /vocabulary': {},
+  'post /categories': {
+    name: 'Regression category',
+    description: 'Verified tenant isolation',
+    example: 'Confirmed order',
+    idPrefix: 'REG',
+  },
+  'patch /categories/:categoryId': { description: 'Verified category update' },
+  'put /templates/internal': { body: '{{work_id}} · {{customer}} · {{summary}}' },
+  'post /aliases': { alias: 'Regression alias', personId: '00000000-0000-4000-8000-000000100099' },
   'post /channels/:channelId/verify': {},
   'patch /channels/:channelId': { displayName: 'Updated group', expectedConfigVersion: 99 },
   'post /channels/:channelId/pause': { expectedConfigVersion: 99 },
@@ -122,6 +138,9 @@ const bodies: Record<string, object> = {
   'patch /people/:personId': { availability: 'leave' },
 };
 const statuses: Record<string, number> = {
+  'post /work/:displayId/close/undo': 409,
+  'post /categories': 201,
+  'post /aliases': 201,
   'patch /channels/:channelId': 409,
   'post /channels/:channelId/pause': 409,
   'put /telegram/connections/:connectionId/credentials': 422,
@@ -132,6 +151,13 @@ const statuses: Record<string, number> = {
 };
 
 async function prepareRouteParameters() {
+  categoryA = (
+    await pool.query(
+      "SELECT id FROM vocab_domains WHERE id_prefix = 'ORD' AND workspace_id <> $1",
+      [workspaceB],
+    )
+  ).rows[0].id;
+  bodies['post /aliases'] = { alias: 'Regression alias', personId: personA };
   channelA = (
     await pool.query('SELECT id FROM channels WHERE workspace_id = $1 ORDER BY id LIMIT 1', [
       pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }).workspaceId,
@@ -214,7 +240,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
+  const path = `/api/v1${route.path.replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
 
   if (route.method === 'get') {
@@ -291,9 +317,11 @@ test.each(routes)('REG-007: $method $path as A reads or changes no row of B', as
     .send(bodies[`${route.method} ${route.path}`]);
 
   expect(response.status).toBe(statuses[`${route.method} ${route.path}`] ?? 200);
-  expect(JSON.stringify(response.body)).not.toContain(workspaceB);
-  expect(JSON.stringify(response.body)).not.toContain('Test operator');
-  expect(JSON.stringify(response.body)).not.toContain('test-only-password');
+  const payload = response.text ?? JSON.stringify(response.body);
+
+  expect(payload).not.toContain(workspaceB);
+  expect(payload).not.toContain('Test operator');
+  expect(payload).not.toContain('test-only-password');
   expect(await foreignSnapshot()).toEqual(before);
 });
 

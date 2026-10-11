@@ -175,3 +175,14 @@ export async function fetchWorkExport(tx: PoolClient) {
 
   return result.rows;
 }
+
+export async function deleteExpiredTentative(tx: PoolClient, workspaceId: string, now: Date) {
+  return (
+    (
+      await tx.query(
+        "DELETE FROM threads WHERE workspace_id = $1 AND status = 'tentative' AND expires_at <= $2",
+        [workspaceId, now],
+      )
+    ).rowCount ?? 0
+  );
+}
