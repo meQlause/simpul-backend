@@ -9,7 +9,7 @@ export const comprehensionOutput = z.strictObject({
     z.strictObject({
       type: z.enum(['progress', 'resolution', 'blocker']),
       tense: z.enum(['sudah_terjadi', 'rencana', 'kondisional']),
-      evidenceMessageIds: z.array(z.guid()).min(1),
+      evidenceMessageIds: z.array(z.guid()),
       confidence: z.number().min(0).max(1),
     }),
   ),

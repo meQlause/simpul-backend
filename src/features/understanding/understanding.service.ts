@@ -36,6 +36,11 @@ export async function storeComprehension(
     }
 
     for (const operation of result.operations) {
+      if (operation.evidenceMessageIds.length === 0) {
+        await insertOrphan(tx, payload, 'empty_evidence');
+        continue;
+      }
+
       await insertLabel(tx, payload, operation);
     }
   });
