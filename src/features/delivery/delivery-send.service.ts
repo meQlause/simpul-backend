@@ -7,7 +7,10 @@ import {
   recordSentAt,
   deferNotification,
   replaceDestination,
+  executiveRecipient,
+  attachDigest,
 } from './delivery-send.repository.js';
+import { pendingDigest } from './delivery-budget.repository.js';
 import { renderNotification, renderActions } from './delivery.rules.js';
 import { reminderRecipient, resolveRoleRecipientInTransaction } from '../people/index.js';
 import type { PoolClient } from 'pg';
@@ -40,7 +43,7 @@ export async function sendNotification(
 
     const chatId = await resolveDestination(tx, scope, pending, now);
 
-    if (!chatId) {
+    if (!chatId || (await holdExecutive(tx, scope, now))) {
       return;
     }
 
@@ -68,6 +71,26 @@ export async function sendNotification(
 
     await recordSentAt(tx, scope, { now, body: message.text });
   });
+}
+
+async function holdExecutive(
+  tx: PoolClient,
+  scope: { workspaceId: string; notificationId: string },
+  now: Date,
+) {
+  const personId = await executiveRecipient(tx, scope);
+
+  if (!personId) {
+    return false;
+  }
+
+  await attachDigest(
+    tx,
+    scope,
+    await pendingDigest(tx, { workspaceId: scope.workspaceId, personId }, now),
+  );
+
+  return true;
 }
 
 async function retryNotification(

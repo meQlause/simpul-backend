@@ -13,8 +13,10 @@ export async function budgetFacts(tx: PoolClient, scope: Scope, now: Date) {
     localTime: string;
     quietStart: string;
     quietEnd: string;
+    executive: boolean;
   }>(
-    `SELECT p.budget_per_hour AS budget, to_char($3::timestamptz AT TIME ZONE w.timezone, 'HH24:MI') AS "localTime",
+    `SELECT (SELECT level = 'executive' FROM people WHERE workspace_id = $1 AND id = $2) AS executive,
+      p.budget_per_hour AS budget, to_char($3::timestamptz AT TIME ZONE w.timezone, 'HH24:MI') AS "localTime",
       left(p.quiet_start::text, 5) AS "quietStart", left(p.quiet_end::text, 5) AS "quietEnd", (SELECT count(*)::int FROM notifications n
       WHERE n.workspace_id = $1 AND n.recipient_person_id = $2 AND n.cancelled_at IS NULL AND n.digest_id IS NULL
         AND ((n.sent_at > $3::timestamptz - interval '1 hour' AND n.sent_at <= $3)

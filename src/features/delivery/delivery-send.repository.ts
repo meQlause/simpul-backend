@@ -115,3 +115,22 @@ export async function deferNotification(
     [scope.workspaceId, scope.notificationId, input.now, input.retryAfter],
   );
 }
+
+export async function executiveRecipient(tx: PoolClient, scope: Scope) {
+  const result = await tx.query<{ personId: string }>(
+    `SELECT p.id AS "personId" FROM notifications n JOIN people p
+      ON p.id = n.recipient_person_id AND p.workspace_id = $1
+    WHERE n.workspace_id = $1 AND n.id = $2 AND p.level = 'executive' FOR UPDATE OF p`,
+    [scope.workspaceId, scope.notificationId],
+  );
+
+  return result.rows[0]?.personId;
+}
+
+export async function attachDigest(tx: PoolClient, scope: Scope, digestId: string) {
+  await tx.query('UPDATE notifications SET digest_id = $3 WHERE workspace_id = $1 AND id = $2', [
+    scope.workspaceId,
+    scope.notificationId,
+    digestId,
+  ]);
+}

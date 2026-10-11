@@ -10,7 +10,9 @@ export async function budgetDigest(
 ) {
   const facts = await budgetFacts(tx, scope, now);
 
-  return exceedsBudget(facts.used, facts.budget) || quietHoursHold({ ...facts, urgency })
+  return facts.executive ||
+    exceedsBudget(facts.used, facts.budget) ||
+    quietHoursHold({ ...facts, urgency })
     ? pendingDigest(tx, scope, now)
     : null;
 }
