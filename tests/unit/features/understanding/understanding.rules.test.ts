@@ -1,5 +1,8 @@
 import { expect, test } from 'vitest';
-import { verdict } from '../../../../src/features/understanding/understanding.rules.js';
+import {
+  quantityCandidates,
+  verdict,
+} from '../../../../src/features/understanding/understanding.rules.js';
 
 const thresholds = { attach: 0.75, create: 0.45, gap: 0.25 };
 
@@ -24,4 +27,16 @@ test.each([
 
 test('SRS §13: verdict uses calibrated thresholds passed as arguments', () => {
   expect(verdict([0.7, 0.5], { attach: 0.7, create: 0.4, gap: 0.2 })).toBe('ATTACH');
+});
+
+test('SRS §6.1: a contradicting quantity removes a candidate regardless of its score', () => {
+  const candidates = [
+    { id: 'wrong', quantity: 3, score: 0.99 },
+    { id: 'matching', quantity: 5, score: 0.5 },
+    { id: 'unknown', quantity: null, score: 0.6 },
+  ];
+
+  expect(quantityCandidates(5, candidates)).toEqual([candidates[1], candidates[2]]);
+  expect(quantityCandidates(null, candidates)).toEqual(candidates);
+  expect(quantityCandidates(0, [{ quantity: 1 }, { quantity: 0 }])).toEqual([{ quantity: 0 }]);
 });

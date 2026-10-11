@@ -10,3 +10,13 @@ export function verdict(
 
   return top < thresholds.create ? 'CREATE' : 'GREY';
 }
+
+export function quantityCandidates<Candidate extends { quantity: number | null }>(
+  quantity: number | null,
+  candidates: readonly Candidate[],
+): readonly Candidate[] {
+  return candidates.filter(
+    (candidate) =>
+      quantity === null || candidate.quantity === null || candidate.quantity === quantity,
+  );
+}
