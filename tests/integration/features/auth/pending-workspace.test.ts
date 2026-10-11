@@ -83,6 +83,25 @@ test.each(['post', 'put', 'patch', 'delete'] as const)(
   },
 );
 
+test.each([
+  'not-a-url',
+  'https://admin:password@db.example.test/simpul',
+  'postgres://db.example.test/simpul',
+  'postgres://admin:password@db.example.test/',
+])(
+  'PUT /database rejects malformed or incomplete connection strings: %s',
+  async (connectionString) => {
+    const response = await supertest(app)
+      .put('/api/v1/database')
+      .set('Cookie', cookie)
+      .send({ connectionString, availabilityAck: true });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('E-VALIDATION');
+    expect(response.text).not.toContain(connectionString);
+  },
+);
+
 test('Only GET and PUT /database pass the pending setup gate; the session stays valid (FR-DB-02)', async () => {
   for (const method of ['get', 'put'] as const) {
     const response = await supertest(app)
@@ -108,3 +127,30 @@ test('Only GET and PUT /database pass the pending setup gate; the session stays 
 
   expect(anonymous.status).toBe(401);
 });
+
+test.each([undefined, false, 'true', 1, null])(
+  'PUT /database without literal availabilityAck true stores no secret (FR-DB-03): %s',
+  async (availabilityAck) => {
+    const response = await supertest(app).put('/api/v1/database').set('Cookie', cookie).send({
+      connectionString: 'postgres://admin:password@db.example.test/simpul?sslmode=require',
+      availabilityAck,
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error).toMatchObject({
+      code: 'E-VALIDATION',
+      details: [{ field: 'availabilityAck' }],
+    });
+    await pool.query('RESET ROLE');
+
+    try {
+      expect((await pool.query('SELECT id FROM secrets')).rows).toEqual([]);
+      expect((await pool.query('SELECT workspace_id FROM workspace_keys')).rows).toEqual([]);
+      expect(
+        (await pool.query('SELECT status, availability_ack_at FROM workspace_databases')).rows,
+      ).toEqual([{ status: 'pending', availability_ack_at: null }]);
+    } finally {
+      await pool.query('SET ROLE pending_app');
+    }
+  },
+);

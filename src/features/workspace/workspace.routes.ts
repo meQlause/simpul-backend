@@ -5,6 +5,7 @@ import { mailController, saveMailController } from './workspace-mail.controller.
 import type { MailServices } from './workspace-mail.service.js';
 import { overviewController } from './workspace-overview.controller.js';
 import { onboardingController } from './workspace-onboarding.controller.js';
+import { databaseSetupValidation } from './workspace-database.controller.js';
 
 export function workspaceRouter(
   resolveConnection: ConnectionResolver,
@@ -13,6 +14,7 @@ export function workspaceRouter(
 ) {
   const router = Router();
 
+  router.use('/database', databaseSetupValidation);
   router.get('/me', meController(resolveConnection));
   router.get('/overview', overviewController(resolveConnection, now));
   router.post('/onboarding/complete', onboardingController(resolveConnection, now));
