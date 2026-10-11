@@ -7,6 +7,7 @@ import {
 } from './workspace-databases.repository.js';
 import { openTenantPool, type TenantPoolOptions } from './tenant-pool.js';
 import { DomainError } from '../errors/domain-error.js';
+import { schemaVersion } from './migrate-tenant.js';
 
 export type ConnectionResolver = (workspaceId: string) => Promise<Pool>;
 
@@ -76,7 +77,7 @@ export function createConnectionResolver(systemPool: Pool, options?: Options) {
       throw new DomainError('E-DB-SETUP-REQUIRED');
     }
 
-    if (row.status !== 'connected') {
+    if (row.status !== 'connected' || row.schema_version !== schemaVersion) {
       throw new DomainError(UNAVAILABLE, undefined, RETRY_SECONDS);
     }
 

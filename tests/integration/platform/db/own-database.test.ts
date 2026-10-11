@@ -6,6 +6,7 @@ import { applyMigrations } from '../../../helpers/migrations.js';
 import { createSecretStore } from '../../../../src/platform/secrets/index.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import addresses from '../../../fixtures/host-addresses.json' with { type: 'json' };
+import { schemaVersion } from '../../../../src/platform/db/migrate-tenant.js';
 
 const systemPool = databaseFixture();
 const workspaceId = randomUUID();
@@ -23,9 +24,9 @@ beforeAll(async () => {
 
     await tx.query(
       `INSERT INTO workspace_databases
-      (workspace_id, workspace_name, timezone, admin_auth_user_id, status, url_secret_ref, availability_ack_at)
-      VALUES ($1, 'Own', 'Asia/Jakarta', 'admin', 'connected', $2, now())`,
-      [workspaceId, ref],
+      (workspace_id, workspace_name, timezone, admin_auth_user_id, status, url_secret_ref, availability_ack_at, schema_version)
+      VALUES ($1, 'Own', 'Asia/Jakarta', 'admin', 'connected', $2, now(), $3)`,
+      [workspaceId, ref, schemaVersion],
     );
   } finally {
     tx.release();

@@ -5,6 +5,18 @@ Run every forward `*.sql` file in filename order, including the handwritten file
 from `meta/_journal.json`. Run migrations using the owner connection;
 the application role must neither own the tables nor have `BYPASSRLS`.
 
+Build, then run `npm run db:migrate` before starting the application processes. The command
+uses `DATABASE_MIGRATION_URL` for the system database first, then visits connected own
+databases using their stored credentials. It checks the workspace identity, migrates each
+customer transactionally, and records its full schema tag. One customer failure commits
+`migration_failed`, sends its admin a system notice, continues with the others and causes
+exit status 1. SMTP failure cannot undo the recorded migration failure.
+
+The migration ledger rejects changed hashes and unknown future tags. Fresh system databases
+are initialized by this command. Existing schemas installed manually without the ledger
+require an operator-verified baseline before adoption; the command does not guess which
+migrations ran or replay destructive schema creation over existing tables.
+
 `0000_vector.sql` installs pgvector before the generated schema uses it.
 `0001_schema.sql` is generated. `0002_guarantees.sql` contains the two triggers,
 tenant policies and narrowly scoped lookup functions from data-spec §6 and

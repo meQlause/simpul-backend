@@ -132,3 +132,17 @@ export async function updateDatabaseProbe(
     [workspaceId, state.status, state.streak, now],
   );
 }
+
+export async function updateDatabaseMigration(
+  tx: PoolClient,
+  workspaceId: string,
+  version: string | null,
+  now: Date,
+) {
+  await tx.query(
+    `UPDATE workspace_databases SET status = CASE WHEN $2::text IS NULL THEN 'migration_failed' ELSE 'connected' END,
+    schema_version = coalesce($2, schema_version), probe_streak = 0, unreachable_since = NULL, updated_at = $3
+    WHERE workspace_id = $1`,
+    [workspaceId, version, now],
+  );
+}

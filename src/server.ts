@@ -32,6 +32,10 @@ if (process.argv[2] === 'create-workspace') {
   const { runCreateWorkspace } = await import('./roles/create-workspace.js');
 
   await runCreateWorkspace(config, process.argv.slice(commandArgumentsOffset));
+} else if (process.argv[2] === 'migrate-databases') {
+  const { runMigrations } = await import('./roles/migrate-command.js');
+
+  await runMigrations(config);
 } else {
   const pool = createSystemPool(config.DATABASE_URL);
   const providers = createProviderRegistry();

@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "build": "tsc -p tsconfig.build.json",
     "db:generate": "drizzle-kit generate",
+    "db:migrate": "node dist/server.js migrate-databases",
     "test": "npm run build && vitest run tests/unit",
     "test:regression:database-modes": "node scripts/test-database-modes.mjs",
     "test:integration": "npm run build && vitest run tests/integration tests/regression",

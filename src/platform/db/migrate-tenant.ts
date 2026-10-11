@@ -4,6 +4,7 @@ import type { PoolClient } from 'pg';
 import { DomainError } from '../errors/domain-error.js';
 
 const directory = new URL('../../../drizzle/', import.meta.url);
+const MIGRATION_FAILED = 'E-DB-MIGRATION-FAILED';
 const migrations = readdirSync(directory)
   .filter((name) => name.endsWith('.sql'))
   .sort()
@@ -25,7 +26,7 @@ async function applyMigration(
   previous?: { tag: string; hash: string },
 ) {
   if (previous && previous.hash !== migration.hash) {
-    throw new DomainError('E-DB-MIGRATION-FAILED');
+    throw new DomainError(MIGRATION_FAILED);
   }
 
   if (!previous) {
@@ -41,11 +42,20 @@ async function applyMigration(
 
 export async function migrateTenant(tx: PoolClient) {
   try {
+    await tx.query("SELECT pg_advisory_xact_lock(hashtextextended('simpul:migrations', 0))");
     await tx.query(`CREATE TABLE IF NOT EXISTS public.simpul_schema_migrations
       (tag text PRIMARY KEY, hash text NOT NULL)`);
     const applied = await tx.query<{ tag: string; hash: string }>(
       'SELECT tag, hash FROM public.simpul_schema_migrations',
     );
+
+    if (
+      applied.rows.some(
+        (previous) => !migrations.some((migration) => migration.tag === previous.tag),
+      )
+    ) {
+      throw new DomainError(MIGRATION_FAILED);
+    }
 
     for (const migration of migrations) {
       await applyMigration(
@@ -55,6 +65,6 @@ export async function migrateTenant(tx: PoolClient) {
       );
     }
   } catch {
-    throw new DomainError('E-DB-MIGRATION-FAILED');
+    throw new DomainError(MIGRATION_FAILED);
   }
 }
