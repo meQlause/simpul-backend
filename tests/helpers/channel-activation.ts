@@ -1,5 +1,6 @@
+import { createQueue, publishCoalesce } from '../../src/platform/queue/index.js';
 import { randomUUID, randomBytes } from 'node:crypto';
-import { beforeAll, expect, vi } from 'vitest';
+import { beforeAll, afterAll, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
@@ -48,6 +49,11 @@ export const webhookSecret = randomBytes(32).toString('base64url');
 export let cookie: string;
 
 let connectionId: string;
+let queue: Awaited<ReturnType<typeof createQueue>> | undefined;
+
+afterAll(async () => {
+  await queue?.stop();
+});
 
 beforeAll(async () => {
   await applyMigrations(pool);
@@ -74,6 +80,7 @@ beforeAll(async () => {
   };
 
   app = createApp('api', undefined, undefined, services);
+  queue = await createQueue(pool);
   webhookApp = createApp('webhook', undefined, undefined, {
     ...services,
     webhook: {
@@ -81,6 +88,7 @@ beforeAll(async () => {
       lookupConnection: createConnectionLookup(pool),
       secretStore: createSecretStore(services.connectionSetup.masterKey),
       provider: createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      publish: publishCoalesce(queue),
       now: () => now,
     },
   });

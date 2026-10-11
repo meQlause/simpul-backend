@@ -1,4 +1,4 @@
-import { parseSetupUpdate } from './receive.js';
+import { parseInboundUpdate } from './receive.js';
 import { z as schema } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../errors/domain-error.js';
@@ -64,7 +64,7 @@ export function createTelegramProvider(
         )
       );
     },
-    parse: parseSetupUpdate,
+    parse: parseInboundUpdate,
     verifyCredential: (credential) => verifyCredential(call, credential),
     async registerWebhook(connection, url, secret) {
       const info = schema

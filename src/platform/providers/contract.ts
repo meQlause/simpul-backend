@@ -77,6 +77,17 @@ type SetupEvent = {
   chatType: 'group' | 'supergroup';
 };
 
+export type InboundMessage = {
+  type: 'message';
+  updateId: string;
+  chatId: string;
+  messageId: string;
+  senderExternalId: string;
+  body: string;
+  serverTs: number;
+  setupProof: boolean;
+};
+
 export type ReceiveProvider = {
   authenticate: (
     request: { headers: Record<string, string | string[] | undefined> },
@@ -84,7 +95,11 @@ export type ReceiveProvider = {
   ) => boolean;
   parse: (
     update: unknown,
-  ) => SetupEvent | { type: 'setup-message'; chatId: string; sentAt: number } | { type: 'ignore' };
+  ) =>
+    | SetupEvent
+    | InboundMessage
+    | { type: 'setup-message'; chatId: string; sentAt: number }
+    | { type: 'ignore' };
 };
 
 export type ProviderAdapter = ActivationProvider &

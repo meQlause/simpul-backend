@@ -30,7 +30,7 @@ const ordinary = schema.object({
     .refine((message) => !(message.entities ?? []).some((entity) => entity.type === 'bot_command')),
 });
 
-export const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
+const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
   const parsed = command.safeParse(update);
 
   if (parsed.success) {
@@ -55,5 +55,43 @@ export const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
     type: 'setup-message',
     chatId: String(incoming.data.message.chat.id),
     sentAt: incoming.data.message.date * MILLISECONDS_PER_SECOND,
+  };
+};
+
+const incomingMessage = schema.object({
+  update_id: schema.number().int().safe(),
+  message: schema.object({
+    message_id: schema.number().int().safe(),
+    date: schema.number().int().positive(),
+    text: schema.string(),
+    from: schema.object({ id: schema.number().int().safe(), is_bot: schema.boolean() }),
+    chat,
+  }),
+});
+
+export const parseInboundUpdate: ReceiveProvider['parse'] = (update) => {
+  const setup = parseSetupUpdate(update);
+
+  if (setup.type === 'setup-command') {
+    return setup;
+  }
+
+  const parsed = incomingMessage.safeParse(update);
+
+  if (!parsed.success) {
+    return setup;
+  }
+
+  const message = parsed.data.message;
+
+  return {
+    type: 'message',
+    updateId: String(parsed.data.update_id),
+    chatId: String(message.chat.id),
+    messageId: String(message.message_id),
+    senderExternalId: String(message.from.id),
+    body: message.text,
+    serverTs: message.date * MILLISECONDS_PER_SECOND,
+    setupProof: setup.type === 'setup-message',
   };
 };

@@ -1,3 +1,5 @@
+import { storeMessage } from './ingest.repository.js';
+import type { publishCoalesce } from '../../platform/queue/index.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createConnectionLookup } from '../../platform/db/connection-lookup.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
@@ -12,6 +14,7 @@ export type WebhookServices = {
   secretStore: ReturnType<typeof createSecretStore>;
   provider: ReceiveProvider;
   now: () => Date;
+  publish?: ReturnType<typeof publishCoalesce>;
 };
 
 export async function authenticateWebhook(
@@ -48,6 +51,10 @@ export async function receiveUpdate(
 ) {
   const event = services.provider.parse(update);
 
+  if (event.type === 'message') {
+    await ingestMessage(services, scope, event);
+  }
+
   if (event.type === 'setup-message') {
     await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
       recordReceiveCheck(tx, scope, event, services.now()),
@@ -59,4 +66,34 @@ export async function receiveUpdate(
       recordCandidate(tx, scope, event, services.now()),
     );
   }
+}
+
+async function ingestMessage(
+  services: WebhookServices,
+  scope: { workspaceId: string; connectionId: string },
+  event: Extract<ReturnType<ReceiveProvider['parse']>, { type: 'message' }>,
+) {
+  const now = services.now();
+
+  await scopedTransaction(services.resolveConnection, scope.workspaceId, async (tx) => {
+    if (event.setupProof) {
+      await recordReceiveCheck(tx, scope, { chatId: event.chatId, sentAt: event.serverTs }, now);
+    }
+
+    const channelId = await storeMessage(tx, scope, event, now);
+
+    if (!channelId) {
+      return;
+    }
+
+    if (!services.publish) {
+      throw new DomainError('E-INTERNAL');
+    }
+
+    await services.publish(tx, {
+      workspaceId: scope.workspaceId,
+      channelId,
+      senderExternalId: event.senderExternalId,
+    });
+  });
 }

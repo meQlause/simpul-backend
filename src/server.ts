@@ -1,3 +1,4 @@
+import { createQueue, publishCoalesce } from './platform/queue/index.js';
 import { readConfig } from './platform/config/index.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { checkDatabase } from './platform/db/health.js';
@@ -43,6 +44,10 @@ if (process.argv[2] === 'create-workspace') {
     throw error;
   }
 
+  const queuePool =
+    config.PROCESS_ROLE === 'webhook' ? createSystemPool(config.DATABASE_QUEUE_URL) : undefined;
+  const queue = queuePool ? await createQueue(queuePool) : undefined;
+
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
   const services = ['api', 'webhook'].includes(config.PROCESS_ROLE)
@@ -58,6 +63,7 @@ if (process.argv[2] === 'create-workspace') {
           secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
           provider: providers.adapterFor('telegram'),
           now: () => new Date(),
+          publish: queue ? publishCoalesce(queue) : undefined,
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: providers.adapterFor('telegram'),
