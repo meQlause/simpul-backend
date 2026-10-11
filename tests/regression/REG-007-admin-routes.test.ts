@@ -53,6 +53,7 @@ let connectionA: string;
 let sessionA: string;
 let channelA: string;
 let categoryA: string;
+let reviewItemA: string;
 let tables: string[];
 
 type Layer = {
@@ -129,6 +130,9 @@ const bodies: Record<string, object> = {
   },
   'get /me': {},
   'get /overview': {},
+  'get /review-items': {},
+  'get /review-items/:itemId': {},
+  'post /review-items/:itemId/resolve': { personId: '00000000-0000-4000-8000-000000100099' },
   'post /telegram/connections/verify': { botToken: 'test-only-credential' },
   'post /telegram/connections': { connectionName: 'My bot', botToken: 'test-only-credential' },
   'get /people': {},
@@ -151,6 +155,16 @@ const statuses: Record<string, number> = {
   'post /channels': 201,
 };
 
+async function prepareReviewRoute() {
+  reviewItemA = (
+    await pool.query(
+      "SELECT id FROM review_items WHERE detected_text = 'Pak Bud' AND workspace_id <> $1",
+      [workspaceB],
+    )
+  ).rows[0].id;
+  bodies['post /review-items/:itemId/resolve'] = { personId: personA };
+}
+
 async function prepareRouteParameters() {
   categoryA = (
     await pool.query(
@@ -158,6 +172,7 @@ async function prepareRouteParameters() {
       [workspaceB],
     )
   ).rows[0].id;
+  await prepareReviewRoute();
   bodies['post /aliases'] = { alias: 'Regression alias', personId: personA };
   channelA = (
     await pool.query('SELECT id FROM channels WHERE workspace_id = $1 ORDER BY id LIMIT 1', [
@@ -241,7 +256,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
+  const path = `/api/v1${route.path.replace(':itemId', reviewItemA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
 
   if (route.method === 'get') {

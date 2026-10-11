@@ -1,5 +1,10 @@
 import { registerIngestJobs } from './features/ingest/index.js';
-import { createQueue, publishCoalesce, publishUnit } from './platform/queue/index.js';
+import {
+  createQueue,
+  publishCoalesce,
+  publishUnit,
+  publishMatching,
+} from './platform/queue/index.js';
 import { readConfig } from './platform/config/index.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { checkDatabase } from './platform/db/health.js';
@@ -45,7 +50,7 @@ if (process.argv[2] === 'create-workspace') {
     throw error;
   }
 
-  const queuePool = ['webhook', 'worker'].includes(config.PROCESS_ROLE)
+  const queuePool = ['api', 'webhook', 'worker'].includes(config.PROCESS_ROLE)
     ? createSystemPool(config.DATABASE_QUEUE_URL)
     : undefined;
   const queue = queuePool ? await createQueue(queuePool) : undefined;
@@ -59,6 +64,10 @@ if (process.argv[2] === 'create-workspace') {
           secret: config.AUTH_SECRET,
         }),
         resolveConnection: createConnectionResolver(pool),
+        review: {
+          now: () => new Date(),
+          publishMatcher: queue ? publishMatching(queue) : undefined,
+        },
         webhook: {
           resolveConnection: createConnectionResolver(pool),
           lookupConnection: createConnectionLookup(pool),

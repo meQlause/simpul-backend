@@ -8,6 +8,15 @@ const duplicateFields: Record<string, string> = {
   aliases_ws_alias_uq: 'alias',
 };
 
+export async function activeCategory(tx: PoolClient, workspaceId: string, id: string) {
+  const result = await tx.query(
+    'SELECT id FROM vocab_domains WHERE workspace_id = $1 AND id = $2 AND active',
+    [workspaceId, id],
+  );
+
+  return result.rowCount === 1;
+}
+
 export async function configurationWrite<Result>(operation: () => Promise<Result>) {
   try {
     return await operation();
@@ -59,6 +68,20 @@ export async function insertAlias(
   );
 
   return { id: result.rows[0].id, alias, person: { id: person.id, name: person.name } };
+}
+
+export async function reuseAlias(
+  tx: PoolClient,
+  workspaceId: string,
+  alias: string,
+  personId: string,
+) {
+  const result = await tx.query<{ id: string; inserted: boolean }>(
+    'INSERT INTO aliases (workspace_id, alias, person_id) VALUES ($1, $2, $3) ON CONFLICT (workspace_id, lower(alias)) DO UPDATE SET alias = aliases.alias WHERE aliases.person_id = EXCLUDED.person_id RETURNING id, (xmax = 0) AS inserted',
+    [workspaceId, alias, personId],
+  );
+
+  return result.rows[0];
 }
 
 export async function selectVocabulary(tx: PoolClient, workspaceId: string) {

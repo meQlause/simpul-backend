@@ -19,6 +19,8 @@ import {
   storeInternalTemplate,
   insertCategory,
   insertAlias,
+  reuseAlias,
+  activeCategory,
   selectVocabulary,
 } from './vocabulary.repository.js';
 import type {
@@ -28,7 +30,45 @@ import type {
   parseTemplate,
 } from './vocabulary.schema.js';
 
+const validationCode = 'E-VALIDATION';
+
 type Scope = { workspaceId: string; actorId: string };
+
+export async function requireActiveCategory(tx: PoolClient, workspaceId: string, id: string) {
+  if (!(await activeCategory(tx, workspaceId, id))) {
+    throw new DomainError(validationCode, [{ field: 'categoryId', issue: 'invalid' }]);
+  }
+}
+
+export async function ensureAlias(
+  tx: PoolClient,
+  scope: Scope,
+  input: { alias: string; personId: string },
+) {
+  const person = await findActivePerson(tx, scope.workspaceId, input.personId);
+
+  if (!person) {
+    throw new DomainError(validationCode, [{ field: 'personId', issue: 'invalid' }]);
+  }
+
+  const alias = await reuseAlias(tx, scope.workspaceId, input.alias, input.personId);
+
+  if (!alias) {
+    throw new DomainError(validationCode, [{ field: 'alias', issue: 'duplicate' }]);
+  }
+
+  if (alias.inserted) {
+    await recordConfigChange(tx, {
+      ...scope,
+      tableName: 'aliases',
+      recordId: alias.id,
+      before: null,
+      after: { id: alias.id, alias: input.alias, person },
+    });
+  }
+
+  return alias.id;
+}
 
 export async function createCategory(
   resolveConnection: ConnectionResolver,
@@ -63,7 +103,7 @@ export async function createAlias(
       const person = await findActivePerson(tx, scope.workspaceId, input.personId);
 
       if (!person) {
-        throw new DomainError('E-VALIDATION', [{ field: 'personId', issue: 'invalid' }]);
+        throw new DomainError(validationCode, [{ field: 'personId', issue: 'invalid' }]);
       }
 
       const alias = await insertAlias(tx, scope.workspaceId, input.alias, person);
@@ -174,7 +214,7 @@ export async function allocateDisplayId(tx: PoolClient, workspaceId: string, dom
   }
 
   if (!category.idPrefix) {
-    throw new DomainError('E-VALIDATION', [{ field: 'idPrefix', issue: 'required' }]);
+    throw new DomainError(validationCode, [{ field: 'idPrefix', issue: 'required' }]);
   }
 
   return formatDisplayId(

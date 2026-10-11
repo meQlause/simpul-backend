@@ -4,6 +4,18 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  review_items: zod
+    .object({
+      id: zod.guid(),
+      kind: zod.enum(['unrouted', 'alias', 'category']),
+      title: zod.string(),
+      detail: zod.string(),
+      resolvedAt: zod.iso.datetime(),
+      resolvedBy: zod.guid(),
+      personId: zod.guid(),
+      categoryId: zod.guid(),
+    })
+    .partial(),
   threads: zod
     .object({
       displayId: zod.string(),

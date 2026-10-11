@@ -1,13 +1,27 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
+import type { PoolClient } from 'pg';
+import { DomainError } from '../../platform/errors/domain-error.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import {
   unmatchedQuery,
   insertOrphan,
   lockUnlabelledUnit,
   insertLabel,
+  setLabelCategory,
 } from './understanding.repository.js';
 import { genesisGate } from './understanding.rules.js';
 import { queryPayload, comprehensionScope, comprehensionOutput } from './understanding.schema.js';
+
+export async function recategorizeLabel(
+  tx: PoolClient,
+  workspaceId: string,
+  labelId: string | null,
+  categoryId: string,
+) {
+  if (!labelId || !(await setLabelCategory(tx, workspaceId, labelId, categoryId))) {
+    throw new DomainError('E-VALIDATION', [{ field: 'categoryId', issue: 'invalid' }]);
+  }
+}
 
 export async function resolveUnmatchedQuery(
   resolveConnection: ConnectionResolver,

@@ -2,6 +2,20 @@ import type { PoolClient } from 'pg';
 
 type Scope = { workspaceId: string; unitId: string };
 
+export async function setLabelCategory(
+  tx: PoolClient,
+  workspaceId: string,
+  labelId: string,
+  categoryId: string,
+) {
+  const result = await tx.query(
+    'UPDATE labels SET domain_id = $3, routed_at = NULL WHERE workspace_id = $1 AND id = $2 RETURNING id',
+    [workspaceId, labelId, categoryId],
+  );
+
+  return result.rowCount === 1;
+}
+
 export async function unmatchedQuery(tx: PoolClient, scope: Scope) {
   const result = await tx.query(
     "SELECT id FROM units WHERE workspace_id = $1 AND id = $2 AND triage_class = 'QUERY' FOR UPDATE",

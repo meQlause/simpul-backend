@@ -1,4 +1,5 @@
 import { vocabularyRouter } from './features/vocabulary/index.js';
+import { reviewRouter, type ReviewServices } from './features/review-queue/index.js';
 import { workRouter } from './features/work/index.js';
 import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
@@ -29,6 +30,7 @@ type ApiServices = {
   webhook?: WebhookServices;
   work?: { now: () => Date };
   overview?: { now: () => Date };
+  review?: ReviewServices;
 };
 
 function mountSetup(app: Express, services: ApiServices) {
@@ -86,6 +88,7 @@ function mountApi(app: Express, services?: ApiServices) {
     workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
   );
   app.use('/api/v1', vocabularyRouter(services.resolveConnection));
+  app.use('/api/v1', reviewRouter(services.resolveConnection, services.review));
   mountSetup(app, services);
 }
 

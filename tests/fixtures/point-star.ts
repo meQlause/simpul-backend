@@ -272,6 +272,10 @@ async function seedAggregates(client: PoolClient, seed: Seed) {
     FROM generate_series(1, 984) AS num`,
     [seed.workspaceId, seed.now],
   );
+  await client.query(
+    "UPDATE review_items SET label_id = md5('point-star-label-1')::uuid WHERE workspace_id = $1 AND kind = 'category'",
+    [seed.workspaceId],
+  );
 }
 
 async function seedRuleMatches(client: PoolClient, seed: Seed) {
