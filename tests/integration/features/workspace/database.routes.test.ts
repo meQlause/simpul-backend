@@ -207,16 +207,44 @@ async function verifyCustomerProvision(personId: string) {
     (await customer.query('SELECT "after" FROM config_audit ORDER BY created_at LIMIT 1')).rows[0]
       .after,
   ).toMatchObject({ availabilityAckAt: '2026-10-11T12:00:00.000Z' });
+  expect((await customer.query('SELECT id FROM people')).rows).toHaveLength(1);
+  expect(
+    (await customer.query('SELECT id FROM config_audit WHERE table_name = $1', ['workspaces']))
+      .rows,
+  ).toHaveLength(1);
 }
 
-test('PUT /database migrates and provisions only the customer database, and GET /me answers 200 (FR-DB-04)', async () => {
+async function interruptSystemCommit(app: ReturnType<typeof createApp>, body: object) {
+  await system.query(`CREATE FUNCTION interrupt_database_setup() RETURNS trigger LANGUAGE plpgsql AS $$
+    BEGIN RAISE EXCEPTION 'simulated process failure after customer commit'; END $$;
+    CREATE TRIGGER interrupt_database_setup BEFORE INSERT ON secrets
+    FOR EACH ROW EXECUTE FUNCTION interrupt_database_setup()`);
+
+  try {
+    const response = await supertest(app).put('/api/v1/database').set('Cookie', cookie).send(body);
+
+    expect(response.status).toBe(500);
+    expect((await customer.query('SELECT id FROM workspaces')).rows).toEqual([{ id: workspaceId }]);
+    expect(
+      (await system.query('SELECT status, url_secret_ref FROM workspace_databases')).rows,
+    ).toEqual([{ status: 'pending', url_secret_ref: null }]);
+    expect((await system.query('SELECT id FROM secrets')).rows).toEqual([]);
+    expect((await system.query('SELECT workspace_id FROM workspace_keys')).rows).toEqual([]);
+  } finally {
+    await system.query(
+      'DROP TRIGGER interrupt_database_setup ON secrets; DROP FUNCTION interrupt_database_setup()',
+    );
+  }
+}
+
+test('An identical PUT /database after a crash between databases completes setup and GET /me answers 200 (data-spec §5.16; FR-DB-04)', async () => {
   const { app, resolveConnection } = api(customer);
   const connectionString =
     'postgres://postgres:test-only-db-password@customer.example/postgres?sslmode=require';
-  const response = await supertest(app)
-    .put('/api/v1/database')
-    .set('Cookie', cookie)
-    .send({ connectionString, availabilityAck: true });
+  const body = { connectionString, availabilityAck: true };
+
+  await interruptSystemCommit(app, body);
+  const response = await supertest(app).put('/api/v1/database').set('Cookie', cookie).send(body);
 
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({
