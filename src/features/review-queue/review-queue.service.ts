@@ -10,6 +10,7 @@ import {
   selectReviewItem,
   reviewCounts,
   markResolved,
+  insertUnrouted,
 } from './review-queue.repository.js';
 import { reviewDto } from './review-queue.mapper.js';
 import { encodeReviewCursor, parseReviewResolution } from './review-queue.schema.js';
@@ -22,6 +23,10 @@ export type ReviewServices = {
     payload: { workspaceId: string; labelId: string },
   ) => Promise<unknown>;
 };
+
+export async function raiseUnrouted(...parameters: Parameters<typeof insertUnrouted>) {
+  await insertUnrouted(...parameters);
+}
 
 async function applyResolution(
   tx: PoolClient,

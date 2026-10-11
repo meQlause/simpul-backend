@@ -100,3 +100,47 @@ test('Delivery concurrency: two workers routing one label produce one notificati
       .routed_at,
   ).toEqual(now);
 });
+
+test('Delivery L5.3–5.4: no matching rule raises one unrouted review item and one queue decision, including replay', async () => {
+  const freshLabel = (
+    await pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, thread_id, domain_id, type, tense,
+      evidence_message_ids, confidence, vocab_version, created_at)
+    SELECT workspace_id, unit_id, thread_id, domain_id, 'blocker', tense,
+      evidence_message_ids, confidence, vocab_version, created_at
+    FROM labels WHERE id = $1 RETURNING id`,
+      [labelId],
+    )
+  ).rows[0].id as string;
+  const services = { resolveConnection: createConnectionResolver(pool), now: () => now };
+  const scope = { workspaceId: seed.workspaceId, labelId: freshLabel };
+  const before = (
+    await pool.query(
+      "SELECT count(*)::int AS total FROM decisions WHERE workspace_id = $1 AND kind = 'queue'",
+      [seed.workspaceId],
+    )
+  ).rows[0].total as number;
+
+  await routeLabel(services, scope);
+  await routeLabel(services, scope);
+
+  expect(
+    (
+      await pool.query(
+        "SELECT * FROM review_items WHERE label_id = $1 AND kind = 'unrouted' AND resolved_at IS NULL",
+        [freshLabel],
+      )
+    ).rows,
+  ).toHaveLength(1);
+  expect(
+    (
+      await pool.query(
+        "SELECT count(*)::int AS total FROM decisions WHERE workspace_id = $1 AND kind = 'queue'",
+        [seed.workspaceId],
+      )
+    ).rows[0].total,
+  ).toBe(before + 1);
+  expect(
+    (await pool.query('SELECT * FROM notifications WHERE label_id = $1', [freshLabel])).rows,
+  ).toHaveLength(0);
+});

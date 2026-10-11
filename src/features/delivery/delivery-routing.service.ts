@@ -3,6 +3,8 @@ import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { resolveRoleRecipientInTransaction } from '../people/index.js';
+import { raiseUnrouted } from '../review-queue/index.js';
+import { recordDecision } from '../audit/index.js';
 import { claimGate, mergeRecipientRules, renderNotification } from './delivery.rules.js';
 import {
   lockRoutingLabel,
@@ -26,6 +28,8 @@ export async function routeLabel(services: Services, scope: Scope) {
     const rules = await matchingRules(tx, scope.workspaceId, label);
 
     if (!rules.length) {
+      await queueUnmatched(tx, scope, label, services.now());
+
       return;
     }
 
@@ -76,4 +80,23 @@ async function resolveRecipients(
   }
 
   return resolved;
+}
+
+async function queueUnmatched(
+  tx: PoolClient,
+  scope: Scope,
+  label: { threadId: string; summary: string },
+  now: Date,
+) {
+  await raiseUnrouted(tx, scope, now);
+  await recordDecision(
+    tx,
+    { workspaceId: scope.workspaceId, threadId: label.threadId, now },
+    {
+      kind: 'queue',
+      title: 'No matching rule',
+      detail: label.summary,
+    },
+  );
+  await markRouted(tx, scope, now);
 }

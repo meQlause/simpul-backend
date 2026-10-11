@@ -17,7 +17,9 @@ export async function recordConfigChange(...parameters: Parameters<typeof insert
 export async function recordDecision(
   tx: PoolClient,
   scope: { workspaceId: string; threadId: string; now: Date },
-  facts: Parameters<typeof workDecision>[0],
+  facts: Parameters<typeof workDecision>[0] | { kind: 'queue'; title: string; detail: string },
 ) {
-  await insertDecision(tx, { ...scope, ...workDecision(facts) });
+  const decision = 'kind' in facts ? facts : { kind: 'work' as const, ...workDecision(facts) };
+
+  await insertDecision(tx, { ...scope, ...decision });
 }

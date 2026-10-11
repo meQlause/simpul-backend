@@ -26,6 +26,28 @@ const columns = `SELECT item.id, item.kind, item.title, item.detail, item.detect
       WHERE a.workspace_id = $1 AND lower(a.alias) = lower(item.detected_text)),
     'suggestedCategoryId', (SELECT id FROM vocab_domains WHERE workspace_id = $1 AND active AND lower(name) = lower(item.detected_text) LIMIT 1)) AS detected`;
 
+export async function insertUnrouted(
+  tx: PoolClient,
+  scope: { workspaceId: string; labelId: string },
+  now: Date,
+) {
+  await tx.query('SELECT id FROM labels WHERE workspace_id = $1 AND id = $2 FOR UPDATE', [
+    scope.workspaceId,
+    scope.labelId,
+  ]);
+  await tx.query(
+    `INSERT INTO review_items (workspace_id, kind, title, detail, channel_id, label_id, detected_text, detected_at, created_at)
+    SELECT $1, 'unrouted', 'No matching rule', coalesce(t.summary, ''), u.channel_id, l.id, d.name, $3, $3
+    FROM labels l JOIN units u ON u.id = l.unit_id AND u.workspace_id = $1
+    JOIN threads t ON t.id = l.thread_id AND t.workspace_id = $1
+    JOIN vocab_domains d ON d.id = coalesce(l.domain_id, t.domain_id) AND d.workspace_id = $1
+    WHERE l.workspace_id = $1 AND l.id = $2 AND NOT EXISTS (
+      SELECT 1 FROM review_items item WHERE item.workspace_id = $1 AND item.label_id = l.id
+        AND item.kind = 'unrouted' AND item.resolved_at IS NULL)`,
+    [scope.workspaceId, scope.labelId, now],
+  );
+}
+
 export async function reviewCounts(tx: PoolClient, workspaceId: string) {
   const { rows } = await tx.query<{ unrouted: number; alias: number; category: number }>(
     `SELECT count(*) FILTER (WHERE kind = 'unrouted')::int AS unrouted,

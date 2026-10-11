@@ -20,10 +20,17 @@ export async function insertAudit(tx: PoolClient, entry: AuditEntry) {
 
 export async function insertDecision(
   tx: PoolClient,
-  entry: { workspaceId: string; threadId: string; title: string; detail: string; now: Date },
+  entry: {
+    workspaceId: string;
+    threadId: string;
+    kind: 'work' | 'queue';
+    title: string;
+    detail: string;
+    now: Date;
+  },
 ) {
   await tx.query(
-    "INSERT INTO decisions (workspace_id, kind, thread_id, title, detail, occurred_at) VALUES ($1, 'work', $2, $3, $4, $5)",
-    [entry.workspaceId, entry.threadId, entry.title, entry.detail, entry.now],
+    'INSERT INTO decisions (workspace_id, kind, thread_id, title, detail, occurred_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    [entry.workspaceId, entry.kind, entry.threadId, entry.title, entry.detail, entry.now],
   );
 }
