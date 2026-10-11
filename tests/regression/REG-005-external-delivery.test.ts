@@ -91,13 +91,17 @@ test('REG-005 / SRS T-10: external sending always renders the fixed template, ev
   }
 
   expect(exchange).toHaveBeenCalledTimes(notifications.length);
+  const expectedOutbound = `${expected}\n1. Already shipped\n2. In progress\n3. There is a blocker\n4. Not this work`;
+
   expect(
-    exchange.mock.calls.every(([payload]) => (payload as { content: string }).content === expected),
+    exchange.mock.calls.every(
+      ([payload]) => (payload as { content: string }).content === expectedOutbound,
+    ),
   ).toBe(true);
   expect(
     (
       await pool.query('SELECT body_rendered FROM notifications WHERE label_id = $1', [labelId])
-    ).rows.every((row: { body_rendered: string }) => row.body_rendered === expected),
+    ).rows.every((row: { body_rendered: string }) => row.body_rendered === expectedOutbound),
   ).toBe(true);
 });
 

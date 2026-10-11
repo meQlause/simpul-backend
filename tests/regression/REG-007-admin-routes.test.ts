@@ -54,6 +54,7 @@ let sessionA: string;
 let channelA: string;
 let categoryA: string;
 let reviewItemA: string;
+let ruleA: string;
 let tables: string[];
 
 type Layer = {
@@ -131,6 +132,10 @@ const bodies: Record<string, object> = {
   'get /me': {},
   'get /overview': {},
   'get /rules': {},
+  'post /rules': {},
+  'patch /rules/:ruleId': { active: false },
+  'post /onboarding/complete': { backups: [], activeRuleIds: [] },
+  'get /previews/recipient': {},
   'get /review-items': {},
   'get /review-items/:itemId': {},
   'post /review-items/:itemId/resolve': { personId: '00000000-0000-4000-8000-000000100099' },
@@ -146,6 +151,8 @@ const bodies: Record<string, object> = {
 const statuses: Record<string, number> = {
   'post /work/:displayId/close/undo': 409,
   'post /categories': 201,
+  'post /rules': 201,
+  'post /onboarding/complete': 422,
   'post /aliases': 201,
   'patch /channels/:channelId': 409,
   'post /channels/:channelId/pause': 409,
@@ -164,6 +171,22 @@ async function prepareReviewRoute() {
     )
   ).rows[0].id;
   bodies['post /review-items/:itemId/resolve'] = { personId: personA };
+  const rule = (
+    await pool.query(
+      'SELECT id, domain_id, recipient_role_id FROM rules WHERE workspace_id <> $1 ORDER BY id LIMIT 1',
+      [workspaceB],
+    )
+  ).rows[0];
+
+  ruleA = rule.id;
+  bodies['post /rules'] = {
+    name: 'Tenant isolation rule',
+    categoryId: rule.domain_id,
+    eventType: 'progress',
+    conditionText: 'Confirmed update',
+    recipientRoleId: rule.recipient_role_id,
+    historyMode: 'future',
+  };
 }
 
 async function prepareRouteParameters() {
@@ -257,7 +280,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':itemId', reviewItemA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
+  const path = `/api/v1${route.path.replace(':itemId', reviewItemA).replace(':ruleId', ruleA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
 
   if (route.method === 'get') {

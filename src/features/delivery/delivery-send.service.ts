@@ -8,7 +8,7 @@ import {
   deferNotification,
   replaceDestination,
 } from './delivery-send.repository.js';
-import { renderNotification } from './delivery.rules.js';
+import { renderNotification, renderActions } from './delivery.rules.js';
 import { resolveRoleRecipientInTransaction } from '../people/index.js';
 import type { PoolClient } from 'pg';
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -45,18 +45,14 @@ export async function sendNotification(
       'bot_token',
       pending.tokenRef,
     );
-    const body = renderNotification(pending.body, {
-      work_id: pending.work_id,
-      customer: pending.customer,
-      summary: pending.summary,
-    });
+    const message = outboundMessage(services, scope, pending, chatId);
     const result = await services.providers.adapterFor(pending.provider).send(
       {
         credential,
         providerAccountId: pending.providerAccountId,
         webhookUrl: `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/${pending.provider}/${pending.connectionId}`,
       },
-      { kind: pending.kind, chatId, text: body },
+      message,
     );
 
     if ('retryAfter' in result) {
@@ -65,8 +61,41 @@ export async function sendNotification(
       return;
     }
 
-    await recordSentAt(tx, scope, { now, body });
+    await recordSentAt(tx, scope, { now, body: message.text });
   });
+}
+
+function outboundMessage(
+  services: Services,
+  scope: { notificationId: string },
+  pending: NonNullable<Awaited<ReturnType<typeof lockPendingNotification>>>,
+  chatId: string,
+) {
+  const body = renderNotification(pending.body, {
+    work_id: pending.work_id,
+    customer: pending.customer,
+    summary: pending.summary,
+  });
+  const actions =
+    pending.kind === 'correction'
+      ? []
+      : [
+          { id: `n:${scope.notificationId}:r`, label: 'Already shipped' },
+          { id: `n:${scope.notificationId}:p`, label: 'In progress' },
+          { id: `n:${scope.notificationId}:b`, label: 'There is a blocker' },
+          { id: `n:${scope.notificationId}:x`, label: 'Not this work' },
+        ];
+  const rendered = renderActions(
+    actions,
+    services.providers.adapterFor(pending.provider).capabilities,
+  );
+
+  return {
+    kind: pending.kind,
+    chatId,
+    text: [body, rendered.text].filter(Boolean).join('\n'),
+    actions: rendered.actions,
+  };
 }
 
 async function resolveDestination(

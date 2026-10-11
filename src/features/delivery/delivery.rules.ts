@@ -1,5 +1,14 @@
 const minimumConfidence = 0.75;
 
+export function renderActions(
+  actions: { id: string; label: string }[],
+  capabilities: { inlineActions: boolean },
+): { actions?: { id: string; label: string }[]; text: string } {
+  return capabilities.inlineActions
+    ? { actions, text: '' }
+    : { text: actions.map((action, index) => `${index + 1}. ${action.label}`).join('\n') };
+}
+
 export function quietHoursHold(facts: {
   localTime: string;
   quietStart: string;
