@@ -1,8 +1,7 @@
 import { beforeAll, expect, test, vi } from 'vitest';
-import { databaseFixture } from '../helpers/database.js';
+import { databaseFixture, createConnectionResolver } from '../helpers/database-mode.js';
 import { applyMigrations } from '../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
 import { createProviderRegistry } from '../../src/platform/providers/index.js';
 import { createFakeProvider } from '../helpers/providers/fake.js';

@@ -9,7 +9,7 @@ import {
   draftWithVerification,
 } from '../helpers/channel-activation.js';
 import { coalesce } from '../../src/features/ingest/index.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
+import { createConnectionResolver } from '../helpers/database-mode.js';
 
 let channelId: string;
 let connectionId: string;

@@ -1,5 +1,5 @@
 import { beforeAll, expect, test } from 'vitest';
-import { databaseFixture } from '../helpers/database.js';
+import { databaseFixture } from '../helpers/database-mode.js';
 import { applyMigrations } from '../helpers/migrations.js';
 import { transactionFixture } from '../helpers/transactions.js';
 import { seedTenantRows } from '../fixtures/tenant-rows.js';

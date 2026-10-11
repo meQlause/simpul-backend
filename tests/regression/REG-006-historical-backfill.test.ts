@@ -1,8 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
-import { databaseFixture } from '../helpers/database.js';
+import { databaseFixture, createConnectionResolver } from '../helpers/database-mode.js';
 import { applyMigrations } from '../helpers/migrations.js';
 import { seedTenantRows } from '../fixtures/tenant-rows.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
 import { storeComprehension } from '../../src/features/understanding/understanding.service.js';
 import { claimGate } from '../../src/features/delivery/delivery.rules.js';
 

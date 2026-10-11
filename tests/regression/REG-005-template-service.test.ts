@@ -1,11 +1,10 @@
 import { beforeAll, expect, test } from 'vitest';
 import request from 'supertest';
-import { databaseFixture } from '../helpers/database.js';
+import { databaseFixture, createConnectionResolver } from '../helpers/database-mode.js';
 import { applyMigrations } from '../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
 import { signInSeedAdmin } from '../helpers/admin-session.js';
 import { createApp } from '../../src/app.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
 
 const pool = databaseFixture();
 const now = new Date('2026-10-10T04:01:00Z');

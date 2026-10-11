@@ -5,7 +5,7 @@ import {
   createProviderRegistry,
   createTelegramProvider,
 } from '../../src/platform/providers/index.js';
-import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
+import { createConnectionLookup, createConnectionResolver } from '../helpers/database-mode.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
 import { webhookRouter } from '../../src/features/ingest/index.js';
 import { errorHandler } from '../../src/platform/http/error-handler.js';
@@ -19,7 +19,6 @@ import {
   draftWithVerification,
 } from '../helpers/channel-activation.js';
 import { coalesce } from '../../src/features/ingest/index.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
 
 let channelId: string;
 let connectionId: string;

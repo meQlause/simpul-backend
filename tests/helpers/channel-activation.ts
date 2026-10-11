@@ -3,15 +3,18 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { beforeAll, afterAll, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
-import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
+import {
+  createConnectionResolver,
+  createConnectionLookup,
+  seedConnectionRoutes,
+  databaseFixture,
+} from './database-mode.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
 import {
   createProviderRegistry,
   createTelegramProvider,
   type ActivationProvider,
 } from '../../src/platform/providers/index.js';
-import { databaseFixture } from './database.js';
 import { applyMigrations } from './migrations.js';
 import { signInSeedAdmin } from './admin-session.js';
 import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
@@ -108,6 +111,7 @@ beforeAll(async () => {
 
   expect(connection.status).toBe(201);
   connectionId = connection.body.data.id;
+  await seedConnectionRoutes(pool);
 }, 120000);
 
 export async function draftWithVerification(scenario: string) {

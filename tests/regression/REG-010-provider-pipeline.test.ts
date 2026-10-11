@@ -1,14 +1,17 @@
 import express from 'express';
 import request from 'supertest';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
-import { databaseFixture } from '../helpers/database.js';
+import {
+  databaseFixture,
+  seedConnectionRoutes,
+  createConnectionResolver,
+  createConnectionLookup,
+} from '../helpers/database-mode.js';
 import { applyMigrations } from '../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
 import { createFakeProvider } from '../helpers/providers/fake.js';
 import { createProviderRegistry } from '../../src/platform/providers/index.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
-import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
-import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
 import {
   createQueue,
   publishCoalesce,
@@ -94,6 +97,7 @@ beforeAll(async () => {
     )
   ).rows[0];
   await configureProvider();
+  await seedConnectionRoutes(pool);
   await pool.query('UPDATE policies SET hold_seconds = 0 WHERE workspace_id = $1', [
     seed.workspaceId,
   ]);
