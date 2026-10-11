@@ -132,6 +132,17 @@ async function seedChannels(client: PoolClient, seed: Seed) {
       (3, 'Warehouse & Shipping', 6, 'internal')) AS sample(num, name, members, class)`,
     [seed.workspaceId, seed.now],
   );
+  await client.query(
+    `INSERT INTO channel_verifications (id, workspace_id, channel_id, bot_connection_id,
+    config_version, credential_version, checks, status, checked_at, expires_at, created_at)
+    SELECT md5('point-star-verification-' || num)::uuid, $1, md5('point-star-channel-' || num)::uuid,
+      md5('point-star-bot')::uuid, 1, 1,
+      '[{"key":"bot_identity","status":"pass"},{"key":"group","status":"pass"},{"key":"membership","status":"pass"},{"key":"privacy_mode","status":"pass"},{"key":"webhook","status":"pass"}]'::jsonb,
+      'pass', $2::timestamptz - interval '3 hours',
+      $2::timestamptz + interval '30 days', $2
+    FROM generate_series(1, 3) AS num`,
+    [seed.workspaceId, seed.now],
+  );
 }
 
 async function seedWork(client: PoolClient, seed: Seed) {
@@ -336,9 +347,9 @@ async function seedDelivery(client: PoolClient, seed: Seed) {
   );
   await client.query(
     `INSERT INTO open_questions (workspace_id, channel_id, thread_ids, asked_at, expires_at, created_at)
-    VALUES ($1, md5('point-star-channel-2')::uuid,
+    VALUES ($1, md5('point-star-channel-3')::uuid,
       ARRAY[md5('point-star-thread-ORD-0098')::uuid, md5('point-star-thread-ORD-0095')::uuid,
-        md5('point-star-thread-ORD-0087')::uuid], $2, $2::timestamptz + interval '1 day', $2)`,
+        md5('point-star-thread-ORD-0087')::uuid], $2, GREATEST($2::timestamptz, now()) + interval '1 day', $2)`,
     [seed.workspaceId, seed.now],
   );
 }
