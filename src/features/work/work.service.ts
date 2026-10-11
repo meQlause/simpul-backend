@@ -1,8 +1,10 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
-import { selectWork } from './work.repository.js';
-import { displayStatus } from './work.rules.js';
-import { encodeWorkCursor, type parseWorkQuery } from './work.schema.js';
+import { allocateDisplayId } from '../vocabulary/index.js';
+import { DomainError } from '../../platform/errors/domain-error.js';
+import { selectWork, insertGenesis } from './work.repository.js';
+import { displayStatus, genesisState } from './work.rules.js';
+import { encodeWorkCursor, parseGenesis, type parseWorkQuery } from './work.schema.js';
 
 export async function listWork(
   resolveConnection: ConnectionResolver,
@@ -30,5 +32,35 @@ export async function listWork(
         nextCursor: result.rows.length > input.limit && last ? encodeWorkCursor(last, input) : null,
       },
     };
+  });
+}
+
+export async function createFromGenesis(
+  resolveConnection: ConnectionResolver,
+  workspaceId: string,
+  input: ReturnType<typeof parseGenesis>,
+  now: Date,
+) {
+  const genesis = parseGenesis(input);
+  const state = genesisState(genesis.confidence, now.getTime());
+
+  if (!state) {
+    return null;
+  }
+
+  return scopedTransaction(resolveConnection, workspaceId, async (tx) => {
+    const displayId = await allocateDisplayId(tx, workspaceId, genesis.domainId);
+    const item = await insertGenesis(tx, workspaceId, genesis, {
+      ...state,
+      displayId,
+      now,
+      expiresAt: state.expiresAt === null ? null : new Date(state.expiresAt),
+    });
+
+    if (!item) {
+      throw new DomainError('E-NOT-FOUND');
+    }
+
+    return item;
   });
 }

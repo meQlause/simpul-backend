@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { parseWorkQuery } from './work.schema.js';
+import type { parseWorkQuery, parseGenesis } from './work.schema.js';
 import type { displayStatus } from './work.rules.js';
 
 type WorkRow = {
@@ -49,4 +49,28 @@ export async function selectWork(
   );
 
   return { rows: rows.rows, total: total.rows[0].total };
+}
+
+export async function insertGenesis(
+  tx: PoolClient,
+  workspaceId: string,
+  input: ReturnType<typeof parseGenesis>,
+  creation: { displayId: string; status: string; expiresAt: Date | null; now: Date },
+) {
+  return (
+    await tx.query<{ id: string; displayId: string; status: string }>(
+      'INSERT INTO threads (workspace_id, domain_id, channel_id, display_id, summary, genesis_confidence, status, expires_at, last_activity_at, created_at) SELECT $1, $2, channel.id, $4, $5, $6, $7, $8, $9, $9 FROM channels AS channel WHERE channel.workspace_id = $1 AND channel.id = $3 RETURNING id, display_id AS "displayId", status',
+      [
+        workspaceId,
+        input.domainId,
+        input.channelId,
+        creation.displayId,
+        input.summary,
+        input.confidence,
+        creation.status,
+        creation.expiresAt,
+        creation.now,
+      ],
+    )
+  ).rows[0];
 }

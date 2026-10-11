@@ -51,3 +51,20 @@ export function encodeWorkCursor(row: { id: string; lastActivityAt: Date }, filt
     JSON.stringify({ at: row.lastActivityAt.toISOString(), id: row.id, filter: filterKey(filter) }),
   ).toString('base64url');
 }
+
+const genesisSchema = schema.strictObject({
+  domainId: schema.guid(),
+  channelId: schema.guid(),
+  summary: schema.string().trim().min(1),
+  confidence: schema.number().min(0).max(1),
+});
+
+export function parseGenesis(input: unknown) {
+  const parsed = genesisSchema.safeParse(input);
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}

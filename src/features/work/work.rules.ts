@@ -12,3 +12,17 @@ export function displayStatus(
     ? 'stalled'
     : thread.status;
 }
+
+export function genesisState(confidence: number, now: number) {
+  const activeThreshold = 0.8;
+  const tentativeThreshold = 0.55;
+  const tentativeLifetime = 86_400_000;
+
+  if (confidence < tentativeThreshold) {
+    return null;
+  }
+
+  return confidence >= activeThreshold
+    ? { status: 'active', expiresAt: null }
+    : { status: 'tentative', expiresAt: now + tentativeLifetime };
+}

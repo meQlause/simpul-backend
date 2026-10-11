@@ -1,4 +1,9 @@
-import { allowedTemplateFields, templateFieldsAllowed } from './vocabulary.rules.js';
+import type { PoolClient } from 'pg';
+import {
+  allowedTemplateFields,
+  templateFieldsAllowed,
+  formatDisplayId,
+} from './vocabulary.rules.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -7,6 +12,7 @@ import { advanceVocabularyVersion, getVocabularyVersion } from '../workspace/ind
 import { findActivePerson } from '../people/index.js';
 import {
   configurationWrite,
+  incrementDisplayCounter,
   lockCategory,
   editCategory,
   lockInternalTemplate,
@@ -157,5 +163,22 @@ export async function updateCategory(
 
       return { category, version };
     }),
+  );
+}
+
+export async function allocateDisplayId(tx: PoolClient, workspaceId: string, domainId: string) {
+  const category = await lockCategory(tx, workspaceId, domainId);
+
+  if (!category) {
+    throw new DomainError('E-NOT-FOUND');
+  }
+
+  if (!category.idPrefix) {
+    throw new DomainError('E-VALIDATION', [{ field: 'idPrefix', issue: 'required' }]);
+  }
+
+  return formatDisplayId(
+    category.idPrefix,
+    await incrementDisplayCounter(tx, workspaceId, domainId),
   );
 }

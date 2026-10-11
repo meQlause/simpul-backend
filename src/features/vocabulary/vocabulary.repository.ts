@@ -138,3 +138,16 @@ export async function editCategory(
     [workspaceId, id, input.description, input.example, input.idPrefix],
   );
 }
+
+export async function incrementDisplayCounter(
+  tx: PoolClient,
+  workspaceId: string,
+  domainId: string,
+) {
+  return (
+    await tx.query<{ value: number }>(
+      'INSERT INTO display_id_counters (workspace_id, domain_id, last_value) VALUES ($1, $2, 1) ON CONFLICT (domain_id) DO UPDATE SET last_value = display_id_counters.last_value + 1 WHERE display_id_counters.workspace_id = $1 RETURNING last_value AS value',
+      [workspaceId, domainId],
+    )
+  ).rows[0].value;
+}
