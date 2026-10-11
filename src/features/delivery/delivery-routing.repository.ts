@@ -34,7 +34,7 @@ export async function lockRoutingLabel(tx: PoolClient, scope: Scope) {
     JOIN channels c ON c.id = u.channel_id AND c.workspace_id = $1
     JOIN policies policy ON policy.workspace_id = $1
     JOIN templates template ON template.workspace_id = $1 AND template.audience = c.class AND template.key = 'update'
-    WHERE l.workspace_id = $1 AND l.id = $2 AND l.routed_at IS NULL FOR UPDATE OF l`,
+    WHERE l.workspace_id = $1 AND l.id = $2 AND l.routed_at IS NULL AND l.retracted_at IS NULL FOR UPDATE OF l`,
     [scope.workspaceId, scope.labelId],
   );
 

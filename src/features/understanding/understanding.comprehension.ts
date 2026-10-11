@@ -6,6 +6,7 @@ import { modelInput } from './understanding.triage.repository.js';
 import { comprehensionScope, comprehensionOutput } from './understanding.schema.js';
 import { hasOutcome, insertOrphan, lockUnlabelledUnit } from './understanding.repository.js';
 import { storeComprehension } from './understanding.service.js';
+import { operationContext } from './understanding-context.repository.js';
 
 const defaultTemperature = 0.2;
 
@@ -14,11 +15,18 @@ type Dependencies = {
   resolveConnection: ConnectionResolver;
   model: ModelPort;
   alert: (event: Scope & { reason: 'model_invalid_json' }) => void;
+  now?: () => Date;
 };
 
-function decode(text: string) {
+function decode(text: string, contextOpIds: string[]) {
   try {
-    return comprehensionOutput.safeParse(JSON.parse(text));
+    return comprehensionOutput
+      .refine((output) =>
+        output.operations.every(
+          (operation) => !operation.retractsOpId || contextOpIds.includes(operation.retractsOpId),
+        ),
+      )
+      .safeParse(JSON.parse(text));
   } catch {
     return null;
   }
@@ -52,7 +60,9 @@ export async function comprehendUnit(dependencies: Dependencies, payload: Scope)
         return null;
       }
 
-      return modelInput(tx, scope);
+      const message = await modelInput(tx, scope);
+
+      return message ? { ...message, operations: await operationContext(tx, scope) } : null;
     },
   );
 
@@ -67,11 +77,18 @@ export async function comprehendUnit(dependencies: Dependencies, payload: Scope)
       bodySafe: input.bodySafe,
       temperature,
       responseSchema: z.toJSONSchema(comprehensionOutput),
+      context: { operations: input.operations },
     });
-    const decoded = decode(output);
+    const decoded = decode(
+      output,
+      input.operations.map((operation) => operation.opId),
+    );
 
     if (decoded?.success) {
-      await storeComprehension(dependencies.resolveConnection, scope, decoded.data);
+      await storeComprehension(dependencies.resolveConnection, scope, decoded.data, {
+        now: dependencies.now?.(),
+        contextOpIds: input.operations.map((operation) => operation.opId),
+      });
 
       return;
     }

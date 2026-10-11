@@ -67,3 +67,25 @@ test('SRS §12.1: the SDK uses one HTTP attempt and a 20 second cancellation dea
     vi.useRealTimers();
   }
 });
+
+test('D-3: comprehension sends only the supplied safe operation context as data', async () => {
+  const generate = vi.fn(async () => ({ text: '{}' }));
+  const model = createGeminiModel(settings, generate);
+  const context = {
+    operations: [{ opId: 'operation-id', type: 'progress', evidence: '[REDACTED]' }],
+  };
+
+  await model.generate({
+    mode: 'comprehend',
+    tier: 'standard',
+    bodySafe: 'correction',
+    temperature: 0,
+    context,
+  });
+
+  expect(generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      contents: JSON.stringify({ message: 'correction', context }),
+    }),
+  );
+});

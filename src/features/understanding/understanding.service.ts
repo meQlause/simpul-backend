@@ -6,11 +6,11 @@ import {
   unmatchedQuery,
   insertOrphan,
   lockUnlabelledUnit,
-  insertLabel,
   setLabelCategory,
 } from './understanding.repository.js';
 import { genesisGate } from './understanding.rules.js';
 import { queryPayload, comprehensionScope, comprehensionOutput } from './understanding.schema.js';
+import { persistOperation, type OperationOptions } from './understanding-operation.service.js';
 
 export async function recategorizeLabel(
   tx: PoolClient,
@@ -40,6 +40,7 @@ export async function storeComprehension(
   resolveConnection: ConnectionResolver,
   scope: { workspaceId: string; unitId: string; threadId: string },
   output: unknown,
+  options: OperationOptions = {},
 ) {
   const payload = comprehensionScope.parse(scope);
   const result = comprehensionOutput.parse(output);
@@ -55,7 +56,7 @@ export async function storeComprehension(
         continue;
       }
 
-      await insertLabel(tx, payload, operation);
+      await persistOperation(tx, payload, operation, options);
     }
   });
 }

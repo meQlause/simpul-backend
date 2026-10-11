@@ -13,6 +13,7 @@ export const comprehensionOutput = z.strictObject({
       tense: z.enum(['sudah_terjadi', 'rencana', 'kondisional']),
       evidenceMessageIds: z.array(z.guid()),
       confidence: z.number().min(0).max(1),
+      retractsOpId: z.guid().nullable().optional(),
     }),
   ),
 });

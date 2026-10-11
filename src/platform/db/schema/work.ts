@@ -110,6 +110,8 @@ export const labels = pgTable(
     unitId: reference('unit_id', () => units.id).notNull(),
     threadId: reference('thread_id', () => threads.id, 'set null'),
     opId: uuid('op_id').defaultRandom().notNull(),
+    retractsOpId: reference('retracts_op_id', (): AnyPgColumn => labels.opId),
+    retractedAt: instant('retracted_at'),
     domainId: reference('domain_id', () => vocabDomains.id),
     domainHint: text('domain_hint'),
     type: text('type').notNull(),
@@ -163,10 +165,14 @@ export const progressMarkers = pgTable(
     text: text('text').notNull(),
     messageId: reference('message_id', () => messagesRaw.id, 'set null'),
     type: text('type').notNull(),
+    opId: reference('op_id', () => labels.opId),
+    previousState: jsonb('previous_state'),
+    retractedAt: instant('retracted_at'),
   },
   (table) => [
     check('markers_type_valid', sql`${table.type} IN ('progress','resolution','blocker')`),
     index('markers_thread_ts_idx').on(table.threadId, table.ts.desc()),
+    uniqueIndex('markers_op_uq').on(table.opId),
   ],
 );
 

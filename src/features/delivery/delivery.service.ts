@@ -1,4 +1,14 @@
-import { cancelChannelUnsent, cancelWorkUnsent } from './delivery.repository.js';
+import {
+  cancelChannelUnsent,
+  cancelWorkUnsent,
+  cancelOperationUnsent,
+} from './delivery.repository.js';
+
+export async function cancelOperationNotifications(
+  ...parameters: Parameters<typeof cancelOperationUnsent>
+) {
+  await cancelOperationUnsent(...parameters);
+}
 
 export async function cancelChannelNotifications(
   ...parameters: Parameters<typeof cancelChannelUnsent>
