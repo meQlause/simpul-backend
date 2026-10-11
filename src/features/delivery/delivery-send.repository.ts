@@ -8,6 +8,9 @@ type Pending = {
   tokenRef: string;
   chatId: string;
   body: string;
+  work_id: string;
+  customer: string;
+  summary: string;
 };
 
 export async function lockPendingNotification(tx: PoolClient, scope: Scope, now: Date) {
@@ -18,11 +21,13 @@ export async function lockPendingNotification(tx: PoolClient, scope: Scope, now:
   );
   const result = await tx.query<Pending>(
     `SELECT c.provider, b.id AS "connectionId", b.provider_account_id AS "providerAccountId",
-      b.token_secret_ref AS "tokenRef", coalesce(identity.external_id, identity.handle) AS "chatId", n.body_rendered AS body
+      b.token_secret_ref AS "tokenRef", coalesce(identity.external_id, identity.handle) AS "chatId", template.body AS body, t.display_id AS work_id, coalesce(t.customer_label, '') AS customer, t.summary
     FROM notifications n JOIN labels l ON l.id = n.label_id AND l.workspace_id = $1
     JOIN units u ON u.id = l.unit_id AND u.workspace_id = $1
     JOIN channels c ON c.id = u.channel_id AND c.workspace_id = $1
     JOIN bot_connections b ON b.id = c.bot_connection_id AND b.workspace_id = $1
+    JOIN threads t ON t.id = n.thread_id AND t.workspace_id = $1
+    JOIN templates template ON template.workspace_id = $1 AND template.audience = c.class AND template.key = 'update'
     JOIN person_identities identity ON identity.person_id = n.recipient_person_id AND identity.workspace_id = $1 AND identity.provider = c.provider
     WHERE n.workspace_id = $1 AND n.id = $2 AND n.sent_at IS NULL AND n.cancelled_at IS NULL
       AND n.digest_id IS NULL AND n.held_until <= $3 AND l.retracted_at IS NULL
@@ -33,12 +38,15 @@ export async function lockPendingNotification(tx: PoolClient, scope: Scope, now:
   return result.rows[0];
 }
 
-export async function recordSentAt(tx: PoolClient, scope: Scope, now: Date) {
-  await tx.query('UPDATE notifications SET sent_at = $3 WHERE workspace_id = $1 AND id = $2', [
-    scope.workspaceId,
-    scope.notificationId,
-    now,
-  ]);
+export async function recordSentAt(
+  tx: PoolClient,
+  scope: Scope,
+  input: { now: Date; body: string },
+) {
+  await tx.query(
+    'UPDATE notifications SET sent_at = $3, body_rendered = $4 WHERE workspace_id = $1 AND id = $2',
+    [scope.workspaceId, scope.notificationId, input.now, input.body],
+  );
 }
 
 export async function deferNotification(

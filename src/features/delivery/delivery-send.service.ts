@@ -7,6 +7,7 @@ import {
   recordSentAt,
   deferNotification,
 } from './delivery-send.repository.js';
+import { renderNotification } from './delivery.rules.js';
 
 type Services = {
   resolveConnection: ConnectionResolver;
@@ -34,13 +35,18 @@ export async function sendNotification(
       'bot_token',
       pending.tokenRef,
     );
+    const body = renderNotification(pending.body, {
+      work_id: pending.work_id,
+      customer: pending.customer,
+      summary: pending.summary,
+    });
     const result = await services.providers.adapterFor(pending.provider).send(
       {
         credential,
         providerAccountId: pending.providerAccountId,
         webhookUrl: `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/${pending.provider}/${pending.connectionId}`,
       },
-      { kind: 'notification', chatId: pending.chatId, text: pending.body },
+      { kind: 'notification', chatId: pending.chatId, text: body },
     );
 
     if ('retryAfter' in result) {
@@ -49,6 +55,6 @@ export async function sendNotification(
       return;
     }
 
-    await recordSentAt(tx, scope, now);
+    await recordSentAt(tx, scope, { now, body });
   });
 }
