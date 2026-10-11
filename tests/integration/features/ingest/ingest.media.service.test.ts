@@ -12,6 +12,7 @@ import { receiveUpdate } from '../../../../src/features/ingest/ingest.service.js
 import { createConnectionLookup } from '../../../../src/platform/db/connection-lookup.js';
 import { createFakeProvider } from '../../../helpers/providers/fake.js';
 import { processMedia } from '../../../../src/features/ingest/ingest.media.service.js';
+import { triageUnit } from '../../../../src/features/understanding/understanding.triage.js';
 
 const pool = databaseFixture(3);
 const now = new Date('2026-10-10T04:00:00Z');
@@ -150,4 +151,24 @@ test('SRS §12.4: failed transcription posts the fixed sentence in the group onc
   expect(exchange.mock.calls[0][0]).toMatchObject({
     content: 'The voice note could not be transcribed. Please type the update in this group.',
   });
+});
+
+test('SRS §12.4: a transcript follows the normal understanding path using its redacted text rather than empty raw audio', async () => {
+  const unitId = (
+    await pool.query(
+      "SELECT u.id FROM units u JOIN unit_messages member ON member.unit_id = u.id JOIN messages_raw m ON m.id = member.message_id WHERE m.provider_msg_id = 'voice-success'",
+      [],
+    )
+  ).rows[0].id;
+  const generate = vi.fn(async () => 'EVENT');
+  const publishResolve = vi.fn();
+
+  await triageUnit(
+    { ...services, model: { generate }, audit: vi.fn(), publishResolve },
+    { workspaceId: seed.workspaceId, unitId },
+  );
+  expect(generate).toHaveBeenCalledWith(
+    expect.objectContaining({ bodySafe: 'ORD-0091 sudah dikirim, rekening [REDACTED].' }),
+  );
+  expect(publishResolve).toHaveBeenCalledTimes(1);
 });
