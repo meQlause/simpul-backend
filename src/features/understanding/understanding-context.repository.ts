@@ -30,3 +30,14 @@ export async function retireOperation(
 
   return result.rowCount === 1;
 }
+
+export async function detachRecordedOperation(
+  tx: PoolClient,
+  scope: Scope,
+  input: { opId: string; now: Date },
+) {
+  await tx.query(
+    'UPDATE labels SET thread_id = NULL, retracted_at = $4 WHERE workspace_id = $1 AND thread_id = $2 AND op_id = $3',
+    [scope.workspaceId, scope.threadId, input.opId, input.now],
+  );
+}

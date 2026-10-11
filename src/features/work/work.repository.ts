@@ -104,7 +104,7 @@ export async function selectWorkDetail(
     item.next_step AS "nextStep", item.created_at AS "createdAt", item.closed_at AS "closedAt",
     item.closed_by AS "closedBy", item.closure_kind AS "closureKind", item.closure_reason AS "closureReason",
     (SELECT name FROM people WHERE workspace_id = $1 AND id = item.closed_by) AS "closedByName",
-    (SELECT jsonb_build_object('text', text, 'at', ts) FROM progress_markers WHERE workspace_id = $1 AND thread_id = item.id ORDER BY ts DESC, id DESC LIMIT 1) AS "latestUpdate",
+    (SELECT jsonb_build_object('text', text, 'at', ts) FROM progress_markers WHERE workspace_id = $1 AND thread_id = item.id AND retracted_at IS NULL ORDER BY ts DESC, id DESC LIMIT 1) AS "latestUpdate",
     (SELECT count(*)::int FROM notifications WHERE workspace_id = $1 AND thread_id = item.id AND kind = 'reminder' AND sent_at IS NOT NULL) AS "reminderCount",
     (SELECT rule.name FROM label_rule_matches AS matched JOIN labels AS label ON label.id = matched.label_id AND label.workspace_id = $1 JOIN rules AS rule ON rule.id = matched.rule_id AND rule.workspace_id = $1 WHERE matched.workspace_id = $1 AND label.thread_id = item.id ORDER BY matched.matched_at DESC, rule.id DESC LIMIT 1) AS "ruleApplied",
     (SELECT backup.name FROM role_members AS member JOIN role_members AS replacement ON replacement.role_id = member.role_id AND replacement.workspace_id = $1 AND replacement.kind = 'backup' JOIN people AS backup ON backup.id = replacement.person_id AND backup.workspace_id = $1 JOIN roles AS role ON role.id = member.role_id AND role.workspace_id = $1 WHERE member.workspace_id = $1 AND member.person_id = owner.id AND member.kind = 'member' ORDER BY role.name, backup.name LIMIT 1) AS "backupName"

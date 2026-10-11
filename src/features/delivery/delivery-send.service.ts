@@ -56,7 +56,7 @@ export async function sendNotification(
         providerAccountId: pending.providerAccountId,
         webhookUrl: `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/${pending.provider}/${pending.connectionId}`,
       },
-      { kind: 'notification', chatId, text: body },
+      { kind: pending.kind, chatId, text: body },
     );
 
     if ('retryAfter' in result) {

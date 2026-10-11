@@ -12,7 +12,12 @@ export async function applyProgress(tx: PoolClient, scope: Scope, input: Progres
     `INSERT INTO progress_markers (workspace_id, thread_id, op_id, ts, text, message_id, type, previous_state)
     SELECT $1, t.id, $3, $4, t.summary, m.id, $6,
       jsonb_build_object('status', t.status, 'lastActivityAt', t.last_activity_at,
-        'closureKind', t.closure_kind, 'closureReason', t.closure_reason, 'closedAt', t.closed_at, 'closedBy', t.closed_by)
+        'closureKind', t.closure_kind, 'closureReason', t.closure_reason, 'closedAt', t.closed_at, 'closedBy', t.closed_by,
+        'previousOpId', (SELECT prior.op_id FROM progress_markers prior
+          WHERE prior.workspace_id = $1 AND prior.thread_id = t.id AND prior.ts = t.last_activity_at AND prior.op_id IS NOT NULL AND prior.retracted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM progress_markers successor WHERE successor.workspace_id = $1 AND successor.thread_id = t.id
+            AND successor.retracted_at IS NULL AND successor.previous_state->>'previousOpId' = prior.op_id::text)
+          ORDER BY prior.created_at DESC, prior.id DESC LIMIT 1))
     FROM threads t JOIN messages_raw m ON m.workspace_id = $1 AND m.id = $5
     WHERE t.workspace_id = $1 AND t.id = $2 AND t.status = 'active' AND NOT t.historical
     ON CONFLICT (op_id) DO NOTHING RETURNING id`,
@@ -52,7 +57,23 @@ export async function restoreProgress(
       closure_kind = operation.previous_state->>'closureKind', closure_reason = operation.previous_state->>'closureReason',
       closed_at = (operation.previous_state->>'closedAt')::timestamptz,
       closed_by = (operation.previous_state->>'closedBy')::uuid
-    FROM operation WHERE t.workspace_id = $1 AND t.id = $2 AND t.last_activity_at = operation.ts`,
+    FROM operation WHERE t.workspace_id = $1 AND t.id = $2 AND t.last_activity_at = operation.ts
+      AND NOT EXISTS (SELECT 1 FROM progress_markers successor WHERE successor.workspace_id = $1 AND successor.thread_id = $2
+        AND successor.retracted_at IS NULL AND successor.previous_state->>'previousOpId' = $3::text)`,
     [scope.workspaceId, scope.threadId, input.opId, input.now],
+  );
+  await tx.query(
+    `UPDATE progress_markers successor SET previous_state = operation.previous_state
+    FROM progress_markers operation WHERE operation.workspace_id = $1 AND operation.thread_id = $2 AND operation.op_id = $3
+      AND successor.workspace_id = $1 AND successor.thread_id = $2 AND successor.retracted_at IS NULL
+      AND successor.previous_state->>'previousOpId' = operation.op_id::text`,
+    [scope.workspaceId, scope.threadId, input.opId],
+  );
+  await tx.query(
+    `DELETE FROM message_thread_link link WHERE link.workspace_id = $1 AND link.thread_id = $2
+    AND link.role = 'state_change' AND link.message_id = ANY(SELECT unnest(evidence_message_ids) FROM labels WHERE workspace_id = $1 AND op_id = $3)
+    AND NOT EXISTS (SELECT 1 FROM labels sibling WHERE sibling.workspace_id = $1 AND sibling.thread_id = $2 AND sibling.op_id <> $3
+      AND sibling.retracted_at IS NULL AND link.message_id = ANY(sibling.evidence_message_ids))`,
+    [scope.workspaceId, scope.threadId, input.opId],
   );
 }
