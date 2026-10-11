@@ -1,8 +1,13 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
-import { unmatchedQuery, insertOrphan } from './understanding.repository.js';
+import {
+  unmatchedQuery,
+  insertOrphan,
+  lockUnlabelledUnit,
+  insertLabel,
+} from './understanding.repository.js';
 import { genesisGate } from './understanding.rules.js';
-import { queryPayload } from './understanding.schema.js';
+import { queryPayload, comprehensionScope, comprehensionOutput } from './understanding.schema.js';
 
 export async function resolveUnmatchedQuery(
   resolveConnection: ConnectionResolver,
@@ -13,6 +18,25 @@ export async function resolveUnmatchedQuery(
   return scopedTransaction(resolveConnection, payload.workspaceId, async (tx) => {
     if (await unmatchedQuery(tx, payload)) {
       await insertOrphan(tx, payload, genesisGate('status_query')!);
+    }
+  });
+}
+
+export async function storeComprehension(
+  resolveConnection: ConnectionResolver,
+  scope: { workspaceId: string; unitId: string; threadId: string },
+  output: unknown,
+) {
+  const payload = comprehensionScope.parse(scope);
+  const result = comprehensionOutput.parse(output);
+
+  return scopedTransaction(resolveConnection, payload.workspaceId, async (tx) => {
+    if (!(await lockUnlabelledUnit(tx, payload))) {
+      return;
+    }
+
+    for (const operation of result.operations) {
+      await insertLabel(tx, payload, operation);
     }
   });
 }

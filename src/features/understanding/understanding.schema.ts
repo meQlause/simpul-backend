@@ -1,3 +1,16 @@
 import { z } from 'zod';
 
 export const queryPayload = z.strictObject({ workspaceId: z.guid(), unitId: z.guid() });
+
+export const comprehensionScope = queryPayload.extend({ threadId: z.guid() });
+
+export const comprehensionOutput = z.strictObject({
+  operations: z.array(
+    z.strictObject({
+      type: z.enum(['progress', 'resolution', 'blocker']),
+      tense: z.enum(['sudah_terjadi', 'rencana', 'kondisional']),
+      evidenceMessageIds: z.array(z.guid()).min(1),
+      confidence: z.number().min(0).max(1),
+    }),
+  ),
+});
