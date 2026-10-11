@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeAll, expect, test, vi } from 'vitest';
 import request from 'supertest';
+import pino from 'pino';
 import { createApp } from '../../../../src/app.js';
 import { signInSeedAdmin } from '../../../helpers/admin-session.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
@@ -31,6 +32,8 @@ let cookie: string;
 let webhookApp: ReturnType<typeof createApp>;
 let instant = new Date('2026-10-10T04:01:00Z');
 const webhookSecret = Buffer.alloc(32, 8).toString('base64url');
+const webhookLogs: string[] = [];
+const webhookLogger = pino({}, { write: (line: string) => webhookLogs.push(line) });
 
 afterEach(() => {
   instant = new Date('2026-10-10T04:01:00Z');
@@ -68,7 +71,7 @@ beforeAll(async () => {
   };
 
   app = createApp('api', undefined, undefined, services);
-  webhookApp = createApp('webhook', undefined, undefined, services);
+  webhookApp = createApp('webhook', undefined, webhookLogger, services);
 }, 120000);
 
 async function connectBot() {
@@ -271,17 +274,20 @@ test('SRS T-24: a wrong code and ordinary text store no message or candidate', a
   await expectNoIngestion();
 });
 
-test('A wrong webhook secret is rejected before the JSON body is parsed', async () => {
+test('A webhook with a wrong secret returns 403 E-WEBHOOK-FORBIDDEN and logs no payload', async () => {
   const connectionId = await connectBot();
   const response = await request(webhookApp)
     .post(`/api/v1/webhooks/telegram/${connectionId}`)
     .set('X-Telegram-Bot-Api-Secret-Token', 'wrong-secret')
     .set('Content-Type', 'application/json')
-    .send('{broken');
+    .send('{private-webhook-payload-marker');
 
   expect(response.status).toBe(403);
   expect(response.body.error.code).toBe('E-WEBHOOK-FORBIDDEN');
   expect(response.body.error).not.toHaveProperty('message');
+  expect(webhookLogs.some((line) => JSON.parse(line).status === 403)).toBe(true);
+  expect(webhookLogs.join('')).not.toContain('private-webhook-payload-marker');
+  expect(webhookLogs.join('')).not.toContain('wrong-secret');
   await expectNoIngestion();
 });
 
