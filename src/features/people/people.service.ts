@@ -1,4 +1,5 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
+import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
@@ -74,7 +75,19 @@ export async function resolveRoleRecipient(
   originChannelId: string,
 ) {
   return scopedTransaction(resolveConnection, workspaceId, async (tx) =>
-    resolveRecipient(await selectRecipientCandidates(tx, workspaceId, roleId), originChannelId),
+    resolveRoleRecipientInTransaction(tx, workspaceId, roleId, originChannelId),
+  );
+}
+
+export async function resolveRoleRecipientInTransaction(
+  tx: PoolClient,
+  workspaceId: string,
+  roleId: string,
+  originChannelId: string,
+) {
+  return resolveRecipient(
+    await selectRecipientCandidates(tx, workspaceId, roleId),
+    originChannelId,
   );
 }
 
