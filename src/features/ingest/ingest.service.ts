@@ -1,4 +1,4 @@
-import { storeMessage } from './ingest.repository.js';
+import { isOwnBot, storeMessage } from './ingest.repository.js';
 import type { publishCoalesce } from '../../platform/queue/index.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createConnectionLookup } from '../../platform/db/connection-lookup.js';
@@ -76,6 +76,10 @@ async function ingestMessage(
   const now = services.now();
 
   await scopedTransaction(services.resolveConnection, scope.workspaceId, async (tx) => {
+    if (await isOwnBot(tx, scope, event.senderExternalId)) {
+      return;
+    }
+
     if (event.setupProof) {
       await recordReceiveCheck(tx, scope, { chatId: event.chatId, sentAt: event.serverTs }, now);
     }
