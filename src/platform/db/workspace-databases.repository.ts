@@ -26,11 +26,67 @@ export type WorkspaceDatabase = {
   status: 'pending' | 'connected' | 'unreachable' | 'migration_failed';
   url_secret_ref: string | null;
   schema_version: string | null;
+  workspace_name: string;
+  timezone: string;
+  admin_auth_user_id: string;
 };
 
 export async function selectWorkspaceDatabase(tx: PoolClient, workspaceId: string) {
   const result = await tx.query<WorkspaceDatabase>(
     'SELECT * FROM workspace_databases WHERE workspace_id = $1',
+    [workspaceId],
+  );
+
+  return result.rows[0];
+}
+
+export async function lockDatabaseSetup(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query<WorkspaceDatabase & { admin_name: string; admin_email: string }>(
+    `SELECT registry.*, admin.name AS admin_name, admin.email AS admin_email
+    FROM workspace_databases registry JOIN "user" admin ON admin.id = registry.admin_auth_user_id
+    WHERE registry.workspace_id = $1 FOR UPDATE OF registry`,
+    [workspaceId],
+  );
+
+  return result.rows[0];
+}
+
+export async function connectDatabaseRegistry(
+  tx: PoolClient,
+  input: {
+    workspaceId: string;
+    urlSecretRef: string;
+    url: URL;
+    version: string;
+    authUserId: string;
+    now: Date;
+  },
+) {
+  await tx.query(
+    `UPDATE workspace_databases SET status = 'connected', url_secret_ref = $2,
+    host = $3, port = $4, database_name = $5, schema_version = $6,
+    availability_ack_at = coalesce(availability_ack_at, $7),
+    availability_ack_by = coalesce(availability_ack_by, $8), connected_at = coalesce(connected_at, $7),
+    unreachable_since = NULL, probe_streak = 0, updated_at = $7 WHERE workspace_id = $1`,
+    [
+      input.workspaceId,
+      input.urlSecretRef,
+      input.url.hostname,
+      Number(input.url.port || '5432'),
+      decodeURIComponent(input.url.pathname.slice(1)),
+      input.version,
+      input.now,
+      input.authUserId,
+    ],
+  );
+}
+
+export async function databaseSummary(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query(
+    `SELECT 'own' AS mode, status, host, port, database_name AS "databaseName",
+    schema_version AS "schemaVersion", availability_ack_at AS "availabilityAckAt",
+    connected_at AS "connectedAt", unreachable_since AS "unreachableSince"
+    FROM workspace_databases WHERE workspace_id = $1`,
     [workspaceId],
   );
 

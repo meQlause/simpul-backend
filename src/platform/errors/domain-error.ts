@@ -1,4 +1,8 @@
 const errors = {
+  'E-DB-MIGRATION-FAILED': {
+    status: 502,
+    message: 'The database could not be prepared. It was left unchanged. Try again.',
+  },
   'E-DB-VERSION-UNSUPPORTED': {
     status: 422,
     message:

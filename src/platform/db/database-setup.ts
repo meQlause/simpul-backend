@@ -11,15 +11,18 @@ export type DatabaseServices = TenantPoolOptions & {
 
 const SETUP_TIMEOUT_MS = 10000;
 
-export async function checkDatabaseSetup(
+export async function withDatabaseSetup<Result>(
   input: { connectionString: string; workspaceId: string; pending: boolean },
   services: DatabaseServices,
+  operation: (pool: Pool) => Promise<Result>,
 ) {
   let pool: Pool | undefined;
 
   try {
     pool = await openTenantPool(input.connectionString, services, SETUP_TIMEOUT_MS);
     await checkTenantDatabase(pool, input.workspaceId, input.pending);
+
+    return await operation(pool);
   } catch (error) {
     throw error instanceof DomainError ? error : new DomainError('E-DB-CONNECTION-FAILED');
   } finally {

@@ -14,12 +14,27 @@ export type WorkspaceProvision = {
   expiresAt: Date;
 };
 
-export async function insertWorkspace(tx: PoolClient, provision: WorkspaceProvision) {
+export type BusinessProvision = Pick<
+  WorkspaceProvision,
+  'input' | 'workspaceId' | 'adminId' | 'authUserId' | 'now'
+>;
+
+export async function insertWorkspace(tx: PoolClient, provision: BusinessProvision) {
   await tx.query(
     `INSERT INTO workspaces (id, name, timezone, created_at)
     VALUES ($1, $2, $3, $4)`,
     [provision.workspaceId, provision.input.name, provision.input.timezone, provision.now],
   );
+}
+
+export async function workspaceAdmin(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query<{ id: string; auth_user_id: string }>(
+    `SELECT person.id, person.auth_user_id FROM workspaces workspace
+    JOIN people person ON person.id = workspace.admin_person_id WHERE workspace.id = $1`,
+    [workspaceId],
+  );
+
+  return result.rows[0];
 }
 
 export async function finishWorkspaceProvision(

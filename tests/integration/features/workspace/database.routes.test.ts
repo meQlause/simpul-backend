@@ -8,6 +8,7 @@ import { createAuthentication } from '../../../../src/features/auth/index.js';
 import { createWorkspace } from '../../../../src/features/workspace/index.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { createApp } from '../../../../src/app.js';
+import { createSecretStore } from '../../../../src/platform/secrets/index.js';
 import addresses from '../../../fixtures/host-addresses.json' with { type: 'json' };
 
 const system = databaseFixture(2);
@@ -101,25 +102,37 @@ function api(
     return connection;
   });
   const address = overrides.refusedHost ? addresses.privateAddress : addresses.publicAddress;
+  const lookup = async (host: string) => [
+    { address: host === 'system.example' ? addresses.systemAddress : address, family: 4 },
+  ];
+  const masterKey = Buffer.alloc(32, 9).toString('base64');
+  const resolveConnection = createConnectionResolver(system, {
+    systemHost: 'system.example',
+    secretStore: createSecretStore(masterKey),
+    lookup,
+    openPool,
+  });
   const app = createApp('api', undefined, undefined, {
-    authentication: auth,
-    resolveConnection: createConnectionResolver(system),
+    authentication: createAuthentication(
+      system,
+      {
+        baseUrl: 'https://simpul.example',
+        secret: 'test-only-auth-secret-with-more-than-32-characters',
+      },
+      resolveConnection,
+    ),
+    resolveConnection,
     database: {
       systemPool: system,
       systemHost: 'system.example',
-      masterKey: Buffer.alloc(32, 9).toString('base64'),
-      lookup: async (host: string) => [
-        {
-          address: host === 'system.example' ? addresses.systemAddress : address,
-          family: 4,
-        },
-      ],
+      masterKey,
+      lookup,
       openPool,
       now: () => new Date('2026-10-11T12:00:00Z'),
     },
   });
 
-  return { app, openPool };
+  return { app, openPool, resolveConnection };
 }
 
 async function scenarioTarget(scenario: string) {
@@ -176,3 +189,56 @@ test.each([
     }
   },
 );
+
+async function verifyCustomerProvision(personId: string) {
+  expect((await customer.query('SELECT id, admin_person_id FROM workspaces')).rows).toEqual([
+    { id: workspaceId, admin_person_id: personId },
+  ]);
+  expect((await customer.query('SELECT auth_user_id FROM people')).rows).toEqual(
+    (await system.query('SELECT admin_auth_user_id AS auth_user_id FROM workspace_databases')).rows,
+  );
+
+  for (const table of ['workspaces', 'people', 'policies', 'config_audit']) {
+    expect((await system.query(`SELECT * FROM ${table}`)).rows).toEqual([]);
+  }
+
+  expect((await customer.query('SELECT id FROM "user"')).rows).toEqual([]);
+  expect(
+    (await customer.query('SELECT "after" FROM config_audit ORDER BY created_at LIMIT 1')).rows[0]
+      .after,
+  ).toMatchObject({ availabilityAckAt: '2026-10-11T12:00:00.000Z' });
+}
+
+test('PUT /database migrates and provisions only the customer database, and GET /me answers 200 (FR-DB-04)', async () => {
+  const { app, resolveConnection } = api(customer);
+  const connectionString =
+    'postgres://postgres:test-only-db-password@customer.example/postgres?sslmode=require';
+  const response = await supertest(app)
+    .put('/api/v1/database')
+    .set('Cookie', cookie)
+    .send({ connectionString, availabilityAck: true });
+
+  expect(response.status).toBe(200);
+  expect(response.body.data).toMatchObject({
+    mode: 'own',
+    status: 'connected',
+    host: 'customer.example',
+    port: 5432,
+    databaseName: 'postgres',
+    schemaVersion: '0012_retention_edit_links',
+    availabilityAckAt: '2026-10-11T12:00:00.000Z',
+    unreachableSince: null,
+  });
+  expect(response.text).not.toContain(connectionString);
+  const profile = await supertest(app).get('/api/v1/me').set('Cookie', cookie);
+
+  expect(profile.status).toBe(200);
+  expect(profile.body.data.workspace).toMatchObject({
+    id: workspaceId,
+    name: 'Customer',
+    timezone: 'Asia/Jakarta',
+  });
+  expect(profile.body.data.person.name).toBe('Admin');
+  await verifyCustomerProvision(profile.body.data.person.id);
+  await resolveConnection.close(workspaceId);
+});

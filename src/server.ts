@@ -59,13 +59,21 @@ if (process.argv[2] === 'create-workspace') {
 
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
+  const resolveConnection = createConnectionResolver(pool, {
+    systemHost: new URL(config.DATABASE_URL).hostname,
+    secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
+  });
   const services = ['api', 'webhook'].includes(config.PROCESS_ROLE)
     ? {
-        authentication: createAuthentication(pool, {
-          baseUrl: config.PUBLIC_BASE_URL,
-          secret: config.AUTH_SECRET,
-        }),
-        resolveConnection: createConnectionResolver(pool),
+        authentication: createAuthentication(
+          pool,
+          {
+            baseUrl: config.PUBLIC_BASE_URL,
+            secret: config.AUTH_SECRET,
+          },
+          resolveConnection,
+        ),
+        resolveConnection,
         database: {
           systemPool: pool,
           systemHost: new URL(config.DATABASE_URL).hostname,
@@ -77,7 +85,7 @@ if (process.argv[2] === 'create-workspace') {
           publishMatcher: queue ? publishMatching(queue) : undefined,
         },
         webhook: {
-          resolveConnection: createConnectionResolver(pool),
+          resolveConnection,
           lookupConnection: createConnectionLookup(pool),
           secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
           providers,
@@ -106,7 +114,7 @@ if (process.argv[2] === 'create-workspace') {
     const logger = createLogger(config.LOG_LEVEL);
 
     await registerPipelineJobs(queue, {
-      resolveConnection: createConnectionResolver(pool),
+      resolveConnection,
       now: () => new Date(),
       debounceSeconds: config.INGEST_DEBOUNCE_SECONDS,
       providers,

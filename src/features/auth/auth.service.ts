@@ -19,7 +19,7 @@ export function createAdminResolver(
   pool: Pool,
   resolveConnection: ConnectionResolver,
 ) {
-  return async (headers: Headers) => {
+  return async (headers: Headers, databaseSetup = false) => {
     const session = await readSession(headers);
 
     if (!session) {
@@ -33,30 +33,58 @@ export function createAdminResolver(
     }
 
     if (!person.person_id) {
-      return resolveOwnAdmin(pool, person.workspace_id, session.user.id);
+      return resolveOwnAdmin(
+        { pool, resolveConnection, databaseSetup },
+        person.workspace_id,
+        session.user.id,
+      );
     }
 
-    const actorId = person.person_id;
-    const allowed = await scopedTransaction(resolveConnection, person.workspace_id, (tx) =>
-      isWorkspaceAdmin(tx, actorId),
-    );
-
-    if (!allowed) {
-      throw new DomainError(FORBIDDEN);
-    }
-
-    return { workspaceId: person.workspace_id, actorId };
+    return authorizeAdmin(resolveConnection, person.workspace_id, person.person_id);
   };
 }
 
-async function resolveOwnAdmin(pool: Pool, workspaceId: string, authUserId: string) {
-  const status = await scopedTransaction(createConnectionResolver(pool), workspaceId, (tx) =>
-    databaseStatus(tx, workspaceId),
+async function resolveOwnAdmin(
+  context: { pool: Pool; resolveConnection: ConnectionResolver; databaseSetup: boolean },
+  workspaceId: string,
+  authUserId: string,
+) {
+  const status = await scopedTransaction(
+    createConnectionResolver(context.pool),
+    workspaceId,
+    (tx) => databaseStatus(tx, workspaceId),
   );
 
-  if (status !== 'pending') {
+  if (!status) {
     throw new DomainError(FORBIDDEN);
   }
 
-  return { workspaceId, actorId: authUserId, databaseSetupRequired: true };
+  if (status === 'pending' || context.databaseSetup) {
+    return { workspaceId, actorId: authUserId, databaseSetupRequired: status === 'pending' };
+  }
+
+  const pool = await context.resolveConnection(workspaceId);
+  const person = await findSessionPerson(pool, authUserId);
+
+  if (!person?.person_id || person.workspace_id !== workspaceId) {
+    throw new DomainError(FORBIDDEN);
+  }
+
+  return authorizeAdmin(context.resolveConnection, workspaceId, person.person_id);
+}
+
+async function authorizeAdmin(
+  resolveConnection: ConnectionResolver,
+  workspaceId: string,
+  actorId: string,
+) {
+  const allowed = await scopedTransaction(resolveConnection, workspaceId, (tx) =>
+    isWorkspaceAdmin(tx, actorId),
+  );
+
+  if (!allowed) {
+    throw new DomainError(FORBIDDEN);
+  }
+
+  return { workspaceId, actorId };
 }

@@ -17,6 +17,8 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
 import type { z as zod } from 'zod';
 import type { settingsSchema } from './workspace.schema.js';
+import type { PoolClient } from 'pg';
+import type { BusinessProvision } from './workspace.repository.js';
 
 const NOT_FOUND = 'E-NOT-FOUND';
 
@@ -46,28 +48,37 @@ export async function createWorkspace(
       return;
     }
 
-    await insertWorkspace(tx, provision);
-    await createAdminPerson(tx, {
-      id: provision.adminId,
-      workspaceId: provision.workspaceId,
-      name: provision.input['admin-name'],
-      email: provision.input['admin-email'],
-      authUserId: provision.authUserId,
-      now: provision.now,
-    });
-    await finishWorkspaceProvision(tx, provision.workspaceId, provision.adminId);
-    await recordConfigChange(tx, {
-      workspaceId: provision.workspaceId,
-      actorId: provision.adminId,
-      tableName: 'workspaces',
-      recordId: provision.workspaceId,
-      before: null,
-      after: {
-        name: provision.input.name,
-        timezone: provision.input.timezone,
-        adminPersonId: provision.adminId,
-      },
-    });
+    await initializeBusinessWorkspace(tx, provision);
+  });
+}
+
+export async function initializeBusinessWorkspace(
+  tx: PoolClient,
+  provision: BusinessProvision,
+  auditData: Record<string, unknown> = {},
+) {
+  await insertWorkspace(tx, provision);
+  await createAdminPerson(tx, {
+    id: provision.adminId,
+    workspaceId: provision.workspaceId,
+    name: provision.input['admin-name'],
+    email: provision.input['admin-email'],
+    authUserId: provision.authUserId,
+    now: provision.now,
+  });
+  await finishWorkspaceProvision(tx, provision.workspaceId, provision.adminId);
+  await recordConfigChange(tx, {
+    workspaceId: provision.workspaceId,
+    actorId: provision.adminId,
+    tableName: 'workspaces',
+    recordId: provision.workspaceId,
+    before: null,
+    after: {
+      name: provision.input.name,
+      timezone: provision.input.timezone,
+      adminPersonId: provision.adminId,
+      ...auditData,
+    },
   });
 }
 

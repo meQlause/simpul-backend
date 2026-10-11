@@ -78,6 +78,8 @@ export const configAuditSchemas = {
       timezone: zod.string(),
       descriptor: zod.string().nullable(),
       adminPersonId: zod.guid(),
+      availabilityAckAt: zod.iso.datetime(),
+      availabilityAckBy: zod.string(),
       onboardingCompletedAt: zod.date().nullable(),
       backups: zod.array(zod.object({ roleId: zod.guid(), personId: zod.guid() })),
       activeRuleIds: zod.array(zod.guid()),
