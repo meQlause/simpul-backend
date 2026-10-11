@@ -61,6 +61,7 @@ export async function startBrowserServer(pool: Pool, port: number) {
     authentication,
     resolveConnection: createConnectionResolver(pool),
     work: { now: () => new Date('2026-10-10T04:01:00Z') },
+    overview: { now: () => new Date('2026-10-10T04:01:00Z') },
     ...(await browserChannels(pool)),
   };
   const app = createApp('api', undefined, undefined, services);
