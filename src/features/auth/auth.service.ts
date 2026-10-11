@@ -63,8 +63,9 @@ async function resolveOwnAdmin(
     return { workspaceId, actorId: authUserId, databaseSetupRequired: status === 'pending' };
   }
 
-  const pool = await context.resolveConnection(workspaceId);
-  const person = await findSessionPerson(pool, authUserId);
+  const person = await scopedTransaction(context.resolveConnection, workspaceId, (tx) =>
+    findSessionPerson(tx, authUserId),
+  );
 
   if (!person?.person_id || person.workspace_id !== workspaceId) {
     throw new DomainError(FORBIDDEN);

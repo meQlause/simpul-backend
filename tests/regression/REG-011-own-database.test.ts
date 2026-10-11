@@ -13,14 +13,14 @@ import { createConnectionLookup } from '../../src/platform/db/connection-lookup.
 import { scopedTransaction } from '../../src/platform/db/scoped-transaction.js';
 import { createQueue, publishCoalesce } from '../../src/platform/queue/index.js';
 import { registerPipelineJobs } from '../../src/roles/worker.js';
-import { createAuthentication } from '../../src/features/auth/index.js';
+import { createAuthentication, provisionAdmin } from '../../src/features/auth/index.js';
 import { createApp } from '../../src/app.js';
 import { createLogger } from '../../src/platform/logger/index.js';
 import { ownDatabaseQueues } from '../../src/platform/db/own-database-queues.js';
 import { schemaVersion } from '../../src/platform/db/migrate-tenant.js';
 
 const system = databaseFixture(3);
-const customer = databaseFixture(5, { tls: true });
+const customer = databaseFixture(5, { tls: true, restartable: true });
 const instant = new Date('2026-10-10T04:00:00Z');
 const seed = pointStarSeed({ now: () => instant });
 const connectionString =
@@ -50,6 +50,15 @@ const tenantOptions = {
   },
 };
 const resolveConnection = createConnectionResolver(system, { ...tenantOptions, maxConnections: 3 });
+const authentication = createAuthentication(
+  system,
+  {
+    baseUrl: 'https://simpul.example',
+    secret: 'test-only-auth-secret-with-more-than-32-characters',
+  },
+  resolveConnection,
+);
+let cookie = '';
 let ownQueues: ReturnType<typeof ownDatabaseQueues>;
 let queue: Awaited<ReturnType<typeof createQueue>>;
 let source: { id: string; connectionId: string };
@@ -113,6 +122,34 @@ async function configureProvider() {
   );
 }
 
+async function signInAdmin() {
+  await scopedTransaction(
+    async () => system,
+    seed.workspaceId,
+    (tx) =>
+      provisionAdmin(tx, {
+        id: 'own-admin',
+        name: 'Siti Aminah',
+        email: 'own-admin@example.test',
+        token: 'own-admin-reset',
+        expiresAt: new Date('2099-01-01'),
+        now: instant,
+      }),
+  );
+  await customer.query(
+    "UPDATE people SET auth_user_id = 'own-admin' WHERE id = md5('point-star-person-1')::uuid",
+  );
+  await authentication.api.resetPassword({
+    body: { token: 'own-admin-reset', newPassword: 'test-password-123' },
+  });
+  const login = await authentication.api.signInEmail({
+    body: { email: 'own-admin@example.test', password: 'test-password-123' },
+    asResponse: true,
+  });
+
+  cookie = login.headers.get('set-cookie') ?? '';
+}
+
 beforeAll(async () => {
   await applyMigrations(system);
   await applyMigrations(customer);
@@ -124,6 +161,7 @@ beforeAll(async () => {
   ).rows[0];
   await configureProvider();
   await registerDatabase();
+  await signInAdmin();
   ownQueues = ownDatabaseQueues(system, {
     ...tenantOptions,
     alert: alerts,
@@ -166,7 +204,7 @@ afterAll(async () => {
   await resolveConnection.close(seed.workspaceId);
 });
 
-async function assertSystemIsolation(logs: string, response: string) {
+async function assertSystemBusinessEmpty() {
   const tables = await system.query<{
     table_name: string;
   }>(`SELECT table_name FROM information_schema.columns
@@ -191,6 +229,10 @@ async function assertSystemIsolation(logs: string, response: string) {
   expect((await system.query("SELECT to_regclass('pgboss.job') AS jobs")).rows).toEqual([
     { jobs: null },
   ]);
+}
+
+async function assertSystemIsolation(logs: string, response: string) {
+  await assertSystemBusinessEmpty();
   const audit = JSON.stringify((await customer.query('SELECT * FROM config_audit')).rows);
 
   for (const output of [logs, response, audit]) {
@@ -296,4 +338,62 @@ test('NFR-DB-07: queue discovery isolates a wrong database and reconnects when t
   expect(queue).not.toBe(previous);
   expect(() => queue.emit('error', new Error(connectionString))).not.toThrow();
   expect(JSON.stringify(alerts.mock.calls)).not.toContain(connectionString);
+  await system.query('DELETE FROM workspace_databases WHERE workspace_id = $1', [otherWorkspace]);
+  await system.query('DELETE FROM secrets WHERE workspace_id = $1', [otherWorkspace]);
+  await system.query('DELETE FROM workspace_keys WHERE workspace_id = $1', [otherWorkspace]);
+}, 20000);
+
+async function assertStoppedDatabase(
+  app: ReturnType<typeof createApp>,
+  webhook: ReturnType<typeof createApp>,
+  session: unknown,
+) {
+  const response = await request(webhook)
+    .post(`/api/v1/webhooks/fake/${source.connectionId}`)
+    .set('X-Fake-Secret', 'invalid-secret')
+    .set('Content-Type', 'application/json')
+    .send('{invalid json');
+
+  expect(response.status).toBe(503);
+  expect(response.body.error.code).toBe('E-DB-UNAVAILABLE');
+  expect(response.headers['retry-after']).toBe('60');
+  expect(response.body.error).not.toHaveProperty('retryAfter');
+  const admin = await request(app).get('/api/v1/me').set('Cookie', cookie);
+
+  expect(admin.status).toBe(503);
+  expect(admin.body.error.code).toBe('E-DB-UNAVAILABLE');
+  expect(admin.headers['retry-after']).toBe('60');
+  expect((await system.query('SELECT id FROM session')).rows).toEqual(session);
+  await assertSystemBusinessEmpty();
+}
+
+test('REG-011 / FR-DB-06: a stopped customer database returns 503 with Retry-After 60 and keeps the admin session', async () => {
+  const app = createApp('api', undefined, undefined, { authentication, resolveConnection });
+  const webhook = createApp('webhook', undefined, undefined, {
+    authentication,
+    resolveConnection,
+    webhook: {
+      resolveConnection,
+      secretStore,
+      providers,
+      lookupConnection: createConnectionLookup(system, resolveConnection),
+      now: () => instant,
+      publish: publishCoalesce(queue, 0),
+    },
+  });
+
+  expect((await request(app).get('/api/v1/me').set('Cookie', cookie)).status).toBe(200);
+  const session = (await system.query('SELECT id FROM session')).rows;
+
+  await ownQueues.stop();
+  customer.on('error', () => {});
+  customer.stopDatabase();
+
+  try {
+    await assertStoppedDatabase(app, webhook, session);
+  } finally {
+    customer.startDatabase();
+  }
+
+  expect((await request(app).get('/api/v1/me').set('Cookie', cookie)).status).toBe(200);
 }, 20000);

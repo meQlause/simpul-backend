@@ -9,7 +9,7 @@ const dockerExecutable =
 
 export function databaseFixture(
   maxConnections = 1,
-  options: { image?: string; tls?: boolean; passwordAuth?: boolean } = {},
+  options: { image?: string; tls?: boolean; passwordAuth?: boolean; restartable?: boolean } = {},
 ) {
   let containerId = '';
   let certificate = '';
@@ -37,6 +37,9 @@ export function databaseFixture(
         '-p',
         '127.0.0.1::5432',
         options.image ?? 'pgvector/pgvector:0.8.7-pg15-trixie',
+        ...(options.restartable
+          ? ['sh', '-c', 'docker-entrypoint.sh postgres & wait; exec sleep infinity']
+          : []),
       ],
       { encoding: 'utf8' },
     ).trim();
@@ -73,7 +76,41 @@ export function databaseFixture(
     }
   });
 
-  return Object.assign(pool, { certificate: () => certificate });
+  return Object.assign(pool, {
+    certificate: () => certificate,
+    ...databaseControl(() => containerId),
+  });
+}
+
+function databaseControl(containerId: () => string) {
+  return {
+    stopDatabase: () =>
+      execFileSync(dockerExecutable, [
+        'exec',
+        '-u',
+        'postgres',
+        containerId(),
+        'pg_ctl',
+        '-D',
+        '/var/lib/postgresql/data',
+        'stop',
+        '-m',
+        'fast',
+      ]),
+    startDatabase: () =>
+      execFileSync(dockerExecutable, [
+        'exec',
+        '-u',
+        'postgres',
+        containerId(),
+        'pg_ctl',
+        '-D',
+        '/var/lib/postgresql/data',
+        '-l',
+        '/var/lib/postgresql/data/simpul-postgres.log',
+        'start',
+      ]),
+  };
 }
 
 async function enableTestTls(containerId: string, pool: postgres.Pool) {

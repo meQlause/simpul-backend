@@ -28,7 +28,7 @@ export async function insertInitialAccount(tx: PoolClient, account: InitialAccou
   );
 }
 
-export async function findSessionPerson(pool: Pool, userId: string) {
+export async function findSessionPerson(pool: Pick<Pool, 'query'>, userId: string) {
   const result = await pool.query<{
     workspace_id: string;
     person_id: string | null;

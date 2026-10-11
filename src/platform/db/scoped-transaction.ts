@@ -1,5 +1,10 @@
 import type { PoolClient } from 'pg';
 import type { ConnectionResolver } from './connection-resolver.js';
+import { isTenantPool } from './tenant-pool.js';
+import { connectionFailed } from './connection-failure.rules.js';
+import { DomainError } from '../errors/domain-error.js';
+
+const RETRY_SECONDS = 60;
 
 export async function transactionOnClient<Result>(
   client: PoolClient,
@@ -26,11 +31,19 @@ export async function scopedTransaction<Result>(
   operation: (tx: PoolClient) => Promise<Result>,
 ) {
   const pool = await resolveConnection(workspaceId);
-  const client = await pool.connect();
+  let client: PoolClient | undefined;
 
   try {
+    client = await pool.connect();
+
     return await transactionOnClient(client, workspaceId, operation);
+  } catch (error) {
+    if (isTenantPool(pool) && connectionFailed(error)) {
+      throw new DomainError('E-DB-UNAVAILABLE', undefined, RETRY_SECONDS);
+    }
+
+    throw error;
   } finally {
-    client.release();
+    client?.release();
   }
 }

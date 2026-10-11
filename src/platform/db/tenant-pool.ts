@@ -18,6 +18,9 @@ const DEFAULT_TIMEOUT = 5000;
 const DEFAULT_PORT = 5432;
 const DEFAULT_MAX_CONNECTIONS = 5;
 const CONNECTION_FAILED = 'E-DB-CONNECTION-FAILED';
+const tenantPools = new WeakSet<Pool>();
+
+export const isTenantPool = (pool: Pool) => tenantPools.has(pool);
 
 async function resolveAddresses(host: string, options: TenantPoolOptions, timeout: number) {
   const lookup = options.lookup ?? ((name) => dnsLookup(name, { all: true, verbatim: true }));
@@ -95,6 +98,7 @@ export async function openTenantPool(
   const pool = options.openPool ? options.openPool(config) : new Pool(config);
 
   pool.on?.('error', () => {});
+  tenantPools.add(pool);
 
   return pool;
 }
