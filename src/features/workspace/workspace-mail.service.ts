@@ -19,6 +19,10 @@ export type MailServices = {
   now: () => Date;
 };
 
+export async function mailConfiguration(...parameters: Parameters<typeof selectMail>) {
+  return selectMail(...parameters);
+}
+
 export async function getMail(resolveConnection: ConnectionResolver, workspaceId: string) {
   return scopedTransaction(resolveConnection, workspaceId, async (tx) => {
     const row = await selectMail(tx, workspaceId);

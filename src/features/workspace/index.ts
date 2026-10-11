@@ -7,3 +7,5 @@ export {
 export { createWorkspaceSchema } from './workspace.schema.js';
 
 export { workspaceRouter } from './workspace.routes.js';
+
+export { mailConfiguration } from './workspace-mail.service.js';

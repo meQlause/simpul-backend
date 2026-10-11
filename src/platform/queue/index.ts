@@ -17,6 +17,7 @@ export async function createQueue(pool: Pool, scheduling = false) {
   await boss.createQueue('delivery.gate', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('delivery.send', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('delivery.staleness', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('delivery.digest', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('scheduler.tick', { retryLimit: 5, retryBackoff: true });
 
   return boss;

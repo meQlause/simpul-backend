@@ -7,6 +7,7 @@ export async function registerSchedulerJobs(queue: PgBoss, pool: Pool) {
 
     for (const workspace of workspaces.rows) {
       await queue.send('delivery.staleness', { workspaceId: workspace.id });
+      await queue.send('delivery.digest', { workspaceId: workspace.id });
     }
   });
   await queue.schedule('scheduler.tick', '* * * * *');

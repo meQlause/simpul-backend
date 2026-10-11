@@ -3,7 +3,7 @@ import type { PgBoss } from 'pg-boss';
 import type { Pool } from 'pg';
 import { registerSchedulerJobs } from '../../../src/roles/scheduler.js';
 
-test('SRS §8.5: the scheduler dispatches one workspace-scoped silence check per minute', async () => {
+test('SRS §8.5: the scheduler dispatches workspace-scoped silence and digest checks per minute', async () => {
   let tick: (() => Promise<void>) | undefined;
   const queue = {
     schedule: vi.fn(),
@@ -21,6 +21,8 @@ test('SRS §8.5: the scheduler dispatches one workspace-scoped silence check per
   await tick?.();
   expect(queue.send.mock.calls).toEqual([
     ['delivery.staleness', { workspaceId: 'workspace-a' }],
+    ['delivery.digest', { workspaceId: 'workspace-a' }],
     ['delivery.staleness', { workspaceId: 'workspace-b' }],
+    ['delivery.digest', { workspaceId: 'workspace-b' }],
   ]);
 });

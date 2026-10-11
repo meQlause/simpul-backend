@@ -46,9 +46,18 @@ export async function saveMailRow(
 
 export async function pendingDigestItems(tx: PoolClient, workspaceId: string) {
   const result = await tx.query<{ count: number }>(
-    `SELECT count(*)::int AS count FROM notifications
-    JOIN people ON people.id = recipient_person_id WHERE notifications.workspace_id = $1
-    AND people.level = 'executive' AND notifications.sent_at IS NULL AND cancelled_at IS NULL`,
+    `SELECT count(*)::int AS count FROM (
+      SELECT n.id FROM notifications n JOIN people p ON p.workspace_id = $1 AND p.id = n.recipient_person_id
+      LEFT JOIN labels l ON l.workspace_id = $1 AND l.id = n.label_id
+      LEFT JOIN rules r ON r.workspace_id = $1 AND r.id = n.rule_id
+      WHERE n.workspace_id = $1 AND (p.level = 'executive' OR n.digest_id IS NOT NULL)
+        AND n.sent_at IS NULL AND n.cancelled_at IS NULL AND l.retracted_at IS NULL AND coalesce(r.active, true)
+      UNION ALL SELECT item.label_id FROM digest_items item JOIN digests d
+        ON d.workspace_id = $1 AND d.id = item.digest_id AND d.sent_at IS NULL
+      JOIN labels l ON l.workspace_id = $1 AND l.id = item.label_id AND l.retracted_at IS NULL
+      JOIN rules r ON r.workspace_id = $1 AND r.id = item.rule_id AND r.active
+      WHERE item.workspace_id = $1
+    ) pending`,
     [workspaceId],
   );
 

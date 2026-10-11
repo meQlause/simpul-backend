@@ -22,15 +22,24 @@ export async function insertDecision(
   tx: PoolClient,
   entry: {
     workspaceId: string;
-    threadId: string;
-    kind: 'work' | 'queue';
+    threadId: string | null;
+    recipientPersonId?: string;
+    kind: 'work' | 'queue' | 'digest';
     title: string;
     detail: string;
     now: Date;
   },
 ) {
   await tx.query(
-    'INSERT INTO decisions (workspace_id, kind, thread_id, title, detail, occurred_at) VALUES ($1, $2, $3, $4, $5, $6)',
-    [entry.workspaceId, entry.kind, entry.threadId, entry.title, entry.detail, entry.now],
+    'INSERT INTO decisions (workspace_id, kind, thread_id, title, detail, occurred_at, recipient_person_id) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+    [
+      entry.workspaceId,
+      entry.kind,
+      entry.threadId,
+      entry.title,
+      entry.detail,
+      entry.now,
+      entry.recipientPersonId,
+    ],
   );
 }
