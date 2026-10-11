@@ -3,6 +3,10 @@ import { insertInitialAccount, findSessionPerson, isWorkspaceAdmin } from './aut
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
+import { createConnectionResolver } from '../../platform/db/connection-resolver.js';
+import { databaseStatus } from '../../platform/db/workspace-databases.repository.js';
+
+const FORBIDDEN = 'E-FORBIDDEN';
 
 export async function provisionAdmin(...parameters: Parameters<typeof insertInitialAccount>) {
   await insertInitialAccount(...parameters);
@@ -24,8 +28,12 @@ export function createAdminResolver(
 
     const person = await findSessionPerson(pool, session.user.id);
 
-    if (!person?.person_id) {
-      throw new DomainError('E-FORBIDDEN');
+    if (!person) {
+      throw new DomainError(FORBIDDEN);
+    }
+
+    if (!person.person_id) {
+      return resolveOwnAdmin(pool, person.workspace_id, session.user.id);
     }
 
     const actorId = person.person_id;
@@ -34,9 +42,21 @@ export function createAdminResolver(
     );
 
     if (!allowed) {
-      throw new DomainError('E-FORBIDDEN');
+      throw new DomainError(FORBIDDEN);
     }
 
     return { workspaceId: person.workspace_id, actorId };
   };
+}
+
+async function resolveOwnAdmin(pool: Pool, workspaceId: string, authUserId: string) {
+  const status = await scopedTransaction(createConnectionResolver(pool), workspaceId, (tx) =>
+    databaseStatus(tx, workspaceId),
+  );
+
+  if (status !== 'pending') {
+    throw new DomainError(FORBIDDEN);
+  }
+
+  return { workspaceId, actorId: authUserId, databaseSetupRequired: true };
 }

@@ -11,3 +11,12 @@ export async function insertPendingDatabase(
     [input.workspaceId, input.name, input.timezone, input.authUserId, input.now],
   );
 }
+
+export async function databaseStatus(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query<{ status: string }>(
+    'SELECT status FROM workspace_databases WHERE workspace_id = $1',
+    [workspaceId],
+  );
+
+  return result.rows[0]?.status;
+}

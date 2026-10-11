@@ -1,4 +1,8 @@
 const errors = {
+  'E-DB-SETUP-REQUIRED': {
+    status: 409,
+    message: 'Connect your database to start using this workspace.',
+  },
   'E-ONBOARDING-BACKUP-MISSING': {
     status: 422,
     message: 'Choose a different backup for every person before continuing.',
