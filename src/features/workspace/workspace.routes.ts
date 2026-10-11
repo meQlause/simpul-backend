@@ -4,6 +4,7 @@ import { meController, getSettingsController, settingsController } from './works
 import { mailController, saveMailController } from './workspace-mail.controller.js';
 import type { MailServices } from './workspace-mail.service.js';
 import { overviewController } from './workspace-overview.controller.js';
+import { onboardingController } from './workspace-onboarding.controller.js';
 
 export function workspaceRouter(
   resolveConnection: ConnectionResolver,
@@ -14,6 +15,7 @@ export function workspaceRouter(
 
   router.get('/me', meController(resolveConnection));
   router.get('/overview', overviewController(resolveConnection, now));
+  router.post('/onboarding/complete', onboardingController(resolveConnection, now));
   router.get('/settings', getSettingsController(resolveConnection));
   router.put('/settings', settingsController(resolveConnection));
   router.get('/settings/mail', mailController(resolveConnection));

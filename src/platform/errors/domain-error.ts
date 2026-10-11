@@ -1,4 +1,12 @@
 const errors = {
+  'E-ONBOARDING-BACKUP-MISSING': {
+    status: 422,
+    message: 'Choose a different backup for every person before continuing.',
+  },
+  'E-ONBOARDING-NO-ACTIVE-GROUP': {
+    status: 422,
+    message: 'At least one group must pass checks and be explicitly activated in Channels.',
+  },
   'E-WORK-UNDO-UNAVAILABLE': { status: 409, message: 'This change can no longer be undone.' },
   'E-WORK-NOT-OPEN': { status: 409, message: 'This work item is already closed.' },
   'E-VOCAB-PREFIX-FIXED': {
