@@ -179,3 +179,53 @@ describe.each([
   sendCases(name, create);
   failureCases(create);
 });
+
+describe('Telegram sender limits', () => {
+  test('serializes concurrent sends at the per-bot rate', async () => {
+    vi.useFakeTimers();
+    const exchange = vi.fn<typeof fetch>(async () =>
+      Response.json({ ok: true, result: { message_id: 7 } }),
+    );
+    const adapter = createTelegramProvider('https://telegram.example', exchange, {
+      callTimeoutMs: 1000,
+      sendPerSecond: 2,
+      sendPerChatPerMinute: 20,
+    });
+    const sends = Promise.all(
+      ['-10', '-11', '-12'].map((chatId) =>
+        adapter.send(connection, { kind: 'notice', chatId, text: 'Rendered' }),
+      ),
+    );
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(exchange).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(sends).resolves.toHaveLength(3);
+    expect(exchange).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+
+  test('applies the per-chat minute limit independently of the bot limit', async () => {
+    vi.useFakeTimers();
+    const exchange = vi.fn<typeof fetch>(async () =>
+      Response.json({ ok: true, result: { message_id: 7 } }),
+    );
+    const adapter = createTelegramProvider('https://telegram.example', exchange, {
+      callTimeoutMs: 1000,
+      sendPerSecond: 30,
+      sendPerChatPerMinute: 1,
+    });
+    const first = adapter.send(connection, { kind: 'notice', chatId: '-10', text: 'First' });
+
+    await vi.advanceTimersByTimeAsync(0);
+    await first;
+    const second = adapter.send(connection, { kind: 'notice', chatId: '-10', text: 'Second' });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(exchange).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60000);
+    await expect(second).resolves.toEqual({ providerMessageId: '7' });
+    expect(exchange).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+});

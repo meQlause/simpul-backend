@@ -113,6 +113,6 @@ export function createTelegramProvider(
       }
     },
     ...setup,
-    ...activationMethods(call, setup.verifyCredential),
+    ...activationMethods(call, setup.verifyCredential, limits),
   };
 }

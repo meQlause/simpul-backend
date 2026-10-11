@@ -1,6 +1,6 @@
 import { z as schema } from 'zod';
 import { DomainError } from '../../errors/domain-error.js';
-import type { ActivationProvider, ConnectionRef, ReadinessCheck } from '../contract.js';
+import type { ActivationProvider, ConnectionRef, Limits, ReadinessCheck } from '../contract.js';
 import type { createCall } from './call.js';
 
 type Call = ReturnType<typeof createCall>;
@@ -19,6 +19,50 @@ const memberSchema = schema.object({
     can_send_messages: schema.boolean().optional(),
   }),
 });
+
+const SECOND_MS = 1000;
+const SECONDS_PER_MINUTE = 60;
+const MINUTE_MS = SECONDS_PER_MINUTE * SECOND_MS;
+
+function createSendLimiter(limits: Limits) {
+  // ponytail: this process-local window is sufficient for the single VPS sender; use shared
+  // storage if delivery workers are scaled across processes.
+  const sentByKey = new Map<string, number[]>();
+
+  function recent(key: string, now: number, windowMs: number) {
+    const sent = (sentByKey.get(key) ?? []).filter((time) => now - time < windowMs);
+
+    sentByKey.set(key, sent);
+
+    return sent;
+  }
+
+  async function waitForSlot(providerAccountId: string, chatId: string) {
+    const accountKey = `account:${providerAccountId}`;
+    const chatKey = `chat:${providerAccountId}:${chatId}`;
+
+    while (true) {
+      const now = Date.now();
+      const accountSent = recent(accountKey, now, SECOND_MS);
+      const chatSent = recent(chatKey, now, MINUTE_MS);
+      const accountWait =
+        accountSent.length >= limits.sendPerSecond ? accountSent[0]! + SECOND_MS - now : 0;
+      const chatWait =
+        chatSent.length >= limits.sendPerChatPerMinute ? chatSent[0]! + MINUTE_MS - now : 0;
+
+      if (accountWait === 0 && chatWait === 0) {
+        accountSent.push(now);
+        chatSent.push(now);
+
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, Math.max(accountWait, chatWait)));
+    }
+  }
+
+  return waitForSlot;
+}
 
 async function describeChat(call: Call, connection: ConnectionRef, chatId: string) {
   const result = chatSchema.safeParse(
@@ -157,10 +201,17 @@ async function sendMessage(
 export function activationMethods(
   call: Call,
   verify: ActivationProvider['verifyCredential'],
+  limits: Limits,
 ): Pick<ActivationProvider, 'describeChat' | 'checkReadiness' | 'send'> {
+  const waitForSendSlot = createSendLimiter(limits);
+
   return {
     describeChat: (connection, chatId) => describeChat(call, connection, chatId),
     checkReadiness: (connection, chatId) => checkReadiness(call, verify, connection, chatId),
-    send: (connection, message) => sendMessage(call, connection, message),
+    async send(connection, message) {
+      await waitForSendSlot(connection.providerAccountId, message.chatId);
+
+      return sendMessage(call, connection, message);
+    },
   };
 }
