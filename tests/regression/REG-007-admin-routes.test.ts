@@ -130,6 +130,7 @@ const bodies: Record<string, object> = {
   },
   'get /me': {},
   'get /overview': {},
+  'get /rules': {},
   'get /review-items': {},
   'get /review-items/:itemId': {},
   'post /review-items/:itemId/resolve': { personId: '00000000-0000-4000-8000-000000100099' },

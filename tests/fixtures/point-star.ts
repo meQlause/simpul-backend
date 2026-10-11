@@ -92,7 +92,8 @@ async function seedConfiguration(client: PoolClient, seed: Seed) {
       event_type, recipient_role_id, template_id, active, created_at)
     SELECT md5('point-star-rule-' || num)::uuid, $1, name, md5('point-star-domain-' || domain)::uuid,
       condition, event, md5('point-star-role-' || recipient)::uuid,
-      md5('point-star-template-internal')::uuid, num <= 3, $2
+      md5('point-star-template-internal')::uuid, num <= 3,
+      $2::timestamptz - interval '1 minute' + num * interval '1 second'
     FROM (VALUES
       (1, 'New orders reach the warehouse', 'Order', 'A new order has been confirmed', 'new', 2),
       (2, 'Ready to ship, notify sales', 'Order', 'An order is ready to ship', 'progress', 3),

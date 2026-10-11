@@ -1,6 +1,7 @@
 import { vocabularyRouter } from './features/vocabulary/index.js';
 import { reviewRouter, type ReviewServices } from './features/review-queue/index.js';
 import { workRouter } from './features/work/index.js';
+import { rulesRouter } from './features/rules/index.js';
 import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import type { createAuthentication } from './features/auth/index.js';
@@ -30,6 +31,7 @@ type ApiServices = {
   webhook?: WebhookServices;
   work?: { now: () => Date };
   overview?: { now: () => Date };
+  rules?: { now: () => Date };
   review?: ReviewServices;
 };
 
@@ -61,6 +63,25 @@ function mountSetup(app: Express, services: ApiServices) {
   }
 }
 
+function mountFeatures(
+  app: Express,
+  services: ApiServices,
+  mail: Parameters<typeof workspaceRouter>[1],
+) {
+  app.use('/api/v1', workspaceRouter(services.resolveConnection, mail, services.overview?.now));
+  app.use('/api/v1', peopleRouter(services.resolveConnection));
+  app.use(
+    '/api/v1',
+    workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
+  );
+  app.use('/api/v1', vocabularyRouter(services.resolveConnection));
+  app.use('/api/v1', reviewRouter(services.resolveConnection, services.review));
+  app.use(
+    '/api/v1',
+    rulesRouter(services.resolveConnection, services.rules?.now ?? (() => new Date())),
+  );
+}
+
 function mountApi(app: Express, services?: ApiServices) {
   if (services) {
     app.all('/api/auth/*splat', toNodeHandler(services.authentication));
@@ -81,14 +102,7 @@ function mountApi(app: Express, services?: ApiServices) {
       }
     : undefined;
 
-  app.use('/api/v1', workspaceRouter(services.resolveConnection, mail, services.overview?.now));
-  app.use('/api/v1', peopleRouter(services.resolveConnection));
-  app.use(
-    '/api/v1',
-    workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
-  );
-  app.use('/api/v1', vocabularyRouter(services.resolveConnection));
-  app.use('/api/v1', reviewRouter(services.resolveConnection, services.review));
+  mountFeatures(app, services, mail);
   mountSetup(app, services);
 }
 
