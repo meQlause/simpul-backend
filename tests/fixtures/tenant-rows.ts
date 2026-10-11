@@ -173,7 +173,6 @@ function workRows(workspaceId: string) {
       'message_thread_link',
       { message_id: workspaceId, thread_id: workspaceId, role: 'genesis', confidence: '1' },
     ],
-    ['digests', { recipient_person_id: workspaceId, scheduled_for: later }],
     [
       'notifications',
       {
@@ -200,6 +199,8 @@ function workRows(workspaceId: string) {
 
 function operationalRows(workspaceId: string) {
   return [
+    ['digests', { recipient_person_id: workspaceId, scheduled_for: later }],
+    ['digest_items', { digest_id: workspaceId, label_id: workspaceId, rule_id: workspaceId }],
     [
       'open_questions',
       { thread_ids: [workspaceId], channel_id: workspaceId, asked_at: instant, expires_at: later },

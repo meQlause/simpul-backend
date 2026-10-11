@@ -24,6 +24,12 @@ export async function lockPendingNotification(tx: PoolClient, scope: Scope, now:
     WHERE l.workspace_id = $1 AND n.id = $2 FOR UPDATE OF l`,
     [scope.workspaceId, scope.notificationId],
   );
+  await tx.query(
+    `UPDATE notifications n SET cancelled_at = $3 FROM rules r
+    WHERE n.workspace_id = $1 AND n.id = $2 AND n.sent_at IS NULL AND n.cancelled_at IS NULL AND n.held_until <= $3
+      AND n.kind <> 'correction' AND r.workspace_id = $1 AND r.id = n.rule_id AND NOT r.active`,
+    [scope.workspaceId, scope.notificationId, now],
+  );
   const result = await tx.query<Pending>(
     `SELECT CASE WHEN n.kind = 'correction' THEN 'correction' ELSE 'notification' END AS kind, c.provider, b.id AS "connectionId", b.provider_account_id AS "providerAccountId",
       b.token_secret_ref AS "tokenRef", coalesce(identity.external_id, identity.handle, c.provider_chat_id) AS "chatId",

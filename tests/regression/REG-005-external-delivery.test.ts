@@ -190,3 +190,31 @@ test('D-2 / SRS T-11: nobody available falls back to one origin-channel notifica
     ),
   ).rejects.toMatchObject({ constraint: 'notifications_exactly_one_destination' });
 });
+
+test('Rules §3: pausing a rule cancels its held notification when the hold ends', async () => {
+  exchange.mockClear();
+  const labelId = (
+    await pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, created_at)
+    SELECT workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, $2
+    FROM labels WHERE workspace_id = $1 AND id = md5('point-star-label-1')::uuid RETURNING id`,
+      [seed.workspaceId, instant],
+    )
+  ).rows[0].id as string;
+
+  await routeLabel({ ...services, now: () => instant }, { workspaceId: seed.workspaceId, labelId });
+  const notification = (
+    await pool.query('SELECT id, rule_id FROM notifications WHERE label_id = $1 LIMIT 1', [labelId])
+  ).rows[0];
+
+  await pool.query('UPDATE rules SET active = false WHERE id = $1', [notification.rule_id]);
+  await sendNotification(services, {
+    workspaceId: seed.workspaceId,
+    notificationId: notification.id,
+  });
+  expect(exchange).not.toHaveBeenCalled();
+  expect(
+    (await pool.query('SELECT cancelled_at FROM notifications WHERE id = $1', [notification.id]))
+      .rows[0].cancelled_at,
+  ).toEqual(services.now());
+});

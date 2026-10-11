@@ -57,6 +57,13 @@
       "when": 1791702216873,
       "tag": "0007_recipient_confirmations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791703201262,
+      "tag": "0008_historical_digest_items",
+      "breakpoints": true
     }
   ]
 }

@@ -32,6 +32,7 @@ export {
 
 export {
   digests,
+  digestItems,
   notifications,
   corrections,
   openQuestions,

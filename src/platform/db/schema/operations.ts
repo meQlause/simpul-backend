@@ -9,7 +9,7 @@ import {
   index,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { tenantColumns, reference, instant, bytes, people } from './identity.js';
+import { tenantColumns, joinColumns, reference, instant, bytes, people } from './identity.js';
 import { channels } from './channels.js';
 import { rules } from './configuration.js';
 import { units } from './messages.js';
@@ -21,6 +21,17 @@ export const digests = pgTable('digests', {
   scheduledFor: instant('scheduled_for').notNull(),
   sentAt: instant('sent_at'),
 });
+
+export const digestItems = pgTable(
+  'digest_items',
+  {
+    ...joinColumns(),
+    digestId: reference('digest_id', () => digests.id, 'cascade').notNull(),
+    labelId: reference('label_id', () => labels.id, 'cascade').notNull(),
+    ruleId: reference('rule_id', () => rules.id).notNull(),
+  },
+  (table) => [uniqueIndex('digest_items_label_uq').on(table.digestId, table.labelId)],
+);
 
 export const notifications = pgTable(
   'notifications',

@@ -44,6 +44,7 @@ const tables = [
   'message_thread_link',
   'notifications',
   'digests',
+  'digest_items',
   'corrections',
   'open_questions',
   'orphans',

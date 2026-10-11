@@ -4,6 +4,17 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  rules: zod
+    .object({
+      name: zod.string(),
+      categoryId: zod.guid(),
+      eventType: zod.string(),
+      conditionText: zod.string(),
+      recipientRoleId: zod.guid(),
+      historyMode: zod.string(),
+      active: zod.boolean(),
+    })
+    .partial(),
   review_items: zod
     .object({
       id: zod.guid(),
