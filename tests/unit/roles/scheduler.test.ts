@@ -22,7 +22,9 @@ test('SRS §8.5: the scheduler dispatches workspace-scoped silence and digest ch
   expect(queue.send.mock.calls).toEqual([
     ['delivery.staleness', { workspaceId: 'workspace-a' }],
     ['delivery.digest', { workspaceId: 'workspace-a' }],
+    ['work.lifecycle', { workspaceId: 'workspace-a' }],
     ['delivery.staleness', { workspaceId: 'workspace-b' }],
     ['delivery.digest', { workspaceId: 'workspace-b' }],
+    ['work.lifecycle', { workspaceId: 'workspace-b' }],
   ]);
 });

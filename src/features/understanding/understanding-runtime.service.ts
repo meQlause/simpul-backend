@@ -1,7 +1,7 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
-import { candidateWork } from '../work/index.js';
+import { candidateWork, reopenArchived } from '../work/index.js';
 import { runtimeUnit, scoringWeights } from './understanding-runtime.repository.js';
 import { rankedCandidates } from './understanding-scoring.rules.js';
 import { resolveCandidates } from './understanding.resolve.js';
@@ -31,6 +31,7 @@ export async function resolveRuntimeUnit(services: Services, scope: Scope) {
         return null;
       }
 
+      await reopenArchived(tx, scope.workspaceId, scope.unitId, now);
       const ranked = rankedCandidates(
         await candidateWork(tx, scope.workspaceId, source, now),
         source,

@@ -45,7 +45,9 @@ export async function selectCandidates(
         WHERE current.workspace_id = $1 AND current.unit_id = $5 AND link.thread_id = t.id), 0)::float8 AS semantic
     FROM threads t WHERE t.workspace_id = $1 AND (
       (t.status IN ('active','tentative') AND (t.expires_at IS NULL OR t.expires_at > $4) AND
-        (t.channel_id = $2 OR t.last_activity_at >= $4::timestamptz - interval '72 hours')) OR t.display_id = ANY($7))
+        (t.channel_id = $2 OR t.last_activity_at >= $4::timestamptz - interval '72 hours')) OR t.display_id = ANY($7)
+        OR EXISTS (SELECT 1 FROM message_thread_link link JOIN messages_raw m ON m.id = link.message_id AND m.workspace_id = $1
+          WHERE link.workspace_id = $1 AND link.thread_id = t.id AND m.channel_id = $2 AND m.provider_msg_id = ANY($6)))
     ORDER BY t.last_activity_at DESC, t.id LIMIT 100`,
     [
       workspaceId,
