@@ -19,6 +19,12 @@ beforeAll(() => {
       'run',
       '-d',
       '--rm',
+      '--label',
+      'pspt.test.project=simpul',
+      '--label',
+      'pspt.test.disposable=true',
+      '--tmpfs',
+      '/var/lib/postgresql/data:rw,size=256m',
       '-e',
       'POSTGRES_HOST_AUTH_METHOD=trust',
       '-p',
@@ -36,7 +42,7 @@ beforeAll(() => {
 
 afterAll(() => {
   if (containerId) {
-    execFileSync(dockerExecutable, ['rm', '-f', containerId]);
+    execFileSync(dockerExecutable, ['rm', '-f', '-v', containerId]);
   }
 });
 

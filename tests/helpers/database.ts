@@ -18,6 +18,12 @@ export function databaseFixture(maxConnections = 1) {
         'run',
         '-d',
         '--rm',
+        '--label',
+        'pspt.test.project=simpul',
+        '--label',
+        'pspt.test.disposable=true',
+        '--tmpfs',
+        '/var/lib/postgresql/data:rw,size=256m',
         '-e',
         'POSTGRES_HOST_AUTH_METHOD=trust',
         '-p',
@@ -44,10 +50,12 @@ export function databaseFixture(maxConnections = 1) {
     );
   }, 30000);
   afterAll(async () => {
-    await pool.end();
-
-    if (containerId) {
-      execFileSync(dockerExecutable, ['rm', '-f', containerId]);
+    try {
+      await pool.end();
+    } finally {
+      if (containerId) {
+        execFileSync(dockerExecutable, ['rm', '-f', '-v', containerId]);
+      }
     }
   });
 
