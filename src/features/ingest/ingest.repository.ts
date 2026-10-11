@@ -1,3 +1,4 @@
+import { lockSender } from './ingest.coalesce.repository.js';
 import type { PoolClient } from 'pg';
 import type { InboundMessage } from '../../platform/providers/index.js';
 
@@ -18,6 +19,12 @@ export async function storeMessage(
     return null;
   }
 
+  await lockSender(tx, {
+    workspaceId: scope.workspaceId,
+    channelId: channel.rows[0].id,
+    senderExternalId: event.senderExternalId,
+  });
+
   const dedup = await tx.query(
     'INSERT INTO provider_updates (workspace_id, bot_connection_id, update_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING update_id',
     [scope.workspaceId, scope.connectionId, event.updateId],
@@ -28,7 +35,7 @@ export async function storeMessage(
   }
 
   const message = await tx.query(
-    'INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, server_ts, received_ts) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (workspace_id, channel_id, provider_msg_id) DO NOTHING RETURNING id',
+    'INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts) VALUES ($1, $2, $3, $4, $5, $5, $6, $7) ON CONFLICT (workspace_id, channel_id, provider_msg_id) DO NOTHING RETURNING id',
     [
       scope.workspaceId,
       channel.rows[0].id,

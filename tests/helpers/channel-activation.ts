@@ -17,7 +17,12 @@ import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
 
 export const pool = databaseFixture(2);
 
-const now = new Date('2026-10-10T04:01:00Z');
+let now = new Date('2026-10-10T04:01:00Z');
+
+export function setFixtureNow(instant: Date) {
+  now = instant;
+}
+
 const keys = ['bot_identity', 'group', 'membership', 'privacy_mode', 'webhook', 'inbound'];
 const checks = keys.map((key) => ({
   key,

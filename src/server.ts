@@ -1,4 +1,5 @@
-import { createQueue, publishCoalesce } from './platform/queue/index.js';
+import { registerIngestJobs } from './features/ingest/index.js';
+import { createQueue, publishCoalesce, publishUnit } from './platform/queue/index.js';
 import { readConfig } from './platform/config/index.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { checkDatabase } from './platform/db/health.js';
@@ -44,8 +45,9 @@ if (process.argv[2] === 'create-workspace') {
     throw error;
   }
 
-  const queuePool =
-    config.PROCESS_ROLE === 'webhook' ? createSystemPool(config.DATABASE_QUEUE_URL) : undefined;
+  const queuePool = ['webhook', 'worker'].includes(config.PROCESS_ROLE)
+    ? createSystemPool(config.DATABASE_QUEUE_URL)
+    : undefined;
   const queue = queuePool ? await createQueue(queuePool) : undefined;
 
   const { createApp } = await import('./app.js');
@@ -63,7 +65,7 @@ if (process.argv[2] === 'create-workspace') {
           secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
           provider: providers.adapterFor('telegram'),
           now: () => new Date(),
-          publish: queue ? publishCoalesce(queue) : undefined,
+          publish: queue ? publishCoalesce(queue, config.INGEST_DEBOUNCE_SECONDS) : undefined,
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: providers.adapterFor('telegram'),
@@ -78,7 +80,16 @@ if (process.argv[2] === 'create-workspace') {
       }
     : undefined;
 
-  if (!services) {
+  if (queue && config.PROCESS_ROLE === 'worker') {
+    await registerIngestJobs(queue, {
+      resolveConnection: createConnectionResolver(pool),
+      now: () => new Date(),
+      debounceSeconds: config.INGEST_DEBOUNCE_SECONDS,
+      publishUnit: publishUnit(queue),
+    });
+  }
+
+  if (!services && config.PROCESS_ROLE !== 'worker') {
     await pool.end();
   }
 

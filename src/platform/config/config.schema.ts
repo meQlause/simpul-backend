@@ -17,6 +17,7 @@ export const configSchema = zod.object({
   TELEGRAM_CALL_TIMEOUT_MS: zod.coerce.number().int().positive().max(10000).default(10000),
   TELEGRAM_SEND_PER_SECOND: zod.coerce.number().int().positive().max(30).default(30),
   TELEGRAM_SEND_PER_CHAT_PER_MINUTE: zod.coerce.number().int().positive().max(20).default(20),
+  INGEST_DEBOUNCE_SECONDS: zod.coerce.number().int().positive().default(12),
   AUTH_SECRET: secret,
   GEMINI_API_KEY: zod.string().min(1),
   GEMINI_MODEL_TRIAGE: modelId,
