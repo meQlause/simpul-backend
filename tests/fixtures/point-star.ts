@@ -264,11 +264,12 @@ async function seedAggregates(client: PoolClient, seed: Seed) {
   );
   await client.query(
     `INSERT INTO notifications (workspace_id, label_id, thread_id, recipient_person_id,
-    channel, body_rendered, held_until, sent_at, created_at)
+    channel, body_rendered, held_until, sent_at, kind, created_at)
     SELECT $1, md5('point-star-label-' || num)::uuid, md5('point-star-thread-ORD-0091')::uuid,
       md5('point-star-person-2')::uuid, 'telegram', 'Sample order update ' || num,
       $2::timestamptz - CASE WHEN num <= 156 THEN interval '1 hour' ELSE interval '2 days' END,
-      $2::timestamptz - CASE WHEN num <= 156 THEN interval '1 hour' ELSE interval '2 days' END, $2
+      $2::timestamptz - CASE WHEN num <= 156 THEN interval '1 hour' ELSE interval '2 days' END,
+      CASE WHEN num = 2 THEN 'reminder' ELSE 'update' END, $2
     FROM generate_series(1, 984) AS num`,
     [seed.workspaceId, seed.now],
   );
