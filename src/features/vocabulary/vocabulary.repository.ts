@@ -8,6 +8,15 @@ const duplicateFields: Record<string, string> = {
   aliases_ws_alias_uq: 'alias',
 };
 
+export async function selectModelCategories(tx: PoolClient, workspaceId: string) {
+  return (
+    await tx.query<{ id: string; name: string }>(
+      'SELECT id, name FROM vocab_domains WHERE workspace_id = $1 AND active ORDER BY name, id',
+      [workspaceId],
+    )
+  ).rows;
+}
+
 export async function activeCategory(tx: PoolClient, workspaceId: string, id: string) {
   const result = await tx.query(
     'SELECT id FROM vocab_domains WHERE workspace_id = $1 AND id = $2 AND active',

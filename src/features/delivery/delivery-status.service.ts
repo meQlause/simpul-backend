@@ -1,4 +1,5 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
+import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordProgress } from '../work/index.js';
@@ -15,31 +16,39 @@ export async function recordStatus(
     confirmationId: string;
   },
 ) {
-  await scopedTransaction(services.resolveConnection, input.workspaceId, async (tx) => {
-    const operation = await lockCorrection(tx, input);
+  await scopedTransaction(services.resolveConnection, input.workspaceId, (tx) =>
+    recordStatusInTransaction(tx, input, services.now()),
+  );
+}
 
-    if (!operation) {
-      throw new DomainError('E-NOT-FOUND');
-    }
+export async function recordStatusInTransaction(
+  tx: PoolClient,
+  input: Parameters<typeof recordStatus>[1],
+  now: Date,
+) {
+  const operation = await lockCorrection(tx, input);
 
-    if (operation.personId && operation.personId !== input.actorId) {
-      throw new DomainError('E-FORBIDDEN');
-    }
+  if (!operation) {
+    throw new DomainError('E-NOT-FOUND');
+  }
 
-    if (operation.correctedAt) {
-      return;
-    }
+  if (operation.personId && operation.personId !== input.actorId) {
+    throw new DomainError('E-FORBIDDEN');
+  }
 
-    await recordProgress(
-      tx,
-      { workspaceId: input.workspaceId, threadId: operation.threadId },
-      {
-        opId: input.opId,
-        type: input.type,
-        messageId: operation.messageId,
-        now: services.now(),
-        confirmation: { actorId: input.actorId, id: input.confirmationId },
-      },
-    );
-  });
+  if (operation.correctedAt) {
+    return;
+  }
+
+  await recordProgress(
+    tx,
+    { workspaceId: input.workspaceId, threadId: operation.threadId },
+    {
+      opId: input.opId,
+      type: input.type,
+      messageId: operation.messageId,
+      now,
+      confirmation: { actorId: input.actorId, id: input.confirmationId },
+    },
+  );
 }

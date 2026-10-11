@@ -11,6 +11,16 @@ export function verdict(
   return top < thresholds.create ? 'CREATE' : 'GREY';
 }
 
+export function groupedScore(
+  signals: Record<string, readonly number[]>,
+  weights: Record<string, number>,
+) {
+  return Object.entries(weights).reduce(
+    (total, [group, weight]) => total + weight * Math.max(0, ...(signals[group] ?? [])),
+    0,
+  );
+}
+
 export function quantityCandidates<Candidate extends { quantity: number | null }>(
   quantity: number | null,
   candidates: readonly Candidate[],

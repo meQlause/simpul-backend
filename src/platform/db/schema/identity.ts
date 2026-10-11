@@ -87,7 +87,7 @@ export const personIdentities = pgTable(
     handle: text('handle'),
   },
   (table) => [
-    check('identities_provider_valid', sql`${table.provider} = 'telegram'`),
+    check('identities_provider_valid', sql`${table.provider} IN ('telegram', 'fake')`),
     check(
       'identities_identifier_required',
       sql`${table.externalId} IS NOT NULL OR ${table.handle} IS NOT NULL`,

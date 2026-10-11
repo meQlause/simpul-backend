@@ -7,6 +7,7 @@ type RoutingLabel = {
   domainId: string;
   channelId: string;
   type: string;
+  operationType: string;
   tense: string;
   evidenceMessageIds: string[];
   confidence: number;
@@ -17,16 +18,17 @@ type RoutingLabel = {
   summary: string;
   template: string;
   holdSeconds: number;
+  provider: string;
 };
 
 export async function lockRoutingLabel(tx: PoolClient, scope: Scope) {
   const result = await tx.query<RoutingLabel>(
     `SELECT l.id, t.id AS "threadId", coalesce(l.domain_id, t.domain_id) AS "domainId",
-      u.channel_id AS "channelId", CASE WHEN EXISTS (
+      u.channel_id AS "channelId", c.provider, CASE WHEN EXISTS (
         SELECT 1 FROM message_thread_link link WHERE link.workspace_id = $1 AND link.thread_id = t.id
           AND link.role = 'genesis' AND link.message_id = ANY(l.evidence_message_ids)
       ) THEN 'new' ELSE l.type END AS type,
-      l.tense, l.evidence_message_ids AS "evidenceMessageIds", l.confidence::float8 AS confidence,
+      l.type AS "operationType", l.tense, l.evidence_message_ids AS "evidenceMessageIds", l.confidence::float8 AS confidence,
       t.status, t.historical, t.display_id AS "displayId", coalesce(t.customer_label, '') AS customer,
       coalesce(t.summary, '') AS summary, template.body AS template, policy.hold_seconds AS "holdSeconds"
     FROM labels l JOIN threads t ON t.id = l.thread_id AND t.workspace_id = $1
@@ -81,11 +83,11 @@ export async function prepareNotification(
   },
   now: Date,
 ) {
-  await tx.query(
+  const result = await tx.query<{ id: string; heldUntil: Date }>(
     `INSERT INTO notifications (workspace_id, label_id, thread_id, rule_id, recipient_person_id,
       channel, body_rendered, held_until, created_at, digest_id, destination_channel_id)
-    VALUES ($1, $2, $3, $4, $5, 'telegram', $6, $7::timestamptz + $8 * interval '1 second', $7, $9, $10)
-    ON CONFLICT DO NOTHING`,
+    VALUES ($1, $2, $3, $4, $5, $11, $6, $7::timestamptz + $8 * interval '1 second', $7, $9, $10)
+    ON CONFLICT DO NOTHING RETURNING id, held_until AS "heldUntil"`,
     [
       scope.workspaceId,
       scope.labelId,
@@ -97,8 +99,11 @@ export async function prepareNotification(
       label.holdSeconds,
       digestId,
       recipient.destinationChannelId,
+      label.provider,
     ],
   );
+
+  return result.rows[0];
 }
 
 export async function markRouted(tx: PoolClient, scope: Scope, now: Date) {

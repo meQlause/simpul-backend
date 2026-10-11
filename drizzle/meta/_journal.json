@@ -64,6 +64,13 @@
       "when": 1791703201262,
       "tag": "0008_historical_digest_items",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791704964157,
+      "tag": "0009_provider_contract_proof",
+      "breakpoints": true
     }
   ]
 }

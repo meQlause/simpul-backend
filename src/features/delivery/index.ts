@@ -9,3 +9,7 @@ export { cancelWorkReminders } from './delivery.service.js';
 export { gatherRuleHistory } from './delivery-history.service.js';
 
 export { deliveryRouter } from './delivery.routes.js';
+
+export { registerDeliveryJobs } from './delivery.jobs.js';
+
+export { receiveRecipientAction } from './delivery-action.service.js';

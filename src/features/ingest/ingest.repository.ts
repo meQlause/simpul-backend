@@ -5,6 +5,15 @@ import type { InboundMessage } from '../../platform/providers/index.js';
 
 type Scope = { workspaceId: string; connectionId: string };
 
+export async function claimProviderUpdate(tx: PoolClient, scope: Scope, updateId: string) {
+  const dedup = await tx.query(
+    'INSERT INTO provider_updates (workspace_id, bot_connection_id, update_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING update_id',
+    [scope.workspaceId, scope.connectionId, updateId],
+  );
+
+  return Boolean(dedup.rowCount);
+}
+
 export async function connectionProvider(tx: PoolClient, scope: Scope) {
   const connection = await tx.query<{ provider: string }>(
     'SELECT provider FROM bot_connections WHERE workspace_id = $1 AND id = $2',
@@ -12,6 +21,15 @@ export async function connectionProvider(tx: PoolClient, scope: Scope) {
   );
 
   return connection.rows[0]?.provider;
+}
+
+export async function connectionTokenRef(tx: PoolClient, scope: Scope) {
+  const result = await tx.query<{ tokenRef: string }>(
+    'SELECT token_secret_ref AS "tokenRef" FROM bot_connections WHERE workspace_id = $1 AND id = $2',
+    [scope.workspaceId, scope.connectionId],
+  );
+
+  return result.rows[0]?.tokenRef;
 }
 
 export async function isOwnBot(tx: PoolClient, scope: Scope, senderExternalId: string) {
@@ -44,12 +62,7 @@ export async function storeMessage(
     senderExternalId: event.senderExternalId,
   });
 
-  const dedup = await tx.query(
-    'INSERT INTO provider_updates (workspace_id, bot_connection_id, update_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING update_id',
-    [scope.workspaceId, scope.connectionId, event.updateId],
-  );
-
-  if (!dedup.rowCount) {
+  if (!(await claimProviderUpdate(tx, scope, event.updateId))) {
     return null;
   }
 

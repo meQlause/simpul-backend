@@ -59,14 +59,6 @@ afterAll(async () => {
 const fake = createFakeProvider(async () => {});
 
 beforeAll(async () => {
-  await pool.query('ALTER TABLE bot_connections DROP CONSTRAINT bot_provider_valid');
-  await pool.query(
-    "ALTER TABLE bot_connections ADD CONSTRAINT bot_provider_valid CHECK (provider IN ('telegram', 'fake'))",
-  );
-  await pool.query('ALTER TABLE channels DROP CONSTRAINT channels_provider_valid');
-  await pool.query(
-    "ALTER TABLE channels ADD CONSTRAINT channels_provider_valid CHECK (provider IN ('telegram', 'fake'))",
-  );
   await pool.query(
     "UPDATE bot_connections SET provider = 'fake', provider_account_id = 'fake-account' WHERE id = $1",
     [connectionId],

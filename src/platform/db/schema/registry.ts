@@ -99,7 +99,7 @@ export const connectionRoutes = pgTable(
     providerAccountId: text('provider_account_id').notNull(),
   },
   (table) => [
-    check('route_provider_valid', sql`${table.provider} = 'telegram'`),
+    check('route_provider_valid', sql`${table.provider} IN ('telegram', 'fake')`),
     uniqueIndex('route_account_uq').on(table.provider, table.providerAccountId),
   ],
 );

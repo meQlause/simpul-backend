@@ -34,7 +34,7 @@ export const botConnections = pgTable(
     updatedAt: instant('updated_at').defaultNow().notNull(),
   },
   (table) => [
-    check('bot_provider_valid', sql`${table.provider} = 'telegram'`),
+    check('bot_provider_valid', sql`${table.provider} IN ('telegram', 'fake')`),
     check('bot_name_length', sql`char_length(${table.connectionName}) BETWEEN 1 AND 80`),
     check(
       'bot_status_valid',
@@ -84,7 +84,7 @@ export const channels = pgTable(
     })
       .onDelete('restrict')
       .onUpdate('restrict'),
-    check('channels_provider_valid', sql`${table.provider} = 'telegram'`),
+    check('channels_provider_valid', sql`${table.provider} IN ('telegram', 'fake')`),
     check('channels_chat_type_valid', sql`${table.providerChatType} IN ('group','supergroup')`),
     check('channels_class_valid', sql`${table.class} IN ('internal','external')`),
     check('channels_language_valid', sql`${table.primaryLanguage} IN ('id','en','auto')`),

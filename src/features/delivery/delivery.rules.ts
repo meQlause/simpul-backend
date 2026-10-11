@@ -59,14 +59,20 @@ export function renderNotification(template: string, fields: Record<string, stri
 }
 
 export function claimGate(
-  label: { tense: string; evidenceMessageIds: readonly string[]; confidence: number },
+  label: {
+    type?: string;
+    tense: string;
+    evidenceMessageIds: readonly string[];
+    confidence: number;
+  },
   thread: { status: string; historical: boolean },
 ) {
   return (
     label.confidence >= minimumConfidence &&
     label.evidenceMessageIds.length > 0 &&
     label.tense === 'sudah_terjadi' &&
-    thread.status === 'active' &&
+    (thread.status === 'active' ||
+      (thread.status === 'completed' && label.type === 'resolution')) &&
     !thread.historical
   );
 }

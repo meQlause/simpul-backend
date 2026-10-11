@@ -1,5 +1,12 @@
-import { connectionProvider, isOwnBot, storeMessage } from './ingest.repository.js';
-import type { publishCoalesce } from '../../platform/queue/index.js';
+import {
+  claimProviderUpdate,
+  connectionProvider,
+  connectionTokenRef,
+  isOwnBot,
+  storeMessage,
+} from './ingest.repository.js';
+import { receiveRecipientAction } from '../delivery/index.js';
+import type { publishCoalesce, publishNotification } from '../../platform/queue/index.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createConnectionLookup } from '../../platform/db/connection-lookup.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
@@ -8,6 +15,8 @@ import type { createProviderRegistry, ReceiveProvider } from '../../platform/pro
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
 
+const NOT_FOUND = 'E-NOT-FOUND';
+
 export type WebhookServices = {
   resolveConnection: ConnectionResolver;
   lookupConnection: ReturnType<typeof createConnectionLookup>;
@@ -15,6 +24,7 @@ export type WebhookServices = {
   providers: ReturnType<typeof createProviderRegistry>;
   now: () => Date;
   publish?: ReturnType<typeof publishCoalesce>;
+  publishNotification?: ReturnType<typeof publishNotification>;
 };
 
 export async function authenticateWebhook(
@@ -26,7 +36,7 @@ export async function authenticateWebhook(
   const connection = await services.lookupConnection(connectionId);
 
   if (!connection) {
-    throw new DomainError('E-NOT-FOUND');
+    throw new DomainError(NOT_FOUND);
   }
 
   const secret = await scopedTransaction(
@@ -39,7 +49,7 @@ export async function authenticateWebhook(
       });
 
       if (storedProvider !== provider) {
-        throw new DomainError('E-NOT-FOUND');
+        throw new DomainError(NOT_FOUND);
       }
 
       return services.secretStore.get(
@@ -69,6 +79,17 @@ export async function receiveUpdate(
     await ingestMessage(services, scope, event);
   }
 
+  if (event.type === 'action') {
+    await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
+      receiveRecipientAction(tx, scope, event, {
+        now: services.now(),
+        claimUpdate: () => claimProviderUpdate(tx, scope, event.updateId),
+        publishNotification: services.publishNotification,
+      }),
+    );
+    await acknowledgeAction(services, scope, event.receiptId);
+  }
+
   if (event.type === 'setup-message') {
     await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
       recordReceiveCheck(tx, scope, event, services.now()),
@@ -82,9 +103,37 @@ export async function receiveUpdate(
   }
 }
 
+async function acknowledgeAction(
+  services: WebhookServices,
+  scope: { workspaceId: string; connectionId: string; provider: string },
+  receiptId: string | undefined,
+) {
+  const adapter = services.providers.adapterFor(scope.provider);
+
+  if (!receiptId || !adapter.acknowledgeAction) {
+    return;
+  }
+
+  const credential = await scopedTransaction(
+    services.resolveConnection,
+    scope.workspaceId,
+    async (tx) => {
+      const tokenRef = await connectionTokenRef(tx, scope);
+
+      if (!tokenRef) {
+        throw new DomainError(NOT_FOUND);
+      }
+
+      return services.secretStore.get(tx, scope.workspaceId, 'bot_token', tokenRef);
+    },
+  );
+
+  await adapter.acknowledgeAction({ credential }, receiptId);
+}
+
 async function ingestMessage(
   services: WebhookServices,
-  scope: { workspaceId: string; connectionId: string },
+  scope: { workspaceId: string; connectionId: string; provider: string },
   event: Extract<ReturnType<ReceiveProvider['parse']>, { type: 'message' }>,
 ) {
   const now = services.now();
@@ -96,6 +145,16 @@ async function ingestMessage(
 
     if (event.setupProof) {
       await recordReceiveCheck(tx, scope, { chatId: event.chatId, sentAt: event.serverTs }, now);
+    }
+
+    if (
+      await receiveRecipientAction(tx, scope, event, {
+        now,
+        claimUpdate: () => claimProviderUpdate(tx, scope, event.updateId),
+        publishNotification: services.publishNotification,
+      })
+    ) {
+      return;
     }
 
     const channelId = await storeMessage(tx, scope, event, now);

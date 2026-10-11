@@ -15,6 +15,29 @@ type WorkRow = {
   thresholdHours: number | null;
 };
 
+export async function insertGenesisEvidence(
+  tx: PoolClient,
+  workspaceId: string,
+  input: {
+    threadId: string;
+    messageIds: string[];
+    confidence: number;
+    customerLabel: string | null;
+    nextStep: string | null;
+  },
+) {
+  await tx.query(
+    'UPDATE threads SET customer_label = $3, next_step = $4 WHERE workspace_id = $1 AND id = $2',
+    [workspaceId, input.threadId, input.customerLabel, input.nextStep],
+  );
+  await tx.query(
+    `INSERT INTO message_thread_link (workspace_id, thread_id, message_id, role, confidence)
+    SELECT $1, t.id, m.id, 'genesis', $4 FROM threads t JOIN messages_raw m ON m.workspace_id = $1 AND m.channel_id = t.channel_id
+    WHERE t.workspace_id = $1 AND t.id = $2 AND m.id = ANY($3) ON CONFLICT DO NOTHING`,
+    [workspaceId, input.threadId, input.messageIds, input.confidence],
+  );
+}
+
 const filteredWork = `FROM threads AS item
   JOIN vocab_domains AS domain ON domain.id = item.domain_id AND domain.workspace_id = $1
   JOIN channels AS channel ON channel.id = item.channel_id AND channel.workspace_id = $1

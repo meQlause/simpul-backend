@@ -98,6 +98,18 @@ export function createTelegramProvider(
     provider: 'telegram',
     capabilities,
     limits,
+    async acknowledgeAction(connection, receiptId) {
+      const result = await call(connection.credential, 'answerCallbackQuery', {
+        callback_query_id: receiptId,
+      });
+
+      if (
+        !schema.object({ ok: schema.literal(true), result: schema.literal(true) }).safeParse(result)
+          .success
+      ) {
+        throw new DomainError('E-TG-SETUP-TIMEOUT');
+      }
+    },
     ...setup,
     ...activationMethods(call, setup.verifyCredential),
   };

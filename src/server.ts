@@ -1,9 +1,8 @@
-import { registerIngestJobs } from './features/ingest/index.js';
 import {
   createQueue,
   publishCoalesce,
-  publishUnit,
   publishMatching,
+  publishNotification,
 } from './platform/queue/index.js';
 import { readConfig } from './platform/config/index.js';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -75,6 +74,7 @@ if (process.argv[2] === 'create-workspace') {
           providers,
           now: () => new Date(),
           publish: queue ? publishCoalesce(queue, config.INGEST_DEBOUNCE_SECONDS) : undefined,
+          publishNotification: queue ? publishNotification(queue) : undefined,
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: providers.adapterFor('telegram'),
@@ -90,11 +90,27 @@ if (process.argv[2] === 'create-workspace') {
     : undefined;
 
   if (queue && config.PROCESS_ROLE === 'worker') {
-    await registerIngestJobs(queue, {
+    const { registerPipelineJobs } = await import('./roles/worker.js');
+    const { createGeminiModel } = await import('./platform/llm/gemini.js');
+    const logger = createLogger(config.LOG_LEVEL);
+
+    await registerPipelineJobs(queue, {
       resolveConnection: createConnectionResolver(pool),
       now: () => new Date(),
       debounceSeconds: config.INGEST_DEBOUNCE_SECONDS,
-      publishUnit: publishUnit(queue),
+      providers,
+      secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
+      publicBaseUrl: config.PUBLIC_BASE_URL,
+      model: createGeminiModel({
+        apiKey: config.GEMINI_API_KEY,
+        models: {
+          triage: config.GEMINI_MODEL_TRIAGE,
+          standard: config.GEMINI_MODEL_STANDARD,
+          strong: config.GEMINI_MODEL_STRONG,
+        },
+      }),
+      audit: (event) => logger.warn(event, 'Pipeline injection screen'),
+      alert: (event) => logger.error(event, 'Pipeline operator alert'),
     });
   }
 

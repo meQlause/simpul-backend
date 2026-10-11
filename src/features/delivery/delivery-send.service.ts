@@ -19,6 +19,11 @@ type Services = {
   secretStore: ReturnType<typeof createSecretStore>;
   providers: ReturnType<typeof createProviderRegistry>;
   publicBaseUrl: string;
+  publishNotification?: (
+    tx: PoolClient,
+    payload: { workspaceId: string; notificationId: string },
+    heldUntil: Date,
+  ) => Promise<unknown>;
 };
 
 export async function sendNotification(
@@ -56,13 +61,29 @@ export async function sendNotification(
     );
 
     if ('retryAfter' in result) {
-      await deferNotification(tx, scope, { now, retryAfter: result.retryAfter });
+      await retryNotification(tx, services, scope, { now, retryAfter: result.retryAfter });
 
       return;
     }
 
     await recordSentAt(tx, scope, { now, body: message.text });
   });
+}
+
+async function retryNotification(
+  tx: PoolClient,
+  services: Services,
+  scope: { workspaceId: string; notificationId: string },
+  input: { now: Date; retryAfter: number },
+) {
+  const millisecondsPerSecond = 1000;
+
+  await deferNotification(tx, scope, input);
+  await services.publishNotification?.(
+    tx,
+    scope,
+    new Date(input.now.getTime() + input.retryAfter * millisecondsPerSecond),
+  );
 }
 
 function outboundMessage(

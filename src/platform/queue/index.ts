@@ -15,8 +15,31 @@ export async function createQueue(pool: Pool) {
   await boss.createQueue('understanding.resolve', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('understanding.comprehend', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('delivery.gate', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('delivery.send', { retryLimit: 5, retryBackoff: true });
 
   return boss;
+}
+
+export function publishComprehension(boss: PgBoss) {
+  return (
+    tx: PoolClient,
+    payload: { workspaceId: string; unitId: string; threadId: string | null },
+  ) =>
+    boss.send('understanding.comprehend', payload, {
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
+}
+
+export function publishNotification(boss: PgBoss) {
+  return (
+    tx: PoolClient,
+    payload: { workspaceId: string; notificationId: string },
+    heldUntil: Date,
+  ) =>
+    boss.send('delivery.send', payload, {
+      startAfter: heldUntil,
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
 }
 
 export function publishResolution(boss: PgBoss) {

@@ -60,7 +60,7 @@ export const notifications = pgTable(
       'notifications_kind_valid',
       sql`${table.kind} IN ('update','reminder','escalation','correction')`,
     ),
-    check('notifications_channel_valid', sql`${table.channel} IN ('telegram','email')`),
+    check('notifications_channel_valid', sql`${table.channel} IN ('telegram','fake','email')`),
     check(
       'notifications_not_sent_and_cancelled',
       sql`NOT (${table.sentAt} IS NOT NULL AND ${table.cancelledAt} IS NOT NULL)`,

@@ -14,14 +14,22 @@ import {
   markRouted,
 } from './delivery-routing.repository.js';
 
-type Services = { resolveConnection: ConnectionResolver; now: () => Date };
+type Services = {
+  resolveConnection: ConnectionResolver;
+  now: () => Date;
+  publishNotification?: (
+    tx: PoolClient,
+    payload: { workspaceId: string; notificationId: string },
+    heldUntil: Date,
+  ) => Promise<unknown>;
+};
 type Scope = { workspaceId: string; labelId: string };
 
 export async function routeLabel(services: Services, scope: Scope) {
   return scopedTransaction(services.resolveConnection, scope.workspaceId, async (tx) => {
     const label = await lockRoutingLabel(tx, scope);
 
-    if (!label || !claimGate(label, label)) {
+    if (!label || !claimGate({ ...label, type: label.operationType }, label)) {
       return;
     }
 
@@ -48,21 +56,55 @@ export async function routeLabel(services: Services, scope: Scope) {
       now,
     );
 
-    for (const recipient of mergeRecipientRules(matches)) {
-      const digestId = recipient.personId
-        ? await budgetDigest(
-            tx,
-            { workspaceId: scope.workspaceId, personId: recipient.personId },
-            now,
-            recipient.urgency,
-          )
-        : null;
-
-      await prepareNotification(tx, scope, { label, recipient, body, digestId }, now);
-    }
+    await prepareRecipients(tx, { services, scope, label, matches, body, now });
 
     await markRouted(tx, scope, now);
   });
+}
+
+async function prepareRecipients(
+  tx: PoolClient,
+  {
+    services,
+    scope,
+    label,
+    matches,
+    body,
+    now,
+  }: {
+    services: Services;
+    scope: Scope;
+    label: NonNullable<Awaited<ReturnType<typeof lockRoutingLabel>>>;
+    matches: Awaited<ReturnType<typeof resolveRecipients>>;
+    body: string;
+    now: Date;
+  },
+) {
+  for (const recipient of mergeRecipientRules(matches)) {
+    const digestId = recipient.personId
+      ? await budgetDigest(
+          tx,
+          { workspaceId: scope.workspaceId, personId: recipient.personId },
+          now,
+          recipient.urgency,
+        )
+      : null;
+
+    const notification = await prepareNotification(
+      tx,
+      scope,
+      { label, recipient, body, digestId },
+      now,
+    );
+
+    if (notification && !digestId) {
+      await services.publishNotification?.(
+        tx,
+        { workspaceId: scope.workspaceId, notificationId: notification.id },
+        notification.heldUntil,
+      );
+    }
+  }
 }
 
 async function resolveRecipients(

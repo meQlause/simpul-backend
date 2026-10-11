@@ -6,6 +6,8 @@ export const queryPayload = z.strictObject({ workspaceId: z.guid(), unitId: z.gu
 
 export const comprehensionScope = queryPayload.extend({ threadId: z.guid() });
 
+export const comprehensionJobScope = queryPayload.extend({ threadId: z.guid().nullable() });
+
 export const comprehensionOutput = z.strictObject({
   operations: z.array(
     z.strictObject({
@@ -27,4 +29,22 @@ export const candidatesInput = z.strictObject({
       quantity: z.number().finite().nullable(),
     }),
   ),
+});
+
+export const genesisOutput = z.strictObject({
+  genesis: z
+    .strictObject({
+      domainId: z.guid(),
+      intent: z.enum(['work_request', 'work_event', 'status_query', 'ack', 'noise']),
+      tense: z.enum(['sudah_terjadi', 'rencana', 'kondisional']),
+      who: z.string().trim().min(1).nullable(),
+      what: z.string().trim().min(1).nullable(),
+      action: z.string().trim().min(1).nullable(),
+      completionCondition: z.string().trim().min(1).nullable(),
+      summary: z.string().trim().min(1),
+      confidence: z.number().min(0).max(1),
+      evidenceMessageIds: z.array(z.guid()).min(1),
+    })
+    .nullable(),
+  operations: comprehensionOutput.shape.operations,
 });

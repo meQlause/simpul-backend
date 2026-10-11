@@ -93,11 +93,17 @@ export type ReceiveProvider = {
     request: { headers: Record<string, string | string[] | undefined> },
     secret: string,
   ) => boolean;
-  parse: (
-    update: unknown,
-  ) =>
+  parse: (update: unknown) =>
     | SetupEvent
     | InboundMessage
+    | {
+        type: 'action';
+        updateId: string;
+        chatId: string;
+        senderExternalId: string;
+        actionId: string;
+        receiptId?: string;
+      }
     | { type: 'setup-message'; chatId: string; sentAt: number }
     | { type: 'ignore' };
 };
@@ -107,4 +113,5 @@ export type ProviderAdapter = ActivationProvider &
     readonly provider: string;
     readonly capabilities: Readonly<Capabilities>;
     readonly limits: Readonly<Limits>;
+    acknowledgeAction?: (connection: { credential: string }, receiptId: string) => Promise<void>;
   };

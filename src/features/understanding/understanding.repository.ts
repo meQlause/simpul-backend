@@ -77,8 +77,8 @@ export async function insertLabel(
   },
   now?: Date,
 ) {
-  const result = await tx.query<{ opId: string; createdAt: Date }>(
-    'INSERT INTO labels (workspace_id, unit_id, thread_id, type, tense, evidence_message_ids, confidence, vocab_version, retracts_op_id, created_at) SELECT w.id, u.id, t.id, $4, $5, $6, $7, w.vocab_version, $8, coalesce($9, now()) FROM workspaces w JOIN units u ON u.workspace_id = w.id JOIN threads t ON t.workspace_id = w.id WHERE w.id = $1 AND u.id = $2 AND t.id = $3 AND NOT EXISTS (SELECT 1 FROM unnest($6::uuid[]) evidence(id) WHERE NOT EXISTS (SELECT 1 FROM unit_messages um WHERE um.workspace_id = w.id AND um.unit_id = u.id AND um.message_id = evidence.id)) RETURNING op_id AS "opId", created_at AS "createdAt"',
+  const result = await tx.query<{ id: string; opId: string; createdAt: Date }>(
+    'INSERT INTO labels (workspace_id, unit_id, thread_id, type, tense, evidence_message_ids, confidence, vocab_version, retracts_op_id, created_at) SELECT w.id, u.id, t.id, $4, $5, $6, $7, w.vocab_version, $8, coalesce($9, now()) FROM workspaces w JOIN units u ON u.workspace_id = w.id JOIN threads t ON t.workspace_id = w.id WHERE w.id = $1 AND u.id = $2 AND t.id = $3 AND NOT EXISTS (SELECT 1 FROM unnest($6::uuid[]) evidence(id) WHERE NOT EXISTS (SELECT 1 FROM unit_messages um WHERE um.workspace_id = w.id AND um.unit_id = u.id AND um.message_id = evidence.id)) RETURNING id, op_id AS "opId", created_at AS "createdAt"',
     [
       scope.workspaceId,
       scope.unitId,

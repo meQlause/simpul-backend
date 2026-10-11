@@ -7,6 +7,7 @@ import { comprehensionScope, comprehensionOutput } from './understanding.schema.
 import { hasOutcome, insertOrphan, lockUnlabelledUnit } from './understanding.repository.js';
 import { storeComprehension } from './understanding.service.js';
 import { operationContext } from './understanding-context.repository.js';
+import type { OperationOptions } from './understanding-operation.service.js';
 
 const defaultTemperature = 0.2;
 
@@ -16,6 +17,7 @@ type Dependencies = {
   model: ModelPort;
   alert: (event: Scope & { reason: 'model_invalid_json' }) => void;
   now?: () => Date;
+  publishMatcher?: OperationOptions['publishMatcher'];
 };
 
 function decode(text: string, contextOpIds: string[]) {
@@ -77,7 +79,7 @@ export async function comprehendUnit(dependencies: Dependencies, payload: Scope)
       bodySafe: input.bodySafe,
       temperature,
       responseSchema: z.toJSONSchema(comprehensionOutput),
-      context: { operations: input.operations },
+      context: { operations: input.operations, evidenceMessageIds: input.evidenceMessageIds },
     });
     const decoded = decode(
       output,
@@ -88,6 +90,7 @@ export async function comprehendUnit(dependencies: Dependencies, payload: Scope)
       await storeComprehension(dependencies.resolveConnection, scope, decoded.data, {
         now: dependencies.now?.(),
         contextOpIds: input.operations.map((operation) => operation.opId),
+        publishMatcher: dependencies.publishMatcher,
       });
 
       return;

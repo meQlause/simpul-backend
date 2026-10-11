@@ -1,0 +1,10 @@
+ALTER TABLE "bot_connections" DROP CONSTRAINT "bot_provider_valid";
+ALTER TABLE "channels" DROP CONSTRAINT "channels_provider_valid";
+ALTER TABLE "connection_routes" DROP CONSTRAINT "route_provider_valid";
+ALTER TABLE "person_identities" DROP CONSTRAINT "identities_provider_valid";
+ALTER TABLE "notifications" DROP CONSTRAINT "notifications_channel_valid";
+ALTER TABLE "bot_connections" ADD CONSTRAINT "bot_provider_valid" CHECK ("provider" = 'telegram');
+ALTER TABLE "channels" ADD CONSTRAINT "channels_provider_valid" CHECK ("provider" = 'telegram');
+ALTER TABLE "connection_routes" ADD CONSTRAINT "route_provider_valid" CHECK ("provider" = 'telegram');
+ALTER TABLE "person_identities" ADD CONSTRAINT "identities_provider_valid" CHECK ("provider" = 'telegram');
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_channel_valid" CHECK ("channel" IN ('telegram','email'));

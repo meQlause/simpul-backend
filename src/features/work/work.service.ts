@@ -7,6 +7,7 @@ import { allocateDisplayId } from '../vocabulary/index.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import {
   selectWork,
+  insertGenesisEvidence,
   insertGenesis,
   selectWorkDetail,
   lockWork,
@@ -26,6 +27,12 @@ import {
 } from './work.schema.js';
 
 const NOT_FOUND = 'E-NOT-FOUND';
+
+export async function attachGenesisEvidence(
+  ...parameters: Parameters<typeof insertGenesisEvidence>
+) {
+  return insertGenesisEvidence(...parameters);
+}
 
 export async function listWork(
   resolveConnection: ConnectionResolver,
@@ -62,6 +69,17 @@ export async function createFromGenesis(
   input: ReturnType<typeof parseGenesis>,
   now: Date,
 ) {
+  return scopedTransaction(resolveConnection, workspaceId, (tx) =>
+    createFromGenesisInTransaction(tx, workspaceId, input, now),
+  );
+}
+
+export async function createFromGenesisInTransaction(
+  tx: PoolClient,
+  workspaceId: string,
+  input: ReturnType<typeof parseGenesis>,
+  now: Date,
+) {
   const genesis = parseGenesis(input);
   const state = genesisState(genesis.confidence, now.getTime());
 
@@ -69,21 +87,19 @@ export async function createFromGenesis(
     return null;
   }
 
-  return scopedTransaction(resolveConnection, workspaceId, async (tx) => {
-    const displayId = await allocateDisplayId(tx, workspaceId, genesis.domainId);
-    const item = await insertGenesis(tx, workspaceId, genesis, {
-      ...state,
-      displayId,
-      now,
-      expiresAt: state.expiresAt === null ? null : new Date(state.expiresAt),
-    });
-
-    if (!item) {
-      throw new DomainError(NOT_FOUND);
-    }
-
-    return item;
+  const displayId = await allocateDisplayId(tx, workspaceId, genesis.domainId);
+  const item = await insertGenesis(tx, workspaceId, genesis, {
+    ...state,
+    displayId,
+    now,
+    expiresAt: state.expiresAt === null ? null : new Date(state.expiresAt),
   });
+
+  if (!item) {
+    throw new DomainError(NOT_FOUND);
+  }
+
+  return item;
 }
 
 function workDetail(item: NonNullable<Awaited<ReturnType<typeof selectWorkDetail>>>, now: Date) {

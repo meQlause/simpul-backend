@@ -32,7 +32,10 @@ export async function pendingMessages(tx: PoolClient, scope: Scope) {
 
 export async function storeUnit(tx: PoolClient, scope: Scope, messages: PendingMessage[]) {
   const result = await tx.query<{ id: string }>(
-    'INSERT INTO units (workspace_id, channel_id, sender_id, text, ts_first, ts_last) VALUES ($1, $2, (SELECT identity.person_id FROM person_identities AS identity JOIN channels AS channel ON channel.provider = identity.provider WHERE identity.workspace_id = $1 AND identity.external_id = $3 AND channel.id = $2), $4, $5, $6) RETURNING id',
+    `INSERT INTO units (workspace_id, channel_id, sender_id, text, ts_first, ts_last, explicit_ids)
+    VALUES ($1, $2, (SELECT identity.person_id FROM person_identities AS identity JOIN channels AS channel ON channel.provider = identity.provider
+      WHERE identity.workspace_id = $1 AND identity.external_id = $3 AND channel.id = $2), $4, $5, $6,
+      ARRAY(SELECT captures[1] FROM regexp_matches($4, '\\m([A-Z][A-Z0-9]*-[0-9]+)\\M', 'g') captures)) RETURNING id`,
     [
       scope.workspaceId,
       scope.channelId,

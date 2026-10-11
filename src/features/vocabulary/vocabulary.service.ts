@@ -12,6 +12,7 @@ import { advanceVocabularyVersion, getVocabularyVersion } from '../workspace/ind
 import { findActivePerson } from '../people/index.js';
 import {
   configurationWrite,
+  selectModelCategories,
   incrementDisplayCounter,
   lockCategory,
   editCategory,
@@ -33,6 +34,10 @@ import type {
 const validationCode = 'E-VALIDATION';
 
 type Scope = { workspaceId: string; actorId: string };
+
+export async function modelCategories(...parameters: Parameters<typeof selectModelCategories>) {
+  return selectModelCategories(...parameters);
+}
 
 export async function requireActiveCategory(tx: PoolClient, workspaceId: string, id: string) {
   if (!(await activeCategory(tx, workspaceId, id))) {

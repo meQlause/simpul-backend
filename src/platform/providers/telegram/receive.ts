@@ -65,11 +65,50 @@ const incomingMessage = schema.object({
     date: schema.number().int().positive(),
     text: schema.string(),
     from: schema.object({ id: schema.number().int().safe(), is_bot: schema.boolean() }),
-    chat,
+    chat: schema.union([
+      chat,
+      schema.object({
+        id: schema.number().int().safe().positive(),
+        type: schema.literal('private'),
+      }),
+    ]),
   }),
 });
 
+const callback = schema.object({
+  update_id: schema.number().int().safe(),
+  callback_query: schema.object({
+    id: schema.string().min(1),
+    data: schema.string(),
+    from: schema.object({ id: schema.number().int().safe(), is_bot: schema.literal(false) }),
+    message: schema.object({ chat: schema.object({ id: schema.number().int().safe() }) }),
+  }),
+});
+
+function parseAction(update: unknown): ReturnType<ReceiveProvider['parse']> | undefined {
+  const parsed = callback.safeParse(update);
+
+  if (!parsed.success) {
+    return undefined;
+  }
+
+  return {
+    type: 'action',
+    updateId: String(parsed.data.update_id),
+    chatId: String(parsed.data.callback_query.message.chat.id),
+    senderExternalId: String(parsed.data.callback_query.from.id),
+    actionId: parsed.data.callback_query.data,
+    receiptId: parsed.data.callback_query.id,
+  };
+}
+
 export const parseInboundUpdate: ReceiveProvider['parse'] = (update) => {
+  const action = parseAction(update);
+
+  if (action) {
+    return action;
+  }
+
   const setup = parseSetupUpdate(update);
 
   if (setup.type === 'setup-command') {

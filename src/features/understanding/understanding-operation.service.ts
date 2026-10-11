@@ -10,7 +10,14 @@ const minimumConfidence = 0.75;
 type Scope = { workspaceId: string; unitId: string; threadId: string };
 type Operation = Parameters<typeof insertLabel>[2];
 
-export type OperationOptions = { now?: Date; contextOpIds?: string[] };
+export type OperationOptions = {
+  now?: Date;
+  contextOpIds?: string[];
+  publishMatcher?: (
+    tx: PoolClient,
+    payload: { workspaceId: string; labelId: string },
+  ) => Promise<unknown>;
+};
 
 export async function persistOperation(
   tx: PoolClient,
@@ -18,13 +25,17 @@ export async function persistOperation(
   operation: Operation,
   options: OperationOptions,
 ) {
-  if (operation.retractsOpId && !options.contextOpIds?.includes(operation.retractsOpId)) {
-    throw new DomainError('E-VALIDATION');
-  }
+  validateCorrectionTarget(operation, options);
 
   const label = await insertLabel(tx, scope, operation, options.now);
 
-  if (!label || operation.confidence < minimumConfidence || operation.tense !== 'sudah_terjadi') {
+  if (!label) {
+    return;
+  }
+
+  await options.publishMatcher?.(tx, { workspaceId: scope.workspaceId, labelId: label.id });
+
+  if (operation.confidence < minimumConfidence || operation.tense !== 'sudah_terjadi') {
     return;
   }
 
@@ -38,6 +49,12 @@ export async function persistOperation(
     messageId: operation.evidenceMessageIds[0],
     now: label.createdAt,
   });
+}
+
+function validateCorrectionTarget(operation: Operation, options: OperationOptions) {
+  if (operation.retractsOpId && !options.contextOpIds?.includes(operation.retractsOpId)) {
+    throw new DomainError('E-VALIDATION');
+  }
 }
 
 async function retract(tx: PoolClient, scope: Scope, input: { opId: string; now: Date }) {

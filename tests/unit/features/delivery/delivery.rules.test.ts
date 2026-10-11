@@ -8,6 +8,21 @@ const actions = [
   { id: 'correction', label: 'Not this work' },
 ];
 
+test('SRS §8.1: an accepted resolution can notify after its own status transition completes the work', () => {
+  const label = {
+    type: 'resolution',
+    tense: 'sudah_terjadi',
+    evidenceMessageIds: ['message'],
+    confidence: 0.9,
+  };
+
+  expect(delivery.claimGate(label, { status: 'completed', historical: false })).toBe(true);
+  expect(
+    delivery.claimGate({ ...label, type: 'progress' }, { status: 'completed', historical: false }),
+  ).toBe(false);
+  expect(delivery.claimGate(label, { status: 'completed', historical: true })).toBe(false);
+});
+
 test('NFR-AD-03: renderActions draws buttons when the adapter declares inlineActions', () => {
   expect(delivery.renderActions(actions, { inlineActions: true })).toEqual({ actions, text: '' });
 });
