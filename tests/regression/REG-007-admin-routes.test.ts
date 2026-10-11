@@ -133,6 +133,7 @@ const bodies: Record<string, object> = {
   'get /overview': {},
   'get /rules': {},
   'post /rules': {},
+  'post /rules/estimate': {},
   'patch /rules/:ruleId': { active: false },
   'post /onboarding/complete': { backups: [], activeRuleIds: [] },
   'get /previews/recipient': {},
@@ -186,6 +187,11 @@ async function prepareReviewRoute() {
     conditionText: 'Confirmed update',
     recipientRoleId: rule.recipient_role_id,
     historyMode: 'future',
+  };
+  bodies['post /rules/estimate'] = {
+    categoryId: rule.domain_id,
+    eventType: 'progress',
+    recipientRoleId: rule.recipient_role_id,
   };
 }
 

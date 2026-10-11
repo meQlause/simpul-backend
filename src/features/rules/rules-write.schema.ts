@@ -13,6 +13,7 @@ const creation = fields.extend({
   historyMode: fields.shape.historyMode.default('digest'),
   reviewItemId: zod.guid().optional(),
 });
+const estimation = fields.pick({ categoryId: true, eventType: true, recipientRoleId: true });
 const patch = fields
   .partial()
   .extend({ active: zod.boolean().optional() })
@@ -33,6 +34,16 @@ export function parseRuleWrite(input: unknown, editing = false) {
 
 export function parseRuleId(input: unknown) {
   const parsed = zod.guid().safeParse(input);
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}
+
+export function parseRuleEstimate(input: unknown) {
+  const parsed = estimation.safeParse(input);
 
   if (!parsed.success) {
     throw validationError(parsed.error);

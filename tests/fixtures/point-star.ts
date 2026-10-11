@@ -282,9 +282,26 @@ async function seedAggregates(client: PoolClient, seed: Seed) {
 
 async function seedRuleMatches(client: PoolClient, seed: Seed) {
   await client.query(
+    `INSERT INTO labels (id, workspace_id, unit_id, thread_id, domain_id, type,
+      tense, evidence_message_ids, confidence, vocab_version, routed_at, created_at)
+    SELECT md5('point-star-order-label-' || num)::uuid, $1, md5('point-star-unit-' || (1000 + num))::uuid,
+      work.id, md5('point-star-domain-Order')::uuid, 'progress',
+      'sudah_terjadi', ARRAY[md5('point-star-message-' || (1000 + num))::uuid], 0.95, 1, $2,
+      date_trunc('hour', $2::timestamptz) - ceil(num / 5.0) * interval '1 hour'
+    FROM generate_series(1, 64) AS num JOIN (SELECT id, row_number() OVER (ORDER BY display_id) AS num
+      FROM threads WHERE workspace_id = $1 AND domain_id = md5('point-star-domain-Order')::uuid) work USING (num)`,
+    [seed.workspaceId, seed.now],
+  );
+  await client.query(
+    `INSERT INTO message_thread_link (workspace_id, message_id, thread_id, role, confidence, created_at)
+    SELECT $1, evidence_message_ids[1], thread_id, 'genesis', confidence, created_at
+    FROM labels WHERE workspace_id = $1 AND id IN (SELECT md5('point-star-order-label-' || num)::uuid FROM generate_series(1, 64) AS num)`,
+    [seed.workspaceId],
+  );
+  await client.query(
     `INSERT INTO label_rule_matches (workspace_id, label_id, rule_id, matched_at, created_at)
-    SELECT $1, md5('point-star-label-' || num)::uuid, md5('point-star-rule-' || rule)::uuid,
-      $2::timestamptz - interval '2 days', $2
+    SELECT $1, md5(CASE WHEN rule = 1 THEN 'point-star-order-label-' ELSE 'point-star-label-' END || num)::uuid,
+      md5('point-star-rule-' || rule)::uuid, $2::timestamptz - interval '2 days', $2
     FROM (VALUES (1, 64), (2, 48), (3, 22), (4, 8), (5, 6), (6, 4), (7, 10), (8, 3)) AS sample(rule, matches)
     CROSS JOIN LATERAL generate_series(1, matches) AS num`,
     [seed.workspaceId, seed.now],
