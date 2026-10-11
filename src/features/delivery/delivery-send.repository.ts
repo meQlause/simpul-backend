@@ -2,6 +2,9 @@ import type { PoolClient } from 'pg';
 
 type Scope = { workspaceId: string; notificationId: string };
 type Pending = {
+  hasOperation: boolean;
+  silenceKind: 'reminder' | 'escalation' | null;
+  ownerId: string | null;
   kind: 'notification' | 'correction';
   provider: string;
   connectionId: string;
@@ -31,21 +34,23 @@ export async function lockPendingNotification(tx: PoolClient, scope: Scope, now:
     [scope.workspaceId, scope.notificationId, now],
   );
   const result = await tx.query<Pending>(
-    `SELECT CASE WHEN n.kind = 'correction' THEN 'correction' ELSE 'notification' END AS kind, c.provider, b.id AS "connectionId", b.provider_account_id AS "providerAccountId",
+    `SELECT n.label_id IS NOT NULL AS "hasOperation", CASE WHEN n.kind IN ('reminder','escalation') THEN n.kind END AS "silenceKind",
+      t.owner_person_id AS "ownerId", CASE WHEN n.kind = 'correction' THEN 'correction' ELSE 'notification' END AS kind, c.provider, b.id AS "connectionId", b.provider_account_id AS "providerAccountId",
       b.token_secret_ref AS "tokenRef", coalesce(identity.external_id, identity.handle, c.provider_chat_id) AS "chatId",
       CASE WHEN n.kind <> 'correction' THEN rule.recipient_role_id END AS "roleId", c.id AS "originChannelId", n.recipient_person_id AS "personId",
-      n.destination_channel_id AS "destinationChannelId", CASE WHEN n.kind = 'correction' THEN n.body_rendered ELSE template.body END AS body, t.display_id AS work_id, coalesce(t.customer_label, '') AS customer, t.summary
-    FROM notifications n JOIN labels l ON l.id = n.label_id AND l.workspace_id = $1
-    JOIN units u ON u.id = l.unit_id AND u.workspace_id = $1
-    JOIN channels c ON c.id = u.channel_id AND c.workspace_id = $1
-    JOIN bot_connections b ON b.id = c.bot_connection_id AND b.workspace_id = $1
+      n.destination_channel_id AS "destinationChannelId", CASE WHEN n.kind = 'correction' OR (n.kind IN ('reminder','escalation') AND c.class = 'internal') THEN n.body_rendered ELSE template.body END AS body, t.display_id AS work_id, coalesce(t.customer_label, '') AS customer, t.summary
+    FROM notifications n LEFT JOIN labels l ON l.id = n.label_id AND l.workspace_id = $1
+    LEFT JOIN units u ON u.id = l.unit_id AND u.workspace_id = $1
     JOIN threads t ON t.id = n.thread_id AND t.workspace_id = $1
+    JOIN channels c ON c.id = coalesce(u.channel_id, t.channel_id) AND c.workspace_id = $1
+    JOIN bot_connections b ON b.id = c.bot_connection_id AND b.workspace_id = $1
     JOIN templates template ON template.workspace_id = $1 AND template.audience = c.class AND template.key = 'update'
     LEFT JOIN rules rule ON rule.id = n.rule_id AND rule.workspace_id = $1
     LEFT JOIN person_identities identity ON identity.person_id = n.recipient_person_id AND identity.workspace_id = $1 AND identity.provider = c.provider
     WHERE n.workspace_id = $1 AND n.id = $2 AND n.sent_at IS NULL AND n.cancelled_at IS NULL
       AND n.digest_id IS NULL AND n.held_until <= $3 AND (l.retracted_at IS NULL OR n.kind = 'correction')
-      AND c.monitored AND c.connection_status = 'active' FOR UPDATE OF n`,
+      AND c.monitored AND c.connection_status = 'active'
+      AND (n.kind NOT IN ('reminder','escalation') OR (t.status = 'active' AND NOT t.historical AND (n.stale_since IS NULL OR n.stale_since = t.last_activity_at))) FOR UPDATE OF n`,
     [scope.workspaceId, scope.notificationId, now],
   );
 

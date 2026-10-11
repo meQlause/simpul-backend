@@ -3,8 +3,31 @@ import { basename, join } from 'node:path';
 import { beforeEach, expect, test } from 'vitest';
 import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
+import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
 
 const pool = databaseFixture();
+
+test('B8: upgrading existing reminder history preserves rows and enforces one silence notification per cycle', async () => {
+  for (const migration of globSync('drizzle/*.sql')
+    .sort()
+    .filter((path) => !path.includes('0010_'))) {
+    await pool.query(readFileSync(migration, 'utf8'));
+  }
+
+  const seed = pointStarSeed({ now: () => new Date('2026-10-10T04:00:00Z') });
+
+  await loadPointStarSeed(pool, seed);
+  const before = await pool.query('SELECT id FROM notifications ORDER BY id');
+
+  await pool.query(readFileSync('drizzle/0010_silence_notifications.sql', 'utf8'));
+  expect((await pool.query('SELECT id FROM notifications ORDER BY id')).rows).toEqual(before.rows);
+  expect(
+    (
+      await pool.query(`SELECT count(*)::int AS count FROM notifications n JOIN threads t ON t.id = n.thread_id
+    WHERE t.display_id = 'ORD-0091' AND n.kind = 'reminder' AND n.cancelled_at IS NULL AND n.stale_since IS NOT NULL`)
+    ).rows,
+  ).toEqual([{ count: 1 }]);
+}, 30000);
 
 // DDL commits need a fresh schema in this file's disposable container per case.
 beforeEach(async () => {

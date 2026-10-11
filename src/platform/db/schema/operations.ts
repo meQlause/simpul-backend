@@ -37,7 +37,7 @@ export const notifications = pgTable(
   'notifications',
   {
     ...tenantColumns(),
-    labelId: reference('label_id', () => labels.id).notNull(),
+    labelId: reference('label_id', () => labels.id),
     threadId: reference('thread_id', () => threads.id, 'set null'),
     ruleId: reference('rule_id', () => rules.id),
     recipientPersonId: reference('recipient_person_id', () => people.id),
@@ -50,8 +50,13 @@ export const notifications = pgTable(
     sentAt: instant('sent_at'),
     cancelledAt: instant('cancelled_at'),
     correctedAt: instant('corrected_at'),
+    staleSince: instant('stale_since'),
   },
   (table) => [
+    check(
+      'notifications_source_valid',
+      sql`${table.labelId} IS NOT NULL OR (${table.kind} IN ('reminder','escalation') AND ${table.threadId} IS NOT NULL)`,
+    ),
     check(
       'notifications_exactly_one_destination',
       sql`(${table.recipientPersonId} IS NULL) <> (${table.destinationChannelId} IS NULL)`,
@@ -72,10 +77,13 @@ export const notifications = pgTable(
     index('notif_rule_idx').on(table.ruleId, table.sentAt.desc()),
     uniqueIndex('notif_one_per_label_uq')
       .on(table.labelId, table.recipientPersonId, table.kind)
-      .where(sql`${table.cancelledAt} IS NULL`),
+      .where(sql`${table.cancelledAt} IS NULL AND ${table.kind} IN ('update','correction')`),
     uniqueIndex('notif_one_per_label_channel_uq')
       .on(table.labelId, table.destinationChannelId, table.kind)
-      .where(sql`${table.cancelledAt} IS NULL`),
+      .where(sql`${table.cancelledAt} IS NULL AND ${table.kind} IN ('update','correction')`),
+    uniqueIndex('notif_silence_cycle_uq')
+      .on(table.workspaceId, table.threadId, table.kind, table.staleSince)
+      .where(sql`${table.kind} IN ('reminder','escalation') AND ${table.cancelledAt} IS NULL`),
   ],
 );
 

@@ -1,10 +1,10 @@
 import { PgBoss } from 'pg-boss';
 import type { Pool, PoolClient } from 'pg';
 
-export async function createQueue(pool: Pool) {
+export async function createQueue(pool: Pool, scheduling = false) {
   const boss = new PgBoss({
     db: { executeSql: (text, values) => pool.query(text, values) },
-    schedule: false,
+    schedule: scheduling,
     supervise: false,
   });
 
@@ -16,6 +16,8 @@ export async function createQueue(pool: Pool) {
   await boss.createQueue('understanding.comprehend', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('delivery.gate', { retryLimit: 5, retryBackoff: true });
   await boss.createQueue('delivery.send', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('delivery.staleness', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('scheduler.tick', { retryLimit: 5, retryBackoff: true });
 
   return boss;
 }

@@ -4,6 +4,7 @@ import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordProgress } from '../work/index.js';
 import { lockCorrection } from './delivery-correction.repository.js';
+import { lockReminderAnswer } from './delivery-status.repository.js';
 
 export async function recordStatus(
   services: { resolveConnection: ConnectionResolver; now: () => Date },
@@ -26,7 +27,7 @@ export async function recordStatusInTransaction(
   input: Parameters<typeof recordStatus>[1],
   now: Date,
 ) {
-  const operation = await lockCorrection(tx, input);
+  const operation = (await lockReminderAnswer(tx, input)) ?? (await lockCorrection(tx, input));
 
   if (!operation) {
     throw new DomainError('E-NOT-FOUND');
@@ -44,7 +45,7 @@ export async function recordStatusInTransaction(
     tx,
     { workspaceId: input.workspaceId, threadId: operation.threadId },
     {
-      opId: input.opId,
+      opId: operation.messageId === null ? null : input.opId,
       type: input.type,
       messageId: operation.messageId,
       now,

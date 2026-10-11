@@ -2,9 +2,9 @@ import type { PoolClient } from 'pg';
 
 type Scope = { workspaceId: string; threadId: string };
 type Progress = {
-  opId: string;
+  opId: string | null;
   type: string;
-  messageId: string;
+  messageId: string | null;
   now: Date;
   confirmation?: { actorId: string; id: string };
 };
@@ -24,8 +24,9 @@ export async function applyProgress(tx: PoolClient, scope: Scope, input: Progres
           AND NOT EXISTS (SELECT 1 FROM progress_markers successor WHERE successor.workspace_id = $1 AND successor.thread_id = t.id
             AND successor.retracted_at IS NULL AND successor.previous_state->>'previousOpId' = prior.op_id::text)
           ORDER BY prior.created_at DESC, prior.id DESC LIMIT 1))
-    FROM threads t JOIN messages_raw m ON m.workspace_id = $1 AND m.id = $5
+    FROM threads t LEFT JOIN messages_raw m ON m.workspace_id = $1 AND m.id = $5
     WHERE t.workspace_id = $1 AND t.id = $2 AND t.status = 'active' AND NOT t.historical
+      AND (m.id IS NOT NULL OR ($5::uuid IS NULL AND $7::uuid IS NOT NULL))
     ON CONFLICT (op_id) DO UPDATE SET ts = excluded.ts, type = excluded.type,
       confirmed_by = excluded.confirmed_by, confirmation_id = excluded.confirmation_id
     WHERE $7::uuid IS NOT NULL AND progress_markers.workspace_id = $1 AND progress_markers.thread_id = $2

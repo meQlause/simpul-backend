@@ -1,5 +1,6 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { PoolClient } from 'pg';
+import { selectReminderRecipient } from './people.repository.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordConfigChange } from '../audit/index.js';
@@ -14,6 +15,10 @@ import {
 } from './people.repository.js';
 import { resolveRecipient, invalidPatchFields } from './people.rules.js';
 import type { PersonPatch } from './people.schema.js';
+
+export async function reminderRecipient(...args: Parameters<typeof selectReminderRecipient>) {
+  return selectReminderRecipient(...args);
+}
 
 export async function createAdminPerson(...parameters: Parameters<typeof insertAdminPerson>) {
   await insertAdminPerson(...parameters);

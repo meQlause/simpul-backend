@@ -71,6 +71,13 @@
       "when": 1791704964157,
       "tag": "0009_provider_contract_proof",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791708381778,
+      "tag": "0010_silence_notifications",
+      "breakpoints": true
     }
   ]
 }

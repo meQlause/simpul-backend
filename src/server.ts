@@ -49,10 +49,12 @@ if (process.argv[2] === 'create-workspace') {
     throw error;
   }
 
-  const queuePool = ['api', 'webhook', 'worker'].includes(config.PROCESS_ROLE)
+  const queuePool = ['api', 'webhook', 'worker', 'scheduler'].includes(config.PROCESS_ROLE)
     ? createSystemPool(config.DATABASE_QUEUE_URL)
     : undefined;
-  const queue = queuePool ? await createQueue(queuePool) : undefined;
+  const queue = queuePool
+    ? await createQueue(queuePool, config.PROCESS_ROLE === 'scheduler')
+    : undefined;
 
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
@@ -114,7 +116,13 @@ if (process.argv[2] === 'create-workspace') {
     });
   }
 
-  if (!services && config.PROCESS_ROLE !== 'worker') {
+  if (queue && config.PROCESS_ROLE === 'scheduler') {
+    const { registerSchedulerJobs } = await import('./roles/scheduler.js');
+
+    await registerSchedulerJobs(queue, pool);
+  }
+
+  if (!services && !['worker', 'scheduler'].includes(config.PROCESS_ROLE)) {
     await pool.end();
   }
 

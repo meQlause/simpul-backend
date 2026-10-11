@@ -53,7 +53,7 @@ export async function receiveRecipientAction(
 
   const target = await recipientActionTarget(tx, scope, event, action);
 
-  if (!target) {
+  if (!target || (!target.hasOperation && ['4', 'x'].includes(action.code))) {
     return false;
   }
 

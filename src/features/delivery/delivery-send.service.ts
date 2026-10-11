@@ -9,7 +9,7 @@ import {
   replaceDestination,
 } from './delivery-send.repository.js';
 import { renderNotification, renderActions } from './delivery.rules.js';
-import { resolveRoleRecipientInTransaction } from '../people/index.js';
+import { reminderRecipient, resolveRoleRecipientInTransaction } from '../people/index.js';
 import type { PoolClient } from 'pg';
 import { DomainError } from '../../platform/errors/domain-error.js';
 
@@ -104,7 +104,9 @@ function outboundMessage(
           { id: `n:${scope.notificationId}:r`, label: 'Already shipped' },
           { id: `n:${scope.notificationId}:p`, label: 'In progress' },
           { id: `n:${scope.notificationId}:b`, label: 'There is a blocker' },
-          { id: `n:${scope.notificationId}:x`, label: 'Not this work' },
+          ...(pending.hasOperation
+            ? [{ id: `n:${scope.notificationId}:x`, label: 'Not this work' }]
+            : []),
         ];
   const rendered = renderActions(
     actions,
@@ -125,6 +127,10 @@ async function resolveDestination(
   pending: NonNullable<Awaited<ReturnType<typeof lockPendingNotification>>>,
   now: Date,
 ) {
+  if (pending.silenceKind) {
+    return resolveSilenceDestination(tx, scope, pending, now);
+  }
+
   if (!pending.roleId) {
     return pending.chatId;
   }
@@ -147,4 +153,23 @@ async function resolveDestination(
   }
 
   return chatId;
+}
+
+async function resolveSilenceDestination(
+  tx: PoolClient,
+  scope: { workspaceId: string; notificationId: string },
+  pending: NonNullable<Awaited<ReturnType<typeof lockPendingNotification>>>,
+  now: Date,
+) {
+  const personId = await reminderRecipient(tx, scope.workspaceId, {
+    ownerId: pending.ownerId,
+    supervisor: pending.silenceKind === 'escalation',
+  });
+
+  return replaceDestination(tx, scope, {
+    personId,
+    channelId: personId ? null : pending.originChannelId,
+    provider: pending.provider,
+    now,
+  });
 }

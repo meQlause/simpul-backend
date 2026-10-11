@@ -3,6 +3,29 @@ import type { z as zod } from 'zod';
 import type { personPatchSchema } from './people.schema.js';
 import type { resolveRecipient } from './people.rules.js';
 
+export async function selectReminderRecipient(
+  tx: PoolClient,
+  workspaceId: string,
+  input: { ownerId: string | null; supervisor: boolean },
+) {
+  const result = await tx.query<{ personId: string }>(
+    `WITH candidates AS (
+      SELECT $2::uuid AS id, 0 AS priority WHERE NOT $3
+      UNION ALL SELECT replacement.person_id, 1 FROM role_members holder
+        JOIN role_members replacement ON replacement.workspace_id = $1 AND replacement.role_id = holder.role_id
+        WHERE holder.workspace_id = $1 AND holder.person_id = $2 AND holder.kind = 'member'
+          AND replacement.kind = 'backup' AND NOT $3
+      UNION ALL SELECT manager_id, 2 FROM people WHERE workspace_id = $1 AND id = $2
+      UNION ALL SELECT admin_person_id, 3 FROM workspaces WHERE id = $1
+    ) SELECT p.id AS "personId" FROM candidates JOIN people p ON p.id = candidates.id
+    WHERE p.workspace_id = $1 AND p.active AND p.availability = 'available'
+    ORDER BY candidates.priority, p.id LIMIT 1`,
+    [workspaceId, input.ownerId, input.supervisor],
+  );
+
+  return result.rows[0]?.personId ?? null;
+}
+
 type NamedPerson = { id: string; name: string };
 type PersonDetail = NamedPerson & {
   level: 'staff' | 'executive';
