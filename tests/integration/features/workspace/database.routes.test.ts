@@ -14,6 +14,7 @@ import { schemaVersion } from '../../../../src/platform/db/migrate-tenant.js';
 
 const system = databaseFixture(2);
 const customer = databaseFixture(2, { tls: true, passwordAuth: true });
+const mirror = databaseFixture(2, { tls: true, passwordAuth: true });
 const plain = databaseFixture();
 const missingVector = databaseFixture(2, { image: 'postgres:16', tls: true });
 const workspaceId = randomUUID();
@@ -83,12 +84,14 @@ function api(
   overrides: { refusedHost?: boolean; oldVersion?: boolean } = {},
 ) {
   const openPool = vi.fn((config: postgres.PoolConfig) => {
-    const target = new URL(pool.options.connectionString!);
+    const selected = config.database === 'mirror' ? mirror : pool;
+    const target = new URL(selected.options.connectionString!);
     const connection = new postgres.Pool({
       ...config,
       host: target.hostname,
       port: Number(target.port),
-      ssl: { ...(config.ssl as object), ca: pool.certificate() },
+      database: 'postgres',
+      ssl: { ...(config.ssl as object), ca: selected.certificate() },
     });
 
     if (overrides.oldVersion) {
@@ -130,6 +133,7 @@ function api(
       lookup,
       openPool,
       now: () => new Date('2026-10-11T12:00:00Z'),
+      invalidate: resolveConnection.close,
     },
   });
 
@@ -270,4 +274,75 @@ test('An identical PUT /database after a crash between databases completes setup
   expect(profile.body.data.person.name).toBe('Admin');
   await verifyCustomerProvision(profile.body.data.person.id);
   await resolveConnection.close(workspaceId);
+});
+
+async function rejectEmptyReplacement(
+  app: ReturnType<typeof createApp>,
+  connectionString: string,
+  closed: ReturnType<typeof vi.spyOn>,
+) {
+  const empty = await supertest(app)
+    .put('/api/v1/database')
+    .set('Cookie', cookie)
+    .send({ connectionString });
+
+  expect(empty.status).toBe(422);
+  expect(empty.body.error.code).toBe('E-DB-WORKSPACE-MISMATCH');
+  expect(closed).not.toHaveBeenCalled();
+  expect((await system.query('SELECT database_name FROM workspace_databases')).rows).toEqual([
+    { database_name: 'postgres' },
+  ]);
+}
+
+async function verifyReplacement(app: ReturnType<typeof createApp>, connectionString: string) {
+  const response = await supertest(app)
+    .put('/api/v1/database')
+    .set('Cookie', cookie)
+    .send({ connectionString });
+
+  expect(response.status).toBe(200);
+  expect(response.body.data.databaseName).toBe('mirror');
+  expect(response.body.data.availabilityAckAt).toBe('2026-10-11T12:00:00.000Z');
+  const profile = await supertest(app).get('/api/v1/me').set('Cookie', cookie);
+
+  expect(profile.status).toBe(200);
+  const audit = (
+    await mirror.query(
+      "SELECT before, after FROM config_audit WHERE table_name = 'workspace_databases'",
+    )
+  ).rows;
+
+  expect(audit).toEqual([
+    {
+      before: { host: 'customer.example', port: 5432, databaseName: 'postgres' },
+      after: { host: 'customer.example', port: 5432, databaseName: 'mirror' },
+    },
+  ]);
+  expect(JSON.stringify(audit)).not.toContain('test-only-db-password');
+  expect(
+    (
+      await supertest(app)
+        .put('/api/v1/database')
+        .set('Cookie', cookie)
+        .send({ connectionString, availabilityAck: true })
+    ).status,
+  ).toBe(422);
+}
+
+test('FR-DB-07: replacement refuses an empty database, accepts a copy without acknowledgement, and closes the old pool', async () => {
+  const { app, resolveConnection } = api(customer);
+  const closed = vi.spyOn(await resolveConnection(workspaceId), 'end');
+  const peer = api(customer);
+  const peerClosed = vi.spyOn(await peer.resolveConnection(workspaceId), 'end');
+  const connectionString =
+    'postgres://postgres:test-only-db-password@customer.example/mirror?sslmode=require';
+
+  await rejectEmptyReplacement(app, connectionString, closed);
+  mirror.restore(customer.dump());
+  await verifyReplacement(app, connectionString);
+  expect(closed).toHaveBeenCalledTimes(1);
+  expect((await supertest(peer.app).get('/api/v1/me').set('Cookie', cookie)).status).toBe(200);
+  expect(peerClosed).toHaveBeenCalledTimes(1);
+  await resolveConnection.close(workspaceId);
+  await peer.resolveConnection.close(workspaceId);
 });

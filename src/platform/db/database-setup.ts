@@ -7,6 +7,7 @@ export type DatabaseServices = TenantPoolOptions & {
   systemPool: Pool;
   masterKey: string;
   now: () => Date;
+  invalidate?: (workspaceId: string) => Promise<void>;
 };
 
 const SETUP_TIMEOUT_MS = 10000;

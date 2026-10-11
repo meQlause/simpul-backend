@@ -14,6 +14,7 @@ import { workspaceAdmin } from './workspace.repository.js';
 import { parseDatabaseConnection } from './workspace-database.schema.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { createQueue } from '../../platform/queue/index.js';
+import { recordConfigChange } from '../audit/index.js';
 
 type Setup = NonNullable<Awaited<ReturnType<typeof lockDatabaseSetup>>>;
 
@@ -47,11 +48,30 @@ async function provisionDatabase(tx: PoolClient, row: Setup, now: Date) {
   );
 }
 
-async function initializeDatabase(pool: Pool, row: Setup, now: Date) {
+async function initializeDatabase(pool: Pool, row: Setup, change: { now: Date; url: URL }) {
   await scopedTransaction(
     async () => pool,
     row.workspace_id,
-    (tx) => provisionDatabase(tx, row, now),
+    async (tx) => {
+      await provisionDatabase(tx, row, change.now);
+
+      if (row.status !== 'pending') {
+        const admin = await workspaceAdmin(tx, row.workspace_id);
+
+        await recordConfigChange(tx, {
+          workspaceId: row.workspace_id,
+          actorId: admin!.id,
+          tableName: 'workspace_databases',
+          recordId: row.workspace_id,
+          before: { host: row.host, port: row.port, databaseName: row.database_name },
+          after: {
+            host: change.url.hostname,
+            port: Number(change.url.port || '5432'),
+            databaseName: decodeURIComponent(change.url.pathname.slice(1)),
+          },
+        });
+      }
+    },
   );
   const queue = await createQueue(pool);
 
@@ -59,7 +79,7 @@ async function initializeDatabase(pool: Pool, row: Setup, now: Date) {
 }
 
 export async function saveDatabase(services: DatabaseServices, workspaceId: string, body: unknown) {
-  return scopedTransaction(
+  const result = await scopedTransaction(
     async () => services.systemPool,
     workspaceId,
     async (systemTx) => {
@@ -79,7 +99,7 @@ export async function saveDatabase(services: DatabaseServices, workspaceId: stri
           pending: row.status === 'pending',
         },
         services,
-        (pool) => initializeDatabase(pool, row, now),
+        (pool) => initializeDatabase(pool, row, { now, url: new URL(input.connectionString) }),
       );
       const ref = await createSecretStore(services.masterKey).put(systemTx, workspaceId, {
         purpose: 'database_url',
@@ -99,4 +119,8 @@ export async function saveDatabase(services: DatabaseServices, workspaceId: stri
       return databaseSummary(systemTx, workspaceId);
     },
   );
+
+  await services.invalidate?.(workspaceId);
+
+  return result;
 }

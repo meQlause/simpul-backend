@@ -44,11 +44,13 @@ async function tenantConnection(systemPool: Pool, row: WorkspaceDatabase, option
 
 export function createConnectionResolver(systemPool: Pool, options?: Options) {
   const pools = new Map<string, Promise<Pool>>();
+  const versions = new Map<string, string | null>();
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
   const close = async (workspaceId: string) => {
     const pending = pools.get(workspaceId);
 
     pools.delete(workspaceId);
+    versions.delete(workspaceId);
     clearTimeout(timers.get(workspaceId));
     timers.delete(workspaceId);
     await pending?.then(
@@ -78,8 +80,9 @@ export function createConnectionResolver(systemPool: Pool, options?: Options) {
       throw new DomainError(UNAVAILABLE, undefined, RETRY_SECONDS);
     }
 
-    return cachedTenantPool(row.workspace_id, () => tenantConnection(systemPool, row, options!), {
+    return cachedTenantPool(row, () => tenantConnection(systemPool, row, options!), {
       pools,
+      versions,
       timers,
       close,
       idleMs: options?.idleMs ?? IDLE_MS,
@@ -89,22 +92,30 @@ export function createConnectionResolver(systemPool: Pool, options?: Options) {
   return Object.assign(resolve, { close });
 }
 
-function cachedTenantPool(
-  workspaceId: string,
+async function cachedTenantPool(
+  row: WorkspaceDatabase,
   open: () => Promise<Pool>,
   cache: {
     pools: Map<string, Promise<Pool>>;
+    versions: Map<string, string | null>;
     timers: Map<string, ReturnType<typeof setTimeout>>;
     close: (workspaceId: string) => Promise<void>;
     idleMs: number;
   },
 ) {
-  const { pools, timers, close } = cache;
+  const { pools, timers, close, versions } = cache;
+  const workspaceId = row.workspace_id;
+
+  if (pools.has(workspaceId) && versions.get(workspaceId) !== row.connection_version) {
+    await close(workspaceId);
+  }
+
   let pending = pools.get(workspaceId);
 
   if (!pending) {
     pending = open();
     pools.set(workspaceId, pending);
+    versions.set(workspaceId, row.connection_version);
     void pending.catch(() => {
       if (pools.get(workspaceId) === pending) {
         pools.delete(workspaceId);

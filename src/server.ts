@@ -86,6 +86,7 @@ if (process.argv[2] === 'create-workspace') {
         ),
         resolveConnection,
         database: {
+          invalidate: resolveConnection.close,
           systemPool: pool,
           systemHost: new URL(config.DATABASE_URL).hostname,
           masterKey: config.SECRETS_MASTER_KEY,

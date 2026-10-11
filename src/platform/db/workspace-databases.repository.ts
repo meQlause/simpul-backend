@@ -29,11 +29,17 @@ export type WorkspaceDatabase = {
   workspace_name: string;
   timezone: string;
   admin_auth_user_id: string;
+  host: string | null;
+  port: number | null;
+  database_name: string | null;
+  connection_version: string | null;
 };
 
 export async function selectWorkspaceDatabase(tx: PoolClient, workspaceId: string) {
   const result = await tx.query<WorkspaceDatabase>(
-    'SELECT * FROM workspace_databases WHERE workspace_id = $1',
+    `SELECT registry.*, encode(secret.nonce, 'hex') AS connection_version
+    FROM workspace_databases registry LEFT JOIN secrets secret ON secret.id = registry.url_secret_ref
+    AND secret.workspace_id = registry.workspace_id WHERE registry.workspace_id = $1`,
     [workspaceId],
   );
 

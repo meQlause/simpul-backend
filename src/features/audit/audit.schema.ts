@@ -4,6 +4,11 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  workspace_databases: zod.object({
+    host: zod.string(),
+    port: zod.number(),
+    databaseName: zod.string(),
+  }),
   rules: zod
     .object({
       name: zod.string(),

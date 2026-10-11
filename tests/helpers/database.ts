@@ -79,7 +79,35 @@ export function databaseFixture(
   return Object.assign(pool, {
     certificate: () => certificate,
     ...databaseControl(() => containerId),
+    ...databaseCopy(() => containerId),
   });
+}
+
+function databaseCopy(containerId: () => string) {
+  return {
+    dump: () =>
+      execFileSync(
+        dockerExecutable,
+        ['exec', containerId(), 'pg_dump', '-U', 'postgres', '--no-owner', '--no-acl', 'postgres'],
+        { encoding: 'utf8' },
+      ),
+    restore: (sql: string) =>
+      execFileSync(
+        dockerExecutable,
+        [
+          'exec',
+          '-i',
+          containerId(),
+          'psql',
+          '-U',
+          'postgres',
+          '-v',
+          'ON_ERROR_STOP=1',
+          'postgres',
+        ],
+        { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+      ),
+  };
 }
 
 function databaseControl(containerId: () => string) {
