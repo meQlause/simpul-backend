@@ -12,13 +12,16 @@ import {
   lockWork,
   storeClosure,
   clearClosure,
+  openWorkExport,
+  fetchWorkExport,
 } from './work.repository.js';
-import { displayStatus, genesisState, closureStatus, undoAvailable } from './work.rules.js';
+import { displayStatus, genesisState, closureStatus, undoAvailable, csvRow } from './work.rules.js';
 import {
   encodeWorkCursor,
   parseGenesis,
   type parseWorkQuery,
   type parseClosure,
+  type parseWorkExport,
 } from './work.schema.js';
 
 const NOT_FOUND = 'E-NOT-FOUND';
@@ -226,5 +229,40 @@ export async function undoCloseWork(
     });
 
     return after;
+  });
+}
+
+export async function exportWork(
+  resolveConnection: ConnectionResolver,
+  options: { workspaceId: string; input: ReturnType<typeof parseWorkExport>; now: Date },
+  emit: (chunk: string) => Promise<void>,
+) {
+  return scopedTransaction(resolveConnection, options.workspaceId, async (tx) => {
+    await openWorkExport(tx, options.workspaceId, options.input, options.now);
+    await emit('﻿' + csvRow(['ID', 'Customer', 'Work', 'Owner', 'Channel', 'Status']));
+    let rows = await fetchWorkExport(tx);
+
+    while (rows.length > 0) {
+      for (const item of rows) {
+        const status = displayStatus(
+          { status: item.status, lastActivityAt: item.lastActivityAt.getTime() },
+          item.thresholdHours ?? Infinity,
+          options.now.getTime(),
+        );
+
+        await emit(
+          csvRow([
+            item.displayId,
+            item.customer,
+            item.summary,
+            item.owner?.name ?? null,
+            item.channel.displayName,
+            status[0].toUpperCase() + status.slice(1),
+          ]),
+        );
+      }
+
+      rows = await fetchWorkExport(tx);
+    }
   });
 }

@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { parseWorkQuery, parseGenesis, parseClosure } from './work.schema.js';
+import type { parseWorkQuery, parseGenesis, parseClosure, parseWorkExport } from './work.schema.js';
 import type { displayStatus } from './work.rules.js';
 
 type WorkRow = {
@@ -152,4 +152,26 @@ export async function clearClosure(tx: PoolClient, workspaceId: string, itemId: 
       [workspaceId, itemId],
     )
   ).rowCount;
+}
+
+export async function openWorkExport(
+  tx: PoolClient,
+  workspaceId: string,
+  input: ReturnType<typeof parseWorkExport>,
+  now: Date,
+) {
+  await tx.query(
+    `DECLARE work_export NO SCROLL CURSOR FOR ${summaryColumns} ${filteredWork} ORDER BY item.last_activity_at DESC, item.id DESC`,
+    [workspaceId, now, input.status ?? null, input.q ?? null],
+  );
+}
+
+export async function fetchWorkExport(tx: PoolClient) {
+  const result = await tx.query<WorkRow>('FETCH FORWARD 100 FROM work_export');
+
+  if (result.rows.length === 0) {
+    await tx.query('CLOSE work_export');
+  }
+
+  return result.rows;
 }

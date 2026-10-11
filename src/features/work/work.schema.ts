@@ -93,3 +93,13 @@ export function parseUndo(input: unknown) {
 
   return parsed.data;
 }
+
+export function parseWorkExport(input: unknown) {
+  const parsed = querySchema.omit({ limit: true, cursor: true }).safeParse(input);
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}

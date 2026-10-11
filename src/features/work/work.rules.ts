@@ -44,3 +44,16 @@ export function undoAvailable(item: {
     item.lastActivityAt <= item.closedAt
   );
 }
+
+export function csvRow(cells: (string | null)[]) {
+  return (
+    cells
+      .map((cell) => {
+        const value = cell ?? '';
+        const safe = /^[=+@-]/u.test(value) ? "'" + value : value;
+
+        return '"' + safe.replaceAll('"', '""') + '"';
+      })
+      .join(',') + '\r\n'
+  );
+}
