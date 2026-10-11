@@ -20,10 +20,10 @@ export const configSchema = zod.object({
   INGEST_DEBOUNCE_SECONDS: zod.coerce.number().int().positive().default(12),
   AUTH_SECRET: secret,
   GEMINI_API_KEY: zod.string().min(1),
-  GEMINI_MODEL_TRIAGE: modelId,
-  GEMINI_MODEL_STANDARD: modelId,
-  GEMINI_MODEL_STRONG: modelId,
-  GEMINI_MODEL_EMBEDDING: modelId,
+  GEMINI_MODEL_TRIAGE: modelId.default('gemini-3.1-flash-lite'),
+  GEMINI_MODEL_STANDARD: modelId.default('gemini-3.8-flash'),
+  GEMINI_MODEL_STRONG: modelId.default('gemini-3.1-pro-preview'),
+  GEMINI_MODEL_EMBEDDING: modelId.default('gemini-embedding-001'),
   SECRETS_MASTER_KEY: zod
     .string()
     .base64()
