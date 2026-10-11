@@ -19,6 +19,12 @@ const auth = createAuthentication(pool, {
 const app = createApp('api', undefined, undefined, {
   authentication: auth,
   resolveConnection: createConnectionResolver(pool),
+  database: {
+    systemPool: pool,
+    systemHost: 'system.example',
+    masterKey: Buffer.alloc(32, 7).toString('base64'),
+    now: () => new Date(),
+  },
   connectionSetup: {
     masterKey: Buffer.alloc(32, 7).toString('base64'),
     publicBaseUrl: 'https://simpul.example',
@@ -93,6 +99,10 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'get /database': {},
+  'put /database': {
+    connectionString: 'postgres://admin:private@customer.example/simpul?sslmode=require',
+  },
   'get /decisions': {},
   'get /decisions/:decisionId': {},
   'get /work': {},
@@ -153,6 +163,8 @@ const bodies: Record<string, object> = {
   'patch /people/:personId': { availability: 'leave' },
 };
 const statuses: Record<string, number> = {
+  'get /database': 404,
+  'put /database': 404,
   'post /work/:displayId/close/undo': 409,
   'post /categories': 201,
   'post /rules': 201,

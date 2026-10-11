@@ -8,6 +8,7 @@ import { onboardingController } from './workspace-onboarding.controller.js';
 import {
   databaseSetupValidation,
   saveDatabaseController,
+  databaseController,
 } from './workspace-database.controller.js';
 import type { DatabaseServices } from '../../platform/db/database-setup.js';
 
@@ -22,6 +23,7 @@ export function workspaceRouter(
   router.use('/database', databaseSetupValidation);
 
   if (database) {
+    router.get('/database', databaseController(database));
     router.put('/database', saveDatabaseController(database));
   }
 

@@ -18,6 +18,22 @@ import { recordConfigChange } from '../audit/index.js';
 
 type Setup = NonNullable<Awaited<ReturnType<typeof lockDatabaseSetup>>>;
 
+export async function readDatabase(services: DatabaseServices, workspaceId: string) {
+  return scopedTransaction(
+    async () => services.systemPool,
+    workspaceId,
+    async (tx) => {
+      const summary = await databaseSummary(tx, workspaceId);
+
+      if (!summary) {
+        throw new DomainError('E-NOT-FOUND');
+      }
+
+      return summary;
+    },
+  );
+}
+
 async function provisionDatabase(tx: PoolClient, row: Setup, now: Date) {
   await migrateTenant(tx);
   const existing = await workspaceAdmin(tx, row.workspace_id);

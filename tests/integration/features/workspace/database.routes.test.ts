@@ -155,6 +155,25 @@ async function scenarioTarget(scenario: string) {
   return target;
 }
 
+test('FR-DB-08: pending database metadata is readable before any customer connection exists', async () => {
+  const response = await supertest(api(customer).app).get('/api/v1/database').set('Cookie', cookie);
+
+  expect(response.status).toBe(200);
+  expect(response.body).toEqual({
+    data: {
+      mode: 'own',
+      status: 'pending',
+      host: null,
+      port: null,
+      databaseName: null,
+      schemaVersion: null,
+      availabilityAckAt: null,
+      connectedAt: null,
+      unreachableSince: null,
+    },
+  });
+});
+
 test.each([
   ['refused host', 'E-DB-CONNECTION-FAILED'],
   ['no TLS', 'E-DB-CONNECTION-FAILED'],
@@ -345,4 +364,36 @@ test('FR-DB-07: replacement refuses an empty database, accepts a copy without ac
   expect(peerClosed).toHaveBeenCalledTimes(1);
   await resolveConnection.close(workspaceId);
   await peer.resolveConnection.close(workspaceId);
+});
+
+test('FR-DB-08: GET /database returns only safe metadata even while the customer database is unreachable', async () => {
+  const { app } = api(customer);
+  const connected = await supertest(app).get('/api/v1/database').set('Cookie', cookie);
+
+  expect(connected.status).toBe(200);
+  expect(connected.body.data).toEqual({
+    mode: 'own',
+    status: 'connected',
+    host: 'customer.example',
+    port: 5432,
+    databaseName: 'mirror',
+    schemaVersion,
+    availabilityAckAt: '2026-10-11T12:00:00.000Z',
+    connectedAt: '2026-10-11T12:00:00.000Z',
+    unreachableSince: null,
+  });
+  await system.query(
+    "UPDATE workspace_databases SET status = 'unreachable', unreachable_since = $1 WHERE workspace_id = $2",
+    ['2026-10-11T13:00:00Z', workspaceId],
+  );
+  const outage = await supertest(app).get('/api/v1/database').set('Cookie', cookie);
+
+  expect(outage.status).toBe(200);
+  expect(outage.body.data).toEqual({
+    ...connected.body.data,
+    status: 'unreachable',
+    unreachableSince: '2026-10-11T13:00:00.000Z',
+  });
+  expect(outage.text).not.toContain('postgres:');
+  expect(outage.text).not.toContain('test-only-db-password');
 });
