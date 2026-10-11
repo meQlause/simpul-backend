@@ -1,5 +1,20 @@
 const minimumConfidence = 0.75;
 
+export function quietHoursHold(facts: {
+  localTime: string;
+  quietStart: string;
+  quietEnd: string;
+  urgency: string;
+}) {
+  const { localTime, quietStart, quietEnd, urgency } = facts;
+  const inside =
+    quietStart < quietEnd
+      ? localTime >= quietStart && localTime < quietEnd
+      : localTime >= quietStart || localTime < quietEnd;
+
+  return urgency !== 'high' && inside;
+}
+
 export function exceedsBudget(used: number, budget: number) {
   return used >= budget;
 }

@@ -183,3 +183,41 @@ test('SRS 8.4: the seventh notification to one person within an hour joins a dig
   expect(notification.sent_at).toBeNull();
   expect(notification.recipient_person_id).toBeTruthy();
 });
+
+test('SRS 8.4: workspace-local midnight holds a normal update in the morning digest', async () => {
+  const midnight = new Date('2026-10-10T17:00:00Z');
+
+  await pool.query("UPDATE rules SET urgency = 'normal' WHERE workspace_id = $1", [
+    seed.workspaceId,
+  ]);
+  await pool.query('DELETE FROM digests WHERE workspace_id = $1', [seed.workspaceId]);
+  const label = (
+    await pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, created_at)
+    SELECT workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, $2
+    FROM labels WHERE id = $1 RETURNING id`,
+      [labelId, midnight],
+    )
+  ).rows[0].id as string;
+
+  await routeLabel(
+    { resolveConnection: createConnectionResolver(pool), now: () => midnight },
+    { workspaceId: seed.workspaceId, labelId: label },
+  );
+
+  const result = await pool.query(
+    `SELECT n.sent_at, d.scheduled_for FROM notifications n JOIN digests d ON d.id = n.digest_id
+    WHERE n.label_id = $1`,
+    [label],
+  );
+
+  expect(result.rows).toHaveLength(2);
+  expect(
+    result.rows.every(
+      (row: { sent_at: Date | null; scheduled_for: Date }) =>
+        row.sent_at === null &&
+        row.scheduled_for > midnight &&
+        row.scheduled_for < new Date(midnight.getTime() + 86400000),
+    ),
+  ).toBe(true);
+});

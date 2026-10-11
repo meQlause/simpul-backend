@@ -54,6 +54,7 @@ export async function routeLabel(services: Services, scope: Scope) {
         tx,
         { workspaceId: scope.workspaceId, personId: recipient.personId },
         now,
+        recipient.urgency,
       );
 
       await prepareNotification(tx, scope, { label, recipient, body, digestId }, now);
