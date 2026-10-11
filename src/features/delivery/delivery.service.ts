@@ -2,6 +2,7 @@ import {
   cancelChannelUnsent,
   cancelWorkUnsent,
   cancelOperationUnsent,
+  cancelReminderUnsent,
 } from './delivery.repository.js';
 
 export async function cancelOperationNotifications(
@@ -18,4 +19,8 @@ export async function cancelChannelNotifications(
 
 export async function cancelWorkNotifications(...parameters: Parameters<typeof cancelWorkUnsent>) {
   await cancelWorkUnsent(...parameters);
+}
+
+export async function cancelWorkReminders(...parameters: Parameters<typeof cancelReminderUnsent>) {
+  await cancelReminderUnsent(...parameters);
 }

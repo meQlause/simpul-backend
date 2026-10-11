@@ -1,7 +1,13 @@
 import type { PoolClient } from 'pg';
 
 type Scope = { workspaceId: string; threadId: string };
-type Progress = { opId: string; type: string; messageId: string; now: Date };
+type Progress = {
+  opId: string;
+  type: string;
+  messageId: string;
+  now: Date;
+  confirmation?: { actorId: string; id: string };
+};
 
 export async function applyProgress(tx: PoolClient, scope: Scope, input: Progress) {
   await tx.query('SELECT id FROM threads WHERE workspace_id = $1 AND id = $2 FOR UPDATE', [
@@ -9,8 +15,8 @@ export async function applyProgress(tx: PoolClient, scope: Scope, input: Progres
     scope.threadId,
   ]);
   const result = await tx.query(
-    `INSERT INTO progress_markers (workspace_id, thread_id, op_id, ts, text, message_id, type, previous_state)
-    SELECT $1, t.id, $3, $4, t.summary, m.id, $6,
+    `INSERT INTO progress_markers (workspace_id, thread_id, op_id, ts, text, message_id, type, confirmed_by, confirmation_id, previous_state)
+    SELECT $1, t.id, $3, $4, t.summary, m.id, $6, $7, $8,
       jsonb_build_object('status', t.status, 'lastActivityAt', t.last_activity_at,
         'closureKind', t.closure_kind, 'closureReason', t.closure_reason, 'closedAt', t.closed_at, 'closedBy', t.closed_by,
         'previousOpId', (SELECT prior.op_id FROM progress_markers prior
@@ -20,12 +26,25 @@ export async function applyProgress(tx: PoolClient, scope: Scope, input: Progres
           ORDER BY prior.created_at DESC, prior.id DESC LIMIT 1))
     FROM threads t JOIN messages_raw m ON m.workspace_id = $1 AND m.id = $5
     WHERE t.workspace_id = $1 AND t.id = $2 AND t.status = 'active' AND NOT t.historical
-    ON CONFLICT (op_id) DO NOTHING RETURNING id`,
-    [scope.workspaceId, scope.threadId, input.opId, input.now, input.messageId, input.type],
+    ON CONFLICT (op_id) DO UPDATE SET ts = excluded.ts, type = excluded.type,
+      confirmed_by = excluded.confirmed_by, confirmation_id = excluded.confirmation_id
+    WHERE $7::uuid IS NOT NULL AND progress_markers.workspace_id = $1 AND progress_markers.thread_id = $2
+      AND progress_markers.retracted_at IS NULL AND progress_markers.confirmation_id IS DISTINCT FROM $8
+    RETURNING id`,
+    [
+      scope.workspaceId,
+      scope.threadId,
+      input.opId,
+      input.now,
+      input.messageId,
+      input.type,
+      input.confirmation?.actorId ?? null,
+      input.confirmation?.id ?? null,
+    ],
   );
 
   if (!result.rowCount) {
-    return;
+    return false;
   }
 
   await tx.query(
@@ -36,6 +55,8 @@ export async function applyProgress(tx: PoolClient, scope: Scope, input: Progres
     WHERE workspace_id = $1 AND id = $2`,
     [scope.workspaceId, scope.threadId, input.now, input.type],
   );
+
+  return true;
 }
 
 export async function restoreProgress(

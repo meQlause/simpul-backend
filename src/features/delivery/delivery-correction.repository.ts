@@ -8,6 +8,7 @@ type Correction = {
   correctedAt: Date | null;
   correctionId: string | null;
   previousState: Record<string, unknown>;
+  messageId: string;
 };
 
 export async function lockCorrection(tx: PoolClient, input: Input) {
@@ -19,7 +20,7 @@ export async function lockCorrection(tx: PoolClient, input: Input) {
   );
   const result = await tx.query<Correction>(
     `SELECT n.thread_id AS "threadId", t.display_id AS "displayId", n.recipient_person_id AS "personId",
-      n.corrected_at AS "correctedAt", p.previous_state AS "previousState",
+      n.corrected_at AS "correctedAt", p.previous_state AS "previousState", l.evidence_message_ids[1] AS "messageId",
       (SELECT id FROM notifications WHERE workspace_id = $1 AND label_id = n.label_id AND kind = 'correction'
         AND recipient_person_id IS NOT DISTINCT FROM n.recipient_person_id
         AND destination_channel_id IS NOT DISTINCT FROM n.destination_channel_id) AS "correctionId"

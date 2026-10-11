@@ -37,3 +37,14 @@ export async function cancelWorkUnsent(
     [workspaceId, input.threadId, input.now],
   );
 }
+
+export async function cancelReminderUnsent(
+  tx: PoolClient,
+  workspaceId: string,
+  input: { threadId: string; now: Date },
+) {
+  await tx.query(
+    "UPDATE notifications SET cancelled_at = $3 WHERE workspace_id = $1 AND thread_id = $2 AND kind IN ('reminder','escalation') AND sent_at IS NULL AND cancelled_at IS NULL",
+    [workspaceId, input.threadId, input.now],
+  );
+}

@@ -50,6 +50,13 @@
       "when": 1791701026109,
       "tag": "0006_notification_destinations",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791702216873,
+      "tag": "0007_recipient_confirmations",
+      "breakpoints": true
     }
   ]
 }

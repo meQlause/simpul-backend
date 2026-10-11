@@ -168,6 +168,8 @@ export const progressMarkers = pgTable(
     opId: reference('op_id', () => labels.opId),
     previousState: jsonb('previous_state'),
     retractedAt: instant('retracted_at'),
+    confirmedBy: reference('confirmed_by', () => people.id),
+    confirmationId: text('confirmation_id'),
   },
   (table) => [
     check('markers_type_valid', sql`${table.type} IN ('progress','resolution','blocker')`),
