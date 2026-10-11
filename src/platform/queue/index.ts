@@ -12,8 +12,17 @@ export async function createQueue(pool: Pool) {
   await boss.createQueue('ingest.coalesce', { retryLimit: 5, retryBackoff: true });
 
   await boss.createQueue('understanding.triage', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('understanding.resolve', { retryLimit: 5, retryBackoff: true });
+  await boss.createQueue('understanding.comprehend', { retryLimit: 5, retryBackoff: true });
 
   return boss;
+}
+
+export function publishResolution(boss: PgBoss) {
+  return (tx: PoolClient, payload: { workspaceId: string; unitId: string }) =>
+    boss.send('understanding.resolve', payload, {
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
 }
 
 export function publishCoalesce(boss: PgBoss, debounceSeconds = 12) {

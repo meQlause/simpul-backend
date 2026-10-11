@@ -12,10 +12,30 @@ export async function unmatchedQuery(tx: PoolClient, scope: Scope) {
 }
 
 export async function insertOrphan(tx: PoolClient, scope: Scope, reason: string) {
-  await tx.query(
+  const result = await tx.query(
     'INSERT INTO orphans (workspace_id, unit_id, reason) SELECT $1, $2, $3 WHERE NOT EXISTS (SELECT 1 FROM orphans WHERE workspace_id = $1 AND unit_id = $2)',
     [scope.workspaceId, scope.unitId, reason],
   );
+
+  return result.rowCount === 1;
+}
+
+export async function hasOutcome(tx: PoolClient, scope: Scope) {
+  const result = await tx.query(
+    "SELECT 1 FROM labels WHERE workspace_id = $1 AND unit_id = $2 UNION ALL SELECT 1 FROM orphans WHERE workspace_id = $1 AND unit_id = $2 AND reason = 'model_invalid_json' LIMIT 1",
+    [scope.workspaceId, scope.unitId],
+  );
+
+  return result.rowCount !== 0;
+}
+
+export async function removeModelFailure(tx: PoolClient, scope: Scope) {
+  const result = await tx.query(
+    "DELETE FROM orphans WHERE workspace_id = $1 AND unit_id = $2 AND reason = 'model_invalid_json' RETURNING id",
+    [scope.workspaceId, scope.unitId],
+  );
+
+  return result.rowCount === 1;
 }
 
 export async function lockUnlabelledUnit(tx: PoolClient, scope: Scope) {
