@@ -63,7 +63,7 @@ if (process.argv[2] === 'create-workspace') {
           resolveConnection: createConnectionResolver(pool),
           lookupConnection: createConnectionLookup(pool),
           secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
-          provider: providers.adapterFor('telegram'),
+          providers,
           now: () => new Date(),
           publish: queue ? publishCoalesce(queue, config.INGEST_DEBOUNCE_SECONDS) : undefined,
         },

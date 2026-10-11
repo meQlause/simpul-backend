@@ -5,6 +5,15 @@ import type { InboundMessage } from '../../platform/providers/index.js';
 
 type Scope = { workspaceId: string; connectionId: string };
 
+export async function connectionProvider(tx: PoolClient, scope: Scope) {
+  const connection = await tx.query<{ provider: string }>(
+    'SELECT provider FROM bot_connections WHERE workspace_id = $1 AND id = $2',
+    [scope.workspaceId, scope.connectionId],
+  );
+
+  return connection.rows[0]?.provider;
+}
+
 export async function isOwnBot(tx: PoolClient, scope: Scope, senderExternalId: string) {
   const bot = await tx.query(
     'SELECT id FROM bot_connections WHERE workspace_id = $1 AND id = $2 AND provider_account_id = $3',

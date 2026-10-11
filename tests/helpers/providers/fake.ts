@@ -1,3 +1,4 @@
+import { z as schema } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../../src/platform/errors/domain-error.js';
 import type {
@@ -18,6 +19,34 @@ const capabilities: Capabilities = {
   voiceNotes: false,
 };
 const limits: Limits = { callTimeoutMs: 5000, sendPerSecond: 2, sendPerChatPerMinute: 10 };
+
+function parseFakeUpdate(update: unknown) {
+  const parsed = schema
+    .strictObject({
+      eventId: schema.string(),
+      room: schema.string(),
+      messageId: schema.string(),
+      author: schema.string(),
+      content: schema.string(),
+      sentAt: schema.number(),
+    })
+    .safeParse(update);
+
+  if (!parsed.success) {
+    return { type: 'ignore' as const };
+  }
+
+  return {
+    type: 'message' as const,
+    updateId: parsed.data.eventId,
+    chatId: parsed.data.room,
+    messageId: parsed.data.messageId,
+    senderExternalId: parsed.data.author,
+    body: parsed.data.content,
+    serverTs: parsed.data.sentAt,
+    setupProof: false,
+  };
+}
 
 export function createFakeProvider(
   exchange: (payload: unknown) => Promise<unknown>,
@@ -50,9 +79,7 @@ export function createFakeProvider(
         )
       );
     },
-    parse(_update: unknown) {
-      return { type: 'ignore' as const };
-    },
+    parse: parseFakeUpdate,
     verifyCredential(credential: string) {
       return perform(
         { operation: 'verify', credential },

@@ -7,7 +7,10 @@ import { signInSeedAdmin } from '../../../helpers/admin-session.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { createConnectionLookup } from '../../../../src/platform/db/connection-lookup.js';
 import { createSecretStore } from '../../../../src/platform/secrets/index.js';
-import { createTelegramProvider } from '../../../../src/platform/providers/index.js';
+import {
+  createProviderRegistry,
+  createTelegramProvider,
+} from '../../../../src/platform/providers/index.js';
 import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
@@ -65,7 +68,9 @@ beforeAll(async () => {
       resolveConnection: createConnectionResolver(pool),
       lookupConnection: createConnectionLookup(pool),
       secretStore: createSecretStore(Buffer.alloc(32, 7).toString('base64')),
-      provider: createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      providers: createProviderRegistry([
+        createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      ]),
       now: () => instant,
     },
   };

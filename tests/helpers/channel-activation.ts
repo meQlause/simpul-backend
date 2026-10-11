@@ -7,6 +7,7 @@ import { createConnectionResolver } from '../../src/platform/db/connection-resol
 import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
 import {
+  createProviderRegistry,
   createTelegramProvider,
   type ActivationProvider,
 } from '../../src/platform/providers/index.js';
@@ -92,7 +93,9 @@ beforeAll(async () => {
       resolveConnection: services.resolveConnection,
       lookupConnection: createConnectionLookup(pool),
       secretStore: createSecretStore(services.connectionSetup.masterKey),
-      provider: createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      providers: createProviderRegistry([
+        createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+      ]),
       publish: publishCoalesce(queue),
       now: () => now,
     },

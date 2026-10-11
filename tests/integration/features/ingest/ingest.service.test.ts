@@ -48,12 +48,12 @@ const childSource = `
 import postgres from 'pg';
 import { receiveUpdate } from './dist/features/ingest/ingest.service.js';
 import { createConnectionResolver } from './dist/platform/db/connection-resolver.js';
-import { createTelegramProvider } from './dist/platform/providers/index.js';
+import { createProviderRegistry, createTelegramProvider } from './dist/platform/providers/index.js';
 const pool = new postgres.Pool({connectionString: process.env.CRASH_DATABASE_URL});
 const scope = JSON.parse(process.env.CRASH_SCOPE);
 await receiveUpdate({
   resolveConnection: createConnectionResolver(pool),
-  provider: createTelegramProvider('https://telegram.example', fetch),
+  providers: createProviderRegistry([createTelegramProvider('https://telegram.example', fetch)]),
   now: () => new Date('2026-10-10T04:01:00Z'),
   publish: async (tx) => {
     const message = await tx.query('SELECT id FROM messages_raw WHERE channel_id = $1', [scope.channelId]);
@@ -78,7 +78,7 @@ test('A message and its job commit together: killing the process between them le
     env: {
       ...process.env,
       CRASH_DATABASE_URL: pool.options.connectionString,
-      CRASH_SCOPE: JSON.stringify({ workspaceId, connectionId, channelId }),
+      CRASH_SCOPE: JSON.stringify({ workspaceId, connectionId, channelId, provider: 'telegram' }),
       CRASH_UPDATE: JSON.stringify(update),
     },
     silent: true,

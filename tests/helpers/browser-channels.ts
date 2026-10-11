@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
 import {
+  createProviderRegistry,
   createTelegramProvider,
   type ProviderAdapter,
 } from '../../src/platform/providers/index.js';
@@ -88,7 +89,7 @@ export async function browserChannels(pool: Pool) {
       resolveConnection: createConnectionResolver(pool),
       lookupConnection: createConnectionLookup(pool),
       secretStore: createSecretStore(masterKey),
-      provider,
+      providers: createProviderRegistry([provider]),
       now,
     },
   };

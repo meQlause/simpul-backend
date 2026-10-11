@@ -4,7 +4,10 @@ import { seedTenantRows } from '../fixtures/tenant-rows.js';
 import { webhookRouter } from '../../src/features/ingest/index.js';
 import { createConnectionLookup } from '../../src/platform/db/connection-lookup.js';
 import { createSecretStore } from '../../src/platform/secrets/index.js';
-import { createTelegramProvider } from '../../src/platform/providers/index.js';
+import {
+  createProviderRegistry,
+  createTelegramProvider,
+} from '../../src/platform/providers/index.js';
 import { createQueue, publishCoalesce } from '../../src/platform/queue/index.js';
 import { errorHandler } from '../../src/platform/http/error-handler.js';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -77,7 +80,9 @@ beforeAll(async () => {
         resolveConnection: createConnectionResolver(restricted),
         lookupConnection: createConnectionLookup(pool),
         secretStore: createSecretStore(Buffer.alloc(32, 7).toString('base64')),
-        provider: createTelegramProvider('https://telegram.example', fetch),
+        providers: createProviderRegistry([
+          createTelegramProvider('https://telegram.example', fetch),
+        ]),
         publish: publishCoalesce(queue),
         now: () => new Date('2026-10-10T04:01:00Z'),
       }),

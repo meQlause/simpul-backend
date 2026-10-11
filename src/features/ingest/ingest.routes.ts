@@ -7,7 +7,7 @@ export function webhookRouter(services: WebhookServices) {
   const router = Router();
 
   router.post(
-    '/api/v1/webhooks/telegram/:connectionId',
+    '/api/v1/webhooks/:provider/:connectionId',
     async (request, response, next) => {
       const connectionId = schema.guid().safeParse(request.params.connectionId);
 
@@ -15,14 +15,23 @@ export function webhookRouter(services: WebhookServices) {
         throw new DomainError('E-NOT-FOUND');
       }
 
-      response.locals.webhookScope = await authenticateWebhook(services, connectionId.data, {
-        headers: request.headers,
-      });
+      response.locals.webhookScope = await authenticateWebhook(
+        services,
+        connectionId.data,
+        request.params.provider,
+        {
+          headers: request.headers,
+        },
+      );
       next();
     },
     express.json(),
     async (request, response) => {
-      const scope = response.locals.webhookScope as { workspaceId: string; connectionId: string };
+      const scope = response.locals.webhookScope as {
+        workspaceId: string;
+        connectionId: string;
+        provider: string;
+      };
 
       await receiveUpdate(services, scope, request.body);
       response.end();

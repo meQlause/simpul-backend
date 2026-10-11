@@ -1,10 +1,10 @@
-import { isOwnBot, storeMessage } from './ingest.repository.js';
+import { connectionProvider, isOwnBot, storeMessage } from './ingest.repository.js';
 import type { publishCoalesce } from '../../platform/queue/index.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createConnectionLookup } from '../../platform/db/connection-lookup.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
-import type { ReceiveProvider } from '../../platform/providers/index.js';
+import type { createProviderRegistry, ReceiveProvider } from '../../platform/providers/index.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
 
@@ -12,7 +12,7 @@ export type WebhookServices = {
   resolveConnection: ConnectionResolver;
   lookupConnection: ReturnType<typeof createConnectionLookup>;
   secretStore: ReturnType<typeof createSecretStore>;
-  provider: ReceiveProvider;
+  providers: ReturnType<typeof createProviderRegistry>;
   now: () => Date;
   publish?: ReturnType<typeof publishCoalesce>;
 };
@@ -20,6 +20,7 @@ export type WebhookServices = {
 export async function authenticateWebhook(
   services: WebhookServices,
   connectionId: string,
+  provider: string,
   request: Parameters<ReceiveProvider['authenticate']>[0],
 ) {
   const connection = await services.lookupConnection(connectionId);
@@ -28,28 +29,41 @@ export async function authenticateWebhook(
     throw new DomainError('E-NOT-FOUND');
   }
 
-  const secret = await scopedTransaction(services.resolveConnection, connection.workspaceId, (tx) =>
-    services.secretStore.get(
-      tx,
-      connection.workspaceId,
-      'webhook_secret',
-      connection.webhookSecretRef,
-    ),
+  const secret = await scopedTransaction(
+    services.resolveConnection,
+    connection.workspaceId,
+    async (tx) => {
+      const storedProvider = await connectionProvider(tx, {
+        workspaceId: connection.workspaceId,
+        connectionId,
+      });
+
+      if (storedProvider !== provider) {
+        throw new DomainError('E-NOT-FOUND');
+      }
+
+      return services.secretStore.get(
+        tx,
+        connection.workspaceId,
+        'webhook_secret',
+        connection.webhookSecretRef,
+      );
+    },
   );
 
-  if (!services.provider.authenticate(request, secret)) {
+  if (!services.providers.adapterFor(provider).authenticate(request, secret)) {
     throw new DomainError('E-WEBHOOK-FORBIDDEN');
   }
 
-  return { workspaceId: connection.workspaceId, connectionId };
+  return { workspaceId: connection.workspaceId, connectionId, provider };
 }
 
 export async function receiveUpdate(
   services: WebhookServices,
-  scope: { workspaceId: string; connectionId: string },
+  scope: { workspaceId: string; connectionId: string; provider: string },
   update: unknown,
 ) {
-  const event = services.provider.parse(update);
+  const event = services.providers.adapterFor(scope.provider).parse(update);
 
   if (event.type === 'message') {
     await ingestMessage(services, scope, event);

@@ -7,8 +7,10 @@ class UnregisteredProviderError extends Error {
   }
 }
 
-export function createProviderRegistry() {
-  const adapters = new Map<string, ProviderAdapter>();
+export function createProviderRegistry(initial: readonly ProviderAdapter[] = []) {
+  const adapters = new Map<string, ProviderAdapter>(
+    initial.map((adapter) => [adapter.provider, adapter]),
+  );
 
   function adapterFor(provider: string) {
     const adapter = adapters.get(provider);
