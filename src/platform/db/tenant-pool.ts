@@ -11,10 +11,12 @@ export type TenantPoolOptions = {
   systemHost: string;
   lookup?: (host: string) => Promise<Address[]>;
   openPool?: (config: PoolConfig) => Pool;
+  maxConnections?: number;
 };
 
 const DEFAULT_TIMEOUT = 5000;
 const DEFAULT_PORT = 5432;
+const DEFAULT_MAX_CONNECTIONS = 5;
 const CONNECTION_FAILED = 'E-DB-CONNECTION-FAILED';
 
 async function resolveAddresses(host: string, options: TenantPoolOptions, timeout: number) {
@@ -33,7 +35,12 @@ async function resolveAddresses(host: string, options: TenantPoolOptions, timeou
   }
 }
 
-function poolConfig(url: URL, address: string, timeout: number): PoolConfig {
+function poolConfig(
+  url: URL,
+  address: string,
+  timeout: number,
+  options: TenantPoolOptions,
+): PoolConfig {
   const hostname = url.hostname.replace(/^\[|\]$/gu, '');
 
   return {
@@ -43,7 +50,7 @@ function poolConfig(url: URL, address: string, timeout: number): PoolConfig {
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
     ssl: { rejectUnauthorized: true, ...(!isIP(hostname) && { servername: hostname }) },
-    max: 5,
+    max: options.maxConnections ?? DEFAULT_MAX_CONNECTIONS,
     idleTimeoutMillis: 60000,
     connectionTimeoutMillis: timeout,
     statement_timeout: timeout,
@@ -84,7 +91,7 @@ export async function openTenantPool(
     throw new DomainError(CONNECTION_FAILED);
   }
 
-  const config = poolConfig(url, addresses[0].address, timeout);
+  const config = poolConfig(url, addresses[0].address, timeout, options);
   const pool = options.openPool ? options.openPool(config) : new Pool(config);
 
   pool.on?.('error', () => {});

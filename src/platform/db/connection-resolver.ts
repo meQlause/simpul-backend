@@ -10,7 +10,10 @@ import { DomainError } from '../errors/domain-error.js';
 
 export type ConnectionResolver = (workspaceId: string) => Promise<Pool>;
 
-type Options = TenantPoolOptions & { secretStore: ReturnType<typeof createSecretStore> };
+type Options = TenantPoolOptions & {
+  secretStore: ReturnType<typeof createSecretStore>;
+  idleMs?: number;
+};
 const UNAVAILABLE = 'E-DB-UNAVAILABLE';
 const RETRY_SECONDS = 60;
 const IDLE_MS = 60000;
@@ -79,6 +82,7 @@ export function createConnectionResolver(systemPool: Pool, options?: Options) {
       pools,
       timers,
       close,
+      idleMs: options?.idleMs ?? IDLE_MS,
     });
   };
 
@@ -92,6 +96,7 @@ function cachedTenantPool(
     pools: Map<string, Promise<Pool>>;
     timers: Map<string, ReturnType<typeof setTimeout>>;
     close: (workspaceId: string) => Promise<void>;
+    idleMs: number;
   },
 ) {
   const { pools, timers, close } = cache;
@@ -108,12 +113,15 @@ function cachedTenantPool(
   }
 
   clearTimeout(timers.get(workspaceId));
-  timers.set(
-    workspaceId,
-    setTimeout(() => {
-      void close(workspaceId);
-    }, IDLE_MS).unref(),
-  );
+
+  if (cache.idleMs > 0) {
+    timers.set(
+      workspaceId,
+      setTimeout(() => {
+        void close(workspaceId);
+      }, cache.idleMs).unref(),
+    );
+  }
 
   return pending;
 }

@@ -10,6 +10,7 @@ import { createConnectionResolver } from '../../../../src/platform/db/connection
 import { createApp } from '../../../../src/app.js';
 import { createSecretStore } from '../../../../src/platform/secrets/index.js';
 import addresses from '../../../fixtures/host-addresses.json' with { type: 'json' };
+import { schemaVersion } from '../../../../src/platform/db/migrate-tenant.js';
 
 const system = databaseFixture(2);
 const customer = databaseFixture(2, { tls: true, passwordAuth: true });
@@ -253,7 +254,7 @@ test('An identical PUT /database after a crash between databases completes setup
     host: 'customer.example',
     port: 5432,
     databaseName: 'postgres',
-    schemaVersion: '0012_retention_edit_links',
+    schemaVersion,
     availabilityAckAt: '2026-10-11T12:00:00.000Z',
     unreachableSince: null,
   });

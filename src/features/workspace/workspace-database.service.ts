@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { PoolClient } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { withDatabaseSetup, type DatabaseServices } from '../../platform/db/database-setup.js';
 import {
@@ -13,6 +13,7 @@ import { initializeBusinessWorkspace } from './workspace.service.js';
 import { workspaceAdmin } from './workspace.repository.js';
 import { parseDatabaseConnection } from './workspace-database.schema.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
+import { createQueue } from '../../platform/queue/index.js';
 
 type Setup = NonNullable<Awaited<ReturnType<typeof lockDatabaseSetup>>>;
 
@@ -46,6 +47,17 @@ async function provisionDatabase(tx: PoolClient, row: Setup, now: Date) {
   );
 }
 
+async function initializeDatabase(pool: Pool, row: Setup, now: Date) {
+  await scopedTransaction(
+    async () => pool,
+    row.workspace_id,
+    (tx) => provisionDatabase(tx, row, now),
+  );
+  const queue = await createQueue(pool);
+
+  await queue.stop();
+}
+
 export async function saveDatabase(services: DatabaseServices, workspaceId: string, body: unknown) {
   return scopedTransaction(
     async () => services.systemPool,
@@ -67,12 +79,7 @@ export async function saveDatabase(services: DatabaseServices, workspaceId: stri
           pending: row.status === 'pending',
         },
         services,
-        (pool) =>
-          scopedTransaction(
-            async () => pool,
-            workspaceId,
-            (tx) => provisionDatabase(tx, row, now),
-          ),
+        (pool) => initializeDatabase(pool, row, now),
       );
       const ref = await createSecretStore(services.masterKey).put(systemTx, workspaceId, {
         purpose: 'database_url',

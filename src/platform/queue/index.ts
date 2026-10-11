@@ -1,11 +1,15 @@
 import { PgBoss } from 'pg-boss';
 import type { Pool, PoolClient } from 'pg';
 
-export async function createQueue(pool: Pool, scheduling = false) {
+export async function createQueue(pool: Pool, scheduling = false, onError?: () => void) {
   const boss = new PgBoss({
     db: { executeSql: (text, values) => pool.query(text, values) },
     schedule: scheduling,
     supervise: false,
+  });
+
+  boss.on('error', () => {
+    onError?.();
   });
 
   await boss.start();

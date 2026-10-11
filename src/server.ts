@@ -15,6 +15,7 @@ import { createProviderRegistry } from './platform/providers/index.js';
 import { createTelegramProvider } from './platform/providers/telegram/index.js';
 import { createConnectionLookup } from './platform/db/connection-lookup.js';
 import { createSecretStore } from './platform/secrets/index.js';
+import { ownDatabaseQueues } from './platform/db/own-database-queues.js';
 
 const config = readConfig(process.env);
 
@@ -22,6 +23,8 @@ const port = 3000;
 const WEBHOOK_SECRET_BYTES = 32;
 const CONNECTION_CODE_BYTES = 16;
 const commandArgumentsOffset = 3;
+const TENANT_APPLICATION_CONNECTIONS = 3;
+const TENANT_REQUEST_CONNECTIONS = 5;
 
 if (process.argv[2] === 'create-workspace') {
   const { runCreateWorkspace } = await import('./roles/create-workspace.js');
@@ -59,9 +62,15 @@ if (process.argv[2] === 'create-workspace') {
 
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
-  const resolveConnection = createConnectionResolver(pool, {
+  const tenantOptions = {
     systemHost: new URL(config.DATABASE_URL).hostname,
     secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
+  };
+  const resolveConnection = createConnectionResolver(pool, {
+    ...tenantOptions,
+    maxConnections: ['worker', 'scheduler'].includes(config.PROCESS_ROLE)
+      ? TENANT_APPLICATION_CONNECTIONS
+      : TENANT_REQUEST_CONNECTIONS,
   });
   const services = ['api', 'webhook'].includes(config.PROCESS_ROLE)
     ? {
@@ -86,7 +95,7 @@ if (process.argv[2] === 'create-workspace') {
         },
         webhook: {
           resolveConnection,
-          lookupConnection: createConnectionLookup(pool),
+          lookupConnection: createConnectionLookup(pool, resolveConnection),
           secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
           providers,
           now: () => new Date(),
@@ -113,7 +122,7 @@ if (process.argv[2] === 'create-workspace') {
     const { createGeminiTranscriber } = await import('./platform/llm/transcription.js');
     const logger = createLogger(config.LOG_LEVEL);
 
-    await registerPipelineJobs(queue, {
+    const pipelineServices = {
       resolveConnection,
       now: () => new Date(),
       debounceSeconds: config.INGEST_DEBOUNCE_SECONDS,
@@ -132,8 +141,20 @@ if (process.argv[2] === 'create-workspace') {
         apiKey: config.GEMINI_API_KEY,
         model: config.GEMINI_MODEL_STANDARD,
       }),
-      audit: (event) => logger.warn(event, 'Pipeline injection screen'),
-      alert: (event) => logger.error(event, 'Pipeline operator alert'),
+      audit: (event: unknown) => logger.warn(event, 'Pipeline injection screen'),
+      alert: (event: unknown) => logger.error(event, 'Pipeline operator alert'),
+    };
+
+    await registerPipelineJobs(queue, pipelineServices);
+    const ownQueues = ownDatabaseQueues(pool, {
+      ...tenantOptions,
+      register: (tenantQueue) => registerPipelineJobs(tenantQueue, pipelineServices),
+      alert: pipelineServices.alert,
+    });
+
+    await ownQueues.refresh();
+    process.once('SIGTERM', () => {
+      void ownQueues.stop();
     });
   }
 
@@ -141,6 +162,18 @@ if (process.argv[2] === 'create-workspace') {
     const { registerSchedulerJobs } = await import('./roles/scheduler.js');
 
     await registerSchedulerJobs(queue, pool);
+    const ownQueues = ownDatabaseQueues(pool, {
+      ...tenantOptions,
+      scheduling: true,
+      register: registerSchedulerJobs,
+      alert: (event) =>
+        createLogger(config.LOG_LEVEL).error(event, 'Database scheduler unavailable'),
+    });
+
+    await ownQueues.refresh();
+    process.once('SIGTERM', () => {
+      void ownQueues.stop();
+    });
   }
 
   if (!services && !['worker', 'scheduler'].includes(config.PROCESS_ROLE)) {
