@@ -5,6 +5,7 @@ import { validationError } from '../../platform/errors/validation-error.js';
 export const createWorkspaceSchema = zod
   .object({
     name: zod.string().trim().min(1).max(80),
+    database: zod.enum(['hosted', 'own']).optional(),
     'admin-name': zod.string().trim().min(1).max(120),
     'admin-email': zod.string().trim().toLowerCase().pipe(zod.email()),
     timezone: zod

@@ -18,9 +18,15 @@ export async function runCreateWorkspace(
       'admin-name': { type: 'string' },
       'admin-email': { type: 'string' },
       timezone: { type: 'string' },
+      database: { type: 'string' },
     },
   });
   const input = createWorkspaceSchema.parse(values);
+
+  if (input.database === 'own' && !config.SYSTEM_SMTP_URL) {
+    throw new Error('SYSTEM_SMTP_URL is required for --database own');
+  }
+
   const pool = createSystemPool(config.DATABASE_URL);
   const now = new Date();
   const token = randomUUID();

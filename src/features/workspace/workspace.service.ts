@@ -1,5 +1,6 @@
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
+import { insertPendingDatabase } from '../../platform/db/workspace-databases.repository.js';
 import { provisionAdmin } from '../auth/index.js';
 import { createAdminPerson } from '../people/index.js';
 import {
@@ -32,6 +33,19 @@ export async function createWorkspace(
       expiresAt: provision.expiresAt,
       now: provision.now,
     });
+
+    if (provision.input.database === 'own') {
+      await insertPendingDatabase(tx, {
+        workspaceId: provision.workspaceId,
+        name: provision.input.name,
+        timezone: provision.input.timezone,
+        authUserId: provision.authUserId,
+        now: provision.now,
+      });
+
+      return;
+    }
+
     await insertWorkspace(tx, provision);
     await createAdminPerson(tx, {
       id: provision.adminId,
