@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const triageClass = z.enum(['EVENT', 'QUERY', 'NOISE']);
+
 export const queryPayload = z.strictObject({ workspaceId: z.guid(), unitId: z.guid() });
 
 export const comprehensionScope = queryPayload.extend({ threadId: z.guid() });

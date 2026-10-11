@@ -24,3 +24,11 @@ export function quantityCandidates<Candidate extends { quantity: number | null }
 export function genesisGate(intent: string) {
   return ['status_query', 'ack', 'noise'].includes(intent) ? 'G1' : null;
 }
+
+export function injectionSuspected(text: string) {
+  return (
+    /ignore\s+(?:all\s+)?(?:previous|prior)\s+instructions/iu.test(text) ||
+    /abaikan\s+(?:semua\s+)?instruksi/iu.test(text) ||
+    /(?:system|developer)\s+prompt/iu.test(text)
+  );
+}
