@@ -5,6 +5,7 @@ import { candidateWork, reopenArchived } from '../work/index.js';
 import { runtimeUnit, scoringWeights } from './understanding-runtime.repository.js';
 import { rankedCandidates } from './understanding-scoring.rules.js';
 import { resolveCandidates } from './understanding.resolve.js';
+import { traverseGraph } from './understanding-graph.repository.js';
 import { resolutionFacts } from './understanding.questions.repository.js';
 import { verdict } from './understanding.rules.js';
 import { hasOutcome } from './understanding.repository.js';
@@ -32,8 +33,18 @@ export async function resolveRuntimeUnit(services: Services, scope: Scope) {
       }
 
       await reopenArchived(tx, scope.workspaceId, scope.unitId, now);
+      const { graphRootIds, ...candidateSource } = source;
+      const graph = await traverseGraph(tx, scope.workspaceId, graphRootIds);
       const ranked = rankedCandidates(
-        await candidateWork(tx, scope.workspaceId, source, now),
+        await candidateWork(
+          tx,
+          scope.workspaceId,
+          {
+            ...candidateSource,
+            graphThreadIds: graph.filter((node) => node.type === 'Thread').map((node) => node.id),
+          },
+          now,
+        ),
         source,
         await scoringWeights(tx, scope.workspaceId),
         now.getTime(),

@@ -10,10 +10,12 @@ export async function runtimeUnit(tx: PoolClient, scope: Scope) {
       senderId: string | null;
       explicitIds: string[];
       replyIds: string[];
+      graphRootIds: string[];
       bodySafe: string;
       triageClass: string;
     }>(
       `SELECT u.id AS "unitId", u.channel_id AS "channelId", u.sender_id AS "senderId", u.explicit_ids AS "explicitIds",
+      array_agg(m.id ORDER BY m.server_ts, m.id) AS "graphRootIds",
       u.triage_class AS "triageClass", array_remove(array_agg(m.reply_to_id), NULL) AS "replyIds",
       CASE WHEN u.source = 'transcript' THEN u.text ELSE string_agg(m.body_safe, E'\n' ORDER BY m.server_ts, m.id) END AS "bodySafe"
     FROM units u JOIN unit_messages um ON um.unit_id = u.id AND um.workspace_id = $1
