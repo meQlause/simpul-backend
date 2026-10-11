@@ -1,4 +1,8 @@
 const errors = {
+  'E-TEMPLATE-FIELD-NOT-ALLOWED': {
+    status: 422,
+    message: 'Use only work_id, customer and summary template fields.',
+  },
   'E-CHANNEL-IDENTITY-FIXED': {
     status: 409,
     message: 'Saved group identity cannot be changed. Add and verify a new group instead.',

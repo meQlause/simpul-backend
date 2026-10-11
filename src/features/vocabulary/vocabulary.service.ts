@@ -1,3 +1,4 @@
+import { allowedTemplateFields, templateFieldsAllowed } from './vocabulary.rules.js';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
@@ -6,13 +7,13 @@ import { advanceVocabularyVersion, getVocabularyVersion } from '../workspace/ind
 import { findActivePerson } from '../people/index.js';
 import {
   configurationWrite,
+  lockInternalTemplate,
+  storeInternalTemplate,
   insertCategory,
   insertAlias,
   selectVocabulary,
 } from './vocabulary.repository.js';
-import type { parseAlias, parseCategory } from './vocabulary.schema.js';
-
-const allowedFields = ['work_id', 'customer', 'summary'];
+import type { parseAlias, parseCategory, parseTemplate } from './vocabulary.schema.js';
 
 type Scope = { workspaceId: string; actorId: string };
 
@@ -76,7 +77,7 @@ export async function getVocabulary(resolveConnection: ConnectionResolver, works
       version: await getVocabularyVersion(tx, workspaceId),
       templates: {
         ...vocabulary.templates,
-        internal: { ...vocabulary.templates['internal'], allowedFields },
+        internal: { ...vocabulary.templates['internal'], allowedFields: allowedTemplateFields },
         sample: {
           work_id: 'ORD-0091',
           customer: 'Mrs. Sri',
@@ -84,5 +85,30 @@ export async function getVocabulary(resolveConnection: ConnectionResolver, works
         },
       },
     };
+  });
+}
+
+export async function saveInternalTemplate(
+  resolveConnection: ConnectionResolver,
+  scope: Scope,
+  input: ReturnType<typeof parseTemplate>,
+) {
+  if (!templateFieldsAllowed(input.body)) {
+    throw new DomainError('E-TEMPLATE-FIELD-NOT-ALLOWED', [{ field: 'body', issue: 'invalid' }]);
+  }
+
+  return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
+    const before = await lockInternalTemplate(tx, scope.workspaceId);
+    const after = await storeInternalTemplate(tx, scope.workspaceId, input.body);
+
+    await recordConfigChange(tx, {
+      ...scope,
+      tableName: 'templates',
+      recordId: after.id,
+      before: before ?? null,
+      after,
+    });
+
+    return { body: after.body, allowedFields: allowedTemplateFields };
   });
 }

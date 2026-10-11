@@ -81,3 +81,25 @@ export async function selectVocabulary(tx: PoolClient, workspaceId: string) {
     templates: Object.fromEntries(templates.rows.map((row) => [row.audience, { body: row.body }])),
   };
 }
+
+export async function lockInternalTemplate(tx: PoolClient, workspaceId: string) {
+  await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+    workspaceId + ':internal-template',
+  ]);
+
+  return (
+    await tx.query<{ id: string; body: string }>(
+      "SELECT id, body FROM templates WHERE workspace_id = $1 AND key = 'update' AND audience = 'internal' FOR UPDATE",
+      [workspaceId],
+    )
+  ).rows[0];
+}
+
+export async function storeInternalTemplate(tx: PoolClient, workspaceId: string, body: string) {
+  return (
+    await tx.query<{ id: string; body: string }>(
+      "INSERT INTO templates (workspace_id, key, audience, body, editable) VALUES ($1, 'update', 'internal', $2, true) ON CONFLICT (workspace_id, key, audience) DO UPDATE SET body = EXCLUDED.body RETURNING id, body",
+      [workspaceId, body],
+    )
+  ).rows[0];
+}

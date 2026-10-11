@@ -32,3 +32,15 @@ export function parseAlias(input: unknown) {
 
   return parsed.data;
 }
+
+export function parseTemplate(input: unknown) {
+  const parsed = schema
+    .strictObject({ body: schema.string().trim().min(1).max(300) })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}

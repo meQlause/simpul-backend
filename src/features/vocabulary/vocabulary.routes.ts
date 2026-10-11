@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import { parseCategory, parseAlias } from './vocabulary.schema.js';
-import { createCategory, createAlias, getVocabulary } from './vocabulary.service.js';
+import { parseCategory, parseAlias, parseTemplate } from './vocabulary.schema.js';
+import {
+  createCategory,
+  createAlias,
+  getVocabulary,
+  saveInternalTemplate,
+} from './vocabulary.service.js';
 
 const CREATED = 201;
 
@@ -19,6 +24,13 @@ export function vocabularyRouter(resolveConnection: ConnectionResolver) {
 
       response.status(CREATED).json({
         data: await createCategory(resolveConnection, scope, parseCategory(request.body)),
+      });
+    })
+    .put('/templates/internal', async (request, response) => {
+      const scope = response.locals.scope as Scope;
+
+      response.json({
+        data: await saveInternalTemplate(resolveConnection, scope, parseTemplate(request.body)),
       });
     })
     .post('/aliases', async (request, response) => {
