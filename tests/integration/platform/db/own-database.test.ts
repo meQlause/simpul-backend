@@ -12,6 +12,48 @@ const systemPool = databaseFixture();
 const workspaceId = randomUUID();
 const secretStore = createSecretStore(Buffer.alloc(32, 9).toString('base64'));
 
+type DnsAnswers = { address: string; family: number }[];
+
+function hangingCustomerLookup() {
+  let releaseCustomerLookup: ((result: DnsAnswers) => void) | undefined;
+  let markCustomerLookupStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    markCustomerLookupStarted = resolve;
+  });
+  const lookup = vi.fn((host: string) =>
+    host === 'customer.example'
+      ? new Promise<DnsAnswers>((resolve) => {
+          releaseCustomerLookup = resolve;
+          markCustomerLookupStarted?.();
+        })
+      : Promise.resolve([{ address: addresses.systemAddress, family: 4 }]),
+  );
+
+  return {
+    lookup,
+    started,
+    release: () => releaseCustomerLookup?.([{ address: addresses.publicAddress, family: 4 }]),
+  };
+}
+
+async function completesWithin<Result>(promise: Promise<Result>, milliseconds: number) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error('Hosted request was blocked by own database lookup')),
+          milliseconds,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 beforeAll(async () => {
   await applyMigrations(systemPool);
   const tx = await systemPool.connect();
@@ -79,4 +121,35 @@ test('The resolver rejects a mixed public/private DNS answer and the system host
 
   await expect(resolve(workspaceId)).rejects.toMatchObject({ code: 'E-DB-UNAVAILABLE' });
   expect(openPool).not.toHaveBeenCalled();
+});
+
+test('A hosted request completes while an own database connection attempt is hanging (NFR-DB-07)', async () => {
+  const { lookup, started, release } = hangingCustomerLookup();
+  const target = {
+    query: vi.fn(async () => ({ rows: [{ id: workspaceId }] })),
+    end: vi.fn(async () => {}),
+  } as unknown as Pool;
+  const resolve = createConnectionResolver(systemPool, {
+    systemHost: 'system.example',
+    secretStore,
+    lookup,
+    openPool: () => target,
+  });
+  const ownConnection = resolve(workspaceId);
+
+  try {
+    await started;
+    const response = await completesWithin(
+      resolve(randomUUID()).then((pool) => pool.query('SELECT 1 AS ok')),
+      2000,
+    );
+
+    expect(response.rows).toEqual([{ ok: 1 }]);
+  } finally {
+    release();
+    await ownConnection.catch(() => {});
+    await resolve.close(workspaceId);
+  }
+
+  expect(lookup).toHaveBeenCalledWith('customer.example');
 });
