@@ -21,6 +21,10 @@ export function connectionsRouter(
   setup?: ConnectionSetup,
 ) {
   const router = Router();
+  const verification = {
+    verifyCredential: provider.verifyCredential.bind(provider),
+    assertAccountAvailable: setup?.assertAccountAvailable,
+  };
 
   router.get('/telegram/connections', async (_request, response) => {
     const { workspaceId } = response.locals.scope as { workspaceId: string };
@@ -32,7 +36,7 @@ export function connectionsRouter(
     const { botToken } = parseCredential(request.body);
 
     response.json({
-      data: await verifyConnection(resolveConnection, provider, workspaceId, botToken),
+      data: await verifyConnection(resolveConnection, verification, workspaceId, botToken),
     });
   });
 

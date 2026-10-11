@@ -16,6 +16,7 @@ import { createTelegramProvider } from './platform/providers/telegram/index.js';
 import { createConnectionLookup } from './platform/db/connection-lookup.js';
 import { createSecretStore } from './platform/secrets/index.js';
 import { ownDatabaseQueues } from './platform/db/own-database-queues.js';
+import { createAccountClaims } from './platform/db/connection-claims.js';
 
 const config = readConfig(process.env);
 
@@ -106,6 +107,7 @@ if (process.argv[2] === 'create-workspace') {
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: providers.adapterFor('telegram'),
         connectionSetup: {
+          ...createAccountClaims(pool),
           masterKey: config.SECRETS_MASTER_KEY,
           publicBaseUrl: config.PUBLIC_BASE_URL,
           now: () => new Date(),

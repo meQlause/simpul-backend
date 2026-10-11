@@ -15,6 +15,13 @@ need execution on `own_database_workspaces()`, which returns workspace ids and a
 version derived from the encryption nonce, never a URL or ciphertext. These functions revoke
 execution from `PUBLIC`.
 
+The API role also needs execution on `bot_account_available(uuid, text)` and
+`claim_own_bot_account(uuid, uuid, text)`. The latter verifies the transaction's workspace
+scope and commits an own-database route before the customer write. Its account lock is
+shared with the hosted `bot_global_account_guard` trigger, so concurrent creates across
+the two modes cannot claim the same Telegram bot. A failed customer transaction removes
+only the route claimed by that request.
+
 Each forward SQL file has a matching file in `down/`. Reverse the filename order
 when reverting, executing each corresponding down file in a transaction. The
 initial schema rollback removes all foreign keys before dropping the tables so
