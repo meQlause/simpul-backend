@@ -12,7 +12,7 @@ type ImportContext = {
   targetProvider?: string;
 };
 
-const understanding = ['triage', 'comprehension'];
+const understanding = ['triage', 'comprehension', 'understanding'];
 const databasePackage = /^(?:drizzle-orm|pg|pg-boss)(?:\/|$)/u;
 
 function importsPolicy(context: ImportContext) {

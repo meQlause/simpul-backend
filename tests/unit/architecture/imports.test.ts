@@ -4,6 +4,21 @@ import { expect, test } from 'vitest';
 import { inspectImports } from '../../helpers/architecture.js';
 
 test.each([
+  [
+    'I-6',
+    'src/features/understanding/understanding.triage.ts',
+    "import { people } from '../people/index.js';",
+  ],
+  [
+    'I-6',
+    'src/features/understanding/understanding.triage.ts',
+    "import { rules } from '../rules/index.js';",
+  ],
+  [
+    'I-6',
+    'src/features/understanding/understanding.triage.ts',
+    "import { templates } from '../vocabulary/templates/index.js';",
+  ],
   ['I-2', 'src/features/work/work.rules.ts', "import { eq } from 'drizzle-orm';"],
   ['I-2', 'src/features/work/work.rules.ts', "import type { Pool } from 'pg';"],
   [
@@ -90,6 +105,10 @@ test.each([
     "import type { ProviderAdapter } from '../contract.js';",
   ],
   ['src/features/work/work.service.ts', "import { service } from '../people/index.js';"],
+  [
+    'src/features/understanding/understanding.triage.ts',
+    "import { model } from '../../platform/llm/port.js';",
+  ],
   ['src/features/triage/triage.service.ts', "import { model } from '../../platform/llm/index.js';"],
   ['src/features/work/work.repository.ts', "import { eq } from 'drizzle-orm';"],
   ['src/platform/db/index.ts', "import { Pool } from 'pg'; new Pool();"],
