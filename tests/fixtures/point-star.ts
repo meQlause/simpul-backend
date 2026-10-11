@@ -137,7 +137,7 @@ async function seedChannels(client: PoolClient, seed: Seed) {
     config_version, credential_version, checks, status, checked_at, expires_at, created_at)
     SELECT md5('point-star-verification-' || num)::uuid, $1, md5('point-star-channel-' || num)::uuid,
       md5('point-star-bot')::uuid, 1, 1,
-      '[{"key":"bot_identity","status":"pass"},{"key":"group","status":"pass"},{"key":"membership","status":"pass"},{"key":"privacy_mode","status":"pass"},{"key":"webhook","status":"pass"}]'::jsonb,
+      '[{"key":"bot_identity","status":"pass","message":"The bot identity matches","action":null},{"key":"group","status":"pass","message":"The group is reachable","action":null},{"key":"membership","status":"pass","message":"The bot is a member","action":null},{"key":"privacy_mode","status":"pass","message":"Privacy mode allows reading","action":null},{"key":"webhook","status":"pass","message":"The webhook is live","action":null}]'::jsonb,
       'pass', $2::timestamptz - interval '3 hours',
       $2::timestamptz + interval '30 days', $2
     FROM generate_series(1, 3) AS num`,
