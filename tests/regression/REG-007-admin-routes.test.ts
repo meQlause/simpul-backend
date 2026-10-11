@@ -55,6 +55,7 @@ let channelA: string;
 let categoryA: string;
 let reviewItemA: string;
 let ruleA: string;
+let decisionA: string;
 let tables: string[];
 
 type Layer = {
@@ -92,6 +93,8 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'get /decisions': {},
+  'get /decisions/:decisionId': {},
   'get /work': {},
   'get /work/export': {},
   'get /work/:displayId': {},
@@ -165,6 +168,12 @@ const statuses: Record<string, number> = {
 };
 
 async function prepareReviewRoute() {
+  decisionA = (
+    await pool.query(
+      'SELECT id FROM decisions WHERE workspace_id <> $1 ORDER BY occurred_at DESC LIMIT 1',
+      [workspaceB],
+    )
+  ).rows[0].id;
   reviewItemA = (
     await pool.query(
       "SELECT id FROM review_items WHERE detected_text = 'Pak Bud' AND workspace_id <> $1",
@@ -286,7 +295,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':itemId', reviewItemA).replace(':ruleId', ruleA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
+  const path = `/api/v1${route.path.replace(':decisionId', decisionA).replace(':itemId', reviewItemA).replace(':ruleId', ruleA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
 
   if (route.method === 'get') {
@@ -390,6 +399,15 @@ test.each(routes.filter((route) => route.method !== 'get'))(
     expect(await foreignSnapshot()).toEqual(before);
   },
 );
+
+test('REG-007: a foreign decision cannot be read through its id', async () => {
+  const response = await supertest(app)
+    .get(`/api/v1/decisions/${workspaceB}`)
+    .set('Cookie', adminCookie);
+
+  expect(response.status).toBe(404);
+  expect(response.body.error.code).toBe('E-NOT-FOUND');
+});
 
 test('REG-007: a foreign person and foreign backup cannot be changed or assigned', async () => {
   const before = await foreignSnapshot();

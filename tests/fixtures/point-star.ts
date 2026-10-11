@@ -218,15 +218,18 @@ async function seedReview(client: PoolClient, seed: Seed) {
     [seed.workspaceId, seed.now],
   );
   await client.query(
-    `INSERT INTO decisions (workspace_id, kind, title, detail, occurred_at, created_at)
-    SELECT $1, kind, title, detail, $2::timestamptz - age, $2::timestamptz - age
+    `INSERT INTO decisions (workspace_id, kind, title, detail, occurred_at, created_at, thread_id, rule_id, recipient_person_id)
+    SELECT $1, kind, title, detail, $2::timestamptz - age, $2::timestamptz - age,
+      CASE WHEN work IS NOT NULL THEN md5('point-star-thread-' || work)::uuid END,
+      CASE WHEN rule IS NOT NULL THEN md5('point-star-rule-' || rule)::uuid END,
+      CASE WHEN recipient IS NOT NULL THEN md5('point-star-person-' || recipient)::uuid END
     FROM (VALUES
-      ('routing', 'ORD-0098 routed to Budi Santoso', 'The “New order → Warehouse” rule matched. The owner is available.', interval '11 minutes'),
-      ('routing', 'PAY-0034 routed to Andi Pratama', 'Finance category matched. The 60-second hold has ended.', interval '37 minutes'),
-      ('work', 'ORD-0095 reminders stopped', 'Customer receipt confirmation closes the work item.', interval '1 hour'),
-      ('queue', 'Return request queued', 'Returns category detected. No rule matched.', interval '78 minutes'),
-      ('digest', 'Morning digest available for Siti Aminah', 'Four work updates combined into one digest.', interval '151 minutes')
-    ) AS sample(kind, title, detail, age)`,
+      ('routing', 'ORD-0098 routed to Budi Santoso', 'The “New order → Warehouse” rule matched. The owner is available.', interval '11 minutes', 'ORD-0098', 1, 2),
+      ('routing', 'PAY-0034 routed to Andi Pratama', 'Finance category matched. The 60-second hold has ended.', interval '37 minutes', 'PAY-0034', 3, 4),
+      ('work', 'ORD-0095 reminders stopped', 'Customer receipt confirmation closes the work item.', interval '1 hour', 'ORD-0095', NULL, NULL),
+      ('queue', 'Return request queued', 'Returns category detected. No rule matched.', interval '78 minutes', NULL, NULL, NULL),
+      ('digest', 'Morning digest available for Mr. Hendra', 'Four work updates combined into one digest.', interval '151 minutes', NULL, NULL, 5)
+    ) AS sample(kind, title, detail, age, work, rule, recipient)`,
     [seed.workspaceId, seed.now],
   );
 }

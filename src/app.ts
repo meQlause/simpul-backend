@@ -3,6 +3,7 @@ import { reviewRouter, type ReviewServices } from './features/review-queue/index
 import { workRouter } from './features/work/index.js';
 import { rulesRouter } from './features/rules/index.js';
 import { deliveryRouter } from './features/delivery/index.js';
+import { auditRouter } from './features/audit/index.js';
 import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import type { createAuthentication } from './features/auth/index.js';
@@ -71,6 +72,7 @@ function mountFeatures(
 ) {
   app.use('/api/v1', workspaceRouter(services.resolveConnection, mail, services.overview?.now));
   app.use('/api/v1', peopleRouter(services.resolveConnection));
+  app.use('/api/v1', auditRouter(services.resolveConnection));
   app.use(
     '/api/v1',
     workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
