@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import { browserChannels } from './browser-channels.js';
 import { Pool } from 'pg';
 import { createApp } from '../../src/app.js';
 import { createAuthentication, provisionAdmin } from '../../src/features/auth/index.js';
@@ -49,11 +51,20 @@ export async function startBrowserServer(pool: Pool, port: number) {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   const authentication = await browserAuthentication(pool);
-  const app = createApp('api', undefined, undefined, {
+  const services = {
     authentication,
     resolveConnection: createConnectionResolver(pool),
-  });
-  const server = app.listen(port, '127.0.0.1');
+    ...(await browserChannels(pool)),
+  };
+  const app = createApp('api', undefined, undefined, services);
+  const webhook = createApp('webhook', undefined, undefined, services);
+  const server = createServer((request, response) => {
+    if (request.url?.startsWith('/api/v1/webhooks/')) {
+      webhook(request, response);
+    } else {
+      app(request, response);
+    }
+  }).listen(port, '127.0.0.1');
   await new Promise<void>((accept, reject) => {
     server.once('listening', accept);
     server.once('error', reject);
