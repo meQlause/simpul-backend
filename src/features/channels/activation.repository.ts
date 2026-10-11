@@ -36,6 +36,7 @@ export async function selectActivation(
      WHERE channel.workspace_id = $1 AND channel.id = $2 FOR UPDATE OF channel, connection`,
     [workspaceId, input.channelId, input.verificationId],
   );
+
   return result.rows[0];
 }
 

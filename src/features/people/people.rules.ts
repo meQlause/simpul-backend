@@ -8,12 +8,15 @@ type Candidates = {
 
 export function resolveRecipient(candidates: Candidates, originChannelId: string) {
   const order = ['holder', 'backup', 'supervisor', 'admin'] as const;
+
   for (const via of order) {
     const person = candidates[via];
+
     if (person?.active && person.availability === 'available') {
       return { kind: 'person', personId: person.id, via };
     }
   }
+
   return { kind: 'channel', channelId: originChannelId };
 }
 
@@ -29,10 +32,12 @@ export function invalidPatchFields(
       input[field] !== undefined &&
       (input[field] === personId || !activeIds.includes(input[field])),
   );
+
   if (!hasRole) {
     invalid.push(
       ...(['roleName', 'backupPersonId'] as const).filter((field) => input[field] !== undefined),
     );
   }
+
   return [...new Set(invalid)];
 }

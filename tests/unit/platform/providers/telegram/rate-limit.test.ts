@@ -17,6 +17,7 @@ test.each([
         }),
     );
     const provider = createTelegramProvider('https://telegram.example', send);
+
     await expect(provider.verifyCredential('test-only-token')).rejects.toMatchObject({
       status: 429,
       code: 'E-TG-RATE-LIMITED',

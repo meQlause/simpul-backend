@@ -14,6 +14,7 @@ function telegram() {
   const exchange = vi.fn<typeof fetch>(async () =>
     Response.json({ ok: true, result: { message_id: 7 } }),
   );
+
   return {
     adapter: createTelegramProvider('https://telegram.example', exchange),
     exchange,
@@ -28,8 +29,10 @@ function telegram() {
     fail(mode: string) {
       if (mode === 'transport') {
         exchange.mockRejectedValue(new Error('raw provider text containing test-only-token'));
+
         return;
       }
+
       exchange.mockImplementation(async () =>
         mode === 'malformed'
           ? new Response('test-only-token')
@@ -41,6 +44,7 @@ function telegram() {
 
 function fake() {
   const exchange = vi.fn(async (_payload: unknown) => undefined);
+
   return {
     adapter: createFakeProvider(exchange),
     exchange,
@@ -60,7 +64,9 @@ type CreateHarness = typeof telegram | typeof fake;
 function receiveCases(name: string, create: CreateHarness) {
   test('one adapter declares its provider, capabilities and limits', () => {
     const { adapter } = create();
+
     expect(adapter).toHaveProperty('provider', name);
+
     for (const capability of [
       'replyTo',
       'edits',
@@ -72,6 +78,7 @@ function receiveCases(name: string, create: CreateHarness) {
     ]) {
       expect(adapter).toHaveProperty(`capabilities.${capability}`, expect.any(Boolean));
     }
+
     expect(adapter).toHaveProperty('limits.callTimeoutMs', expect.any(Number));
     expect(adapter).toHaveProperty('limits.sendPerSecond', expect.any(Number));
     expect(adapter).toHaveProperty('limits.sendPerChatPerMinute', expect.any(Number));
@@ -79,6 +86,7 @@ function receiveCases(name: string, create: CreateHarness) {
 
   test('authenticate rejects a wrong or absent secret and accepts the correct secret', () => {
     const { adapter, secretHeader } = create();
+
     expect(
       adapter.authenticate({ headers: { [secretHeader]: 'wrong-secret' } }, 'right-secret'),
     ).toBe(false);
@@ -106,6 +114,7 @@ function receiveCases(name: string, create: CreateHarness) {
 function sendCases(name: string, create: CreateHarness) {
   test.each(kinds)('every OutboundMessage kind sends through the adapter: %s', async (kind) => {
     const { adapter, exchange } = create();
+
     expect(
       await adapter.send(connection, { kind, chatId: '-10', text: 'Rendered message' }),
     ).toEqual({ providerMessageId: name === 'telegram' ? '7' : 'fake-message' });
@@ -114,6 +123,7 @@ function sendCases(name: string, create: CreateHarness) {
 
   test('declared inlineActions and replyTo capabilities match the outbound request', async () => {
     const { adapter, outbound, expectedOutbound } = create();
+
     await adapter.send(connection, {
       kind: 'question',
       chatId: '-10',
@@ -133,6 +143,7 @@ function failureCases(create: CreateHarness) {
         'every provider failure maps to a Simpul code before returning: %s',
         async (operation) => {
           const { adapter, exchange, fail } = create();
+
           fail(mode);
           const calls = {
             verify: () => adapter.verifyCredential(connection.credential),
@@ -144,6 +155,7 @@ function failureCases(create: CreateHarness) {
               adapter.send(connection, { kind: 'notice', chatId: '-10', text: 'Rendered' }),
           };
           const failure = calls[operation]();
+
           await expect(failure).rejects.toBeInstanceOf(DomainError);
           await expect(failure).rejects.toMatchObject({
             code: expect.stringMatching(/^E-/u),

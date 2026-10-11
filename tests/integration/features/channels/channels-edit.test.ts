@@ -21,12 +21,14 @@ test('Channels API section 4: name and language keep monitoring, but changing au
       authorizationAck: true,
       expectedConfigVersion: 1,
     });
+
   expect(activated.status).toBe(200);
   const renamed = await edit(draft.channelId, {
     displayName: 'Renamed group',
     primaryLanguage: 'id',
     expectedConfigVersion: 1,
   });
+
   expect(renamed.status).toBe(200);
   expect(renamed.body.data).toMatchObject({
     displayName: 'Renamed group',
@@ -36,6 +38,7 @@ test('Channels API section 4: name and language keep monitoring, but changing au
     configVersion: 2,
   });
   const changed = await edit(draft.channelId, { class: 'internal', expectedConfigVersion: 2 });
+
   expect(changed.status).toBe(200);
   expect(changed.body.data).toMatchObject({
     class: 'internal',
@@ -46,6 +49,7 @@ test('Channels API section 4: name and language keep monitoring, but changing au
   const detail = await request(app)
     .get('/api/v1/channels/' + draft.channelId)
     .set('Cookie', cookie);
+
   expect(detail.body.data.verification.activationReady).toBe(false);
   expect(
     (
@@ -63,6 +67,7 @@ test('Channels API section 4: concurrent edits with the same version write once 
       edit(draft.channelId, { displayName, expectedConfigVersion: 1 }),
     ),
   );
+
   expect(edits.map((response) => response.status).sort()).toEqual([200, 409]);
   expect(edits.find((response) => response.status === 409)?.body.error.code).toBe(
     'E-TG-VERSION-CONFLICT',
@@ -91,6 +96,7 @@ test.each(['providerChatId', 'botConnectionId'])(
       [key]: key === 'providerChatId' ? '-99999' : randomUUID(),
       expectedConfigVersion: 1,
     });
+
     expect(result.status).toBe(409);
     expect(result.body.error.code).toBe('E-CHANNEL-IDENTITY-FIXED');
     expect(
@@ -108,6 +114,7 @@ test.each([
 ])('Channels API section 4: invalid edit %j saves nothing', async (input) => {
   const draft = await draftWithVerification('Invalid edit');
   const result = await edit(draft.channelId, { ...input, expectedConfigVersion: 1 });
+
   expect(result.status).toBe(422);
   expect(result.body.error.code).toBe('E-TG-INPUT-INVALID');
   expect(
@@ -118,6 +125,7 @@ test.each([
 
 test('Channels API section 4: a missing channel returns E-NOT-FOUND', async () => {
   const result = await edit(randomUUID(), { displayName: 'Unknown', expectedConfigVersion: 1 });
+
   expect(result.status).toBe(404);
   expect(result.body.error.code).toBe('E-NOT-FOUND');
 });

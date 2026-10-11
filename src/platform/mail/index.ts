@@ -22,6 +22,7 @@ export async function verifyMail(credentials: {
     debug: false,
     transactionLog: false,
   });
+
   try {
     await transport.verify();
   } finally {

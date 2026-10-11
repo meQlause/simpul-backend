@@ -56,6 +56,7 @@ export async function selectPeople(
     ORDER BY person.name`,
     [workspaceId, personId],
   );
+
   return result.rows;
 }
 
@@ -101,6 +102,7 @@ export async function updateRole(
       input.roleName,
     ]);
   }
+
   if (input.backupPersonId !== undefined) {
     await tx.query('SELECT id FROM roles WHERE workspace_id = $1 AND id = $2 FOR UPDATE', [
       workspaceId,
@@ -137,5 +139,6 @@ export async function selectRecipientCandidates(
       FROM workspaces JOIN people AS person ON person.id = admin_person_id WHERE workspaces.id = $1 AND person.workspace_id = $1) AS admin`,
     [workspaceId, roleId],
   );
+
   return result.rows[0];
 }

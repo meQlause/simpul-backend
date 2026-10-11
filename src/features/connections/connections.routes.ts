@@ -21,23 +21,28 @@ export function connectionsRouter(
   setup?: ConnectionSetup,
 ) {
   const router = Router();
+
   router.get('/telegram/connections', async (_request, response) => {
     const { workspaceId } = response.locals.scope as { workspaceId: string };
+
     response.json({ data: await listConnections(resolveConnection, workspaceId) });
   });
   router.post('/telegram/connections/verify', async (request, response) => {
     const { workspaceId } = response.locals.scope as { workspaceId: string };
     const { botToken } = parseCredential(request.body);
+
     response.json({
       data: await verifyConnection(resolveConnection, provider, workspaceId, botToken),
     });
   });
+
   if (setup) {
     router.put('/telegram/connections/:connectionId/credentials', async (request, response) => {
       const scope = response.locals.scope as { workspaceId: string; actorId: string };
       const input = parseReplacement(request.body);
       const key = parseRequestKey(request.get('Idempotency-Key'));
       const connectionId = parseSessionId(request.params.connectionId);
+
       response.json({
         data: await rotateCredential(
           resolveConnection,
@@ -53,6 +58,7 @@ export function connectionsRouter(
         ...parseSession(request.body),
         connectionId: parseSessionId(request.params.connectionId),
       };
+
       response
         .status(CREATED)
         .json({ data: await issueSession(resolveConnection, scope, input, setup) });
@@ -60,6 +66,7 @@ export function connectionsRouter(
     router.get('/telegram/connection-sessions/:sessionId', async (request, response) => {
       const { workspaceId } = response.locals.scope as { workspaceId: string };
       const sessionId = parseSessionId(request.params.sessionId);
+
       response.json({
         data: await pollSession(resolveConnection, { workspaceId, sessionId }, setup.now()),
       });
@@ -68,6 +75,7 @@ export function connectionsRouter(
       const scope = response.locals.scope as { workspaceId: string; actorId: string };
       const input = parseConnection(request.body);
       const key = parseRequestKey(request.get('Idempotency-Key'));
+
       response.status(CREATED).json({
         data: await createConnection(
           resolveConnection,
@@ -78,5 +86,6 @@ export function connectionsRouter(
       });
     });
   }
+
   return router;
 }

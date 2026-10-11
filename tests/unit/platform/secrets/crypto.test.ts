@@ -7,6 +7,7 @@ const context = 'workspace:purpose:id';
 
 test('authenticated encryption round-trips without exposing plaintext', () => {
   const encrypted = seal(key, value, context);
+
   expect(encrypted.ciphertext.includes(value)).toBe(false);
   expect(open(key, encrypted, context)).toEqual(value);
   expect(seal(key, value, context).nonce).not.toEqual(encrypted.nonce);
@@ -22,6 +23,7 @@ test('ciphertext cannot be moved to another workspace, purpose or secret id', ()
 
 test('tampered ciphertext fails authentication', () => {
   const encrypted = seal(key, value, context);
+
   encrypted.ciphertext[0] ^= 1;
   expect(() => open(key, encrypted, context)).toThrow();
 });
@@ -29,6 +31,7 @@ test('tampered ciphertext fails authentication', () => {
 test('a workspace data key is wrapped under the master key and bound to that workspace', () => {
   const dataKey = Buffer.alloc(32, 3);
   const wrapped = wrap(key, dataKey, 'workspace');
+
   expect(unwrap(key, wrapped, 'workspace')).toEqual(dataKey);
   expect(() => unwrap(Buffer.alloc(32, 2), wrapped, 'workspace')).toThrow();
   expect(() => unwrap(key, wrapped, 'other-workspace')).toThrow();

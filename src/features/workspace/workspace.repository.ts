@@ -65,6 +65,7 @@ export async function selectMe(tx: PoolClient, scope: { workspaceId: string; act
     WHERE workspace.id = $1 AND person.id = $2`,
     [scope.workspaceId, scope.actorId],
   );
+
   return result.rows[0];
 }
 
@@ -79,6 +80,7 @@ export async function selectSettings(tx: PoolClient, workspaceId: string) {
     WHERE policy.workspace_id = $1 FOR UPDATE OF policy`,
     [workspaceId],
   );
+
   return result.rows[0];
 }
 

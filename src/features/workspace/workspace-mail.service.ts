@@ -22,6 +22,7 @@ export type MailServices = {
 export async function getMail(resolveConnection: ConnectionResolver, workspaceId: string) {
   return scopedTransaction(resolveConnection, workspaceId, async (tx) => {
     const row = await selectMail(tx, workspaceId);
+
     return row
       ? { data: mailDto(row) }
       : { data: null, pendingDigestItems: await pendingDigestItems(tx, workspaceId) };
@@ -47,6 +48,7 @@ export async function saveMail(
           )
         : undefined;
     const password = requireMailPassword(input, stored);
+
     try {
       await services.verifyMail({
         host: input.host,
@@ -57,6 +59,7 @@ export async function saveMail(
     } catch {
       throw new DomainError('E-MAIL-CONNECTION-FAILED');
     }
+
     const secretRef =
       input.password === undefined && before
         ? before.passwordSecretRef
@@ -65,8 +68,10 @@ export async function saveMail(
             value: password,
             id: before?.passwordSecretRef,
           });
+
     await saveMailRow(tx, scope.workspaceId, { ...input, secretRef, verifiedAt: services.now() });
     const after = await selectMail(tx, scope.workspaceId);
+
     await recordConfigChange(tx, {
       ...scope,
       tableName: 'mail_connections',
@@ -74,6 +79,7 @@ export async function saveMail(
       before: mailAudit(before),
       after: mailAudit(after),
     });
+
     return mailDto(after);
   });
 }

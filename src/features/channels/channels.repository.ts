@@ -14,6 +14,7 @@ export async function selectChannelState(tx: PoolClient, workspaceId: string, ch
      FROM channels WHERE workspace_id = $1 AND id = $2 FOR UPDATE`,
     [workspaceId, channelId],
   );
+
   return result.rows[0];
 }
 
@@ -36,6 +37,7 @@ export async function setConnectionNeedsAction(
      RETURNING channel.id, previous.monitored, previous.connection_status AS "connectionStatus"`,
     [workspaceId, connectionId],
   );
+
   return result.rows;
 }
 
@@ -55,6 +57,7 @@ export async function selectChannels(tx: PoolClient, workspaceId: string) {
      WHERE channel.workspace_id = $1 ORDER BY channel.display_name, channel.id`,
     [workspaceId],
   );
+
   return result.rows;
 }
 
@@ -87,6 +90,7 @@ export async function insertDraft(
         input.providerChatType,
       ],
     );
+
     return result.rows[0];
   } catch (error) {
     if (
@@ -98,6 +102,7 @@ export async function insertDraft(
     ) {
       throw new DomainError('E-TG-CHANNEL-DUPLICATE');
     }
+
     throw error;
   }
 }
@@ -125,5 +130,6 @@ export async function selectLatestVerification(
      ORDER BY verification.checked_at DESC, verification.created_at DESC, verification.id DESC LIMIT 1`,
     [workspaceId, channelId],
   );
+
   return result.rows[0];
 }

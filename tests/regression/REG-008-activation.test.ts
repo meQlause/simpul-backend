@@ -28,12 +28,14 @@ test.each([
       authorizationAck: true,
       expectedConfigVersion: scenario === 'version-conflict' ? 2 : 1,
     });
+
   expect(response.status).toBe(status);
   expect(response.body.error.code).toBe(code);
   const stored = await pool.query(
     'SELECT monitored, monitoring_started_at, visible_indicator_message_id FROM channels WHERE id = $1',
     [draft.channelId],
   );
+
   expect(stored.rows[0]).toEqual({
     monitored: false,
     monitoring_started_at: null,

@@ -28,12 +28,14 @@ function stub(memberStatus = 'member', webhookUrl = connection.webhookUrl) {
         JSON.stringify({ ok: true, result: results[String(url).split('/').at(-1) ?? ''] }),
       ),
   );
+
   return { provider: createTelegramProvider('https://telegram.example', send), send };
 }
 
 test('Activation re-checks identity, group, membership, privacy and owned webhook without requiring administrator rights or claiming inbound proof', async () => {
   const { provider, send } = stub();
   const checks = await provider.checkReadiness(connection, '-12345');
+
   expect(checks.map(({ key, status }) => ({ key, status }))).toEqual(
     ['bot_identity', 'group', 'membership', 'privacy_mode', 'webhook'].map((key) => ({
       key,
@@ -56,6 +58,7 @@ test.each(['left', 'kicked'])(
   'Activation refuses membership %s before posting an indicator',
   async (status) => {
     const { provider, send } = stub(status);
+
     await expect(provider.checkReadiness(connection, '-12345')).rejects.toMatchObject({
       code: 'E-TG-GROUP-UNAVAILABLE',
     });
@@ -67,6 +70,7 @@ test.each(['left', 'kicked'])(
 
 test('Activation refuses a foreign webhook without overwriting it', async () => {
   const { provider, send } = stub('member', 'https://other.example/hook');
+
   await expect(provider.checkReadiness(connection, '-12345')).rejects.toMatchObject({
     code: 'E-TG-WEBHOOK-CONFLICT',
   });
@@ -75,6 +79,7 @@ test('Activation refuses a foreign webhook without overwriting it', async () => 
 
 test('The indicator sender maps the confirmed Telegram message id and sends only the approved text', async () => {
   const { provider, send } = stub();
+
   await expect(
     provider.send(connection, {
       kind: 'indicator',

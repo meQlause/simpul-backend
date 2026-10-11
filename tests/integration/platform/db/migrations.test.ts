@@ -5,6 +5,7 @@ import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 
 const pool = databaseFixture();
+
 // DDL commits need a fresh schema in this file's disposable container per case.
 beforeEach(async () => {
   await pool.query(
@@ -64,34 +65,43 @@ async function tableNames() {
   const result = await pool.query<{ tablename: string }>(
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
   );
+
   return result.rows.map(({ tablename }) => tablename);
 }
 
 test('Migrations apply to an empty PostgreSQL 15 with pgvector and are reversible in order', async () => {
   const migrations = globSync('drizzle/*.sql').sort();
+
   expect(migrations.length).toBeGreaterThan(0);
   expect(await tableNames()).toEqual([]);
   expect((await pool.query('SHOW server_version')).rows[0].server_version).toMatch(/^15\./);
+
   for (const migration of migrations) {
     await pool.query(readFileSync(migration, 'utf8'));
   }
+
   expect(await tableNames()).toEqual(tables);
   expect(
     (await pool.query("SELECT extname FROM pg_extension WHERE extname = 'vector'")).rowCount,
   ).toBe(1);
+
   for (const migration of migrations.toReversed()) {
     await pool.query(readFileSync(join('drizzle/down', basename(migration)), 'utf8'));
   }
+
   expect(await tableNames()).toEqual([]);
+
   for (const migration of migrations) {
     await pool.query(readFileSync(migration, 'utf8'));
   }
+
   expect(await tableNames()).toEqual(tables);
 }, 30000);
 
 test('System-side workspace keys and secrets exist without a local workspaces row, retaining the secret-to-key foreign key', async () => {
   await applyMigrations(pool);
   const workspaceId = '00000000-0000-4000-8000-000000000001';
+
   await pool.query('INSERT INTO workspace_keys (workspace_id, wrapped_key) VALUES ($1, $2)', [
     workspaceId,
     Buffer.from('wrapped'),

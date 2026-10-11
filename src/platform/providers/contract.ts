@@ -76,6 +76,7 @@ type SetupEvent = {
   title: string;
   chatType: 'group' | 'supergroup';
 };
+
 export type ReceiveProvider = {
   authenticate: (
     request: { headers: Record<string, string | string[] | undefined> },

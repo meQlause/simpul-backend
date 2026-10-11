@@ -33,6 +33,7 @@ export async function findSessionPerson(pool: Pool, userId: string) {
     workspace_id: string;
     person_id: string | null;
   }>('SELECT * FROM workspace_for_session($1)', [userId]);
+
   return result.rows[0];
 }
 
@@ -43,5 +44,6 @@ export async function isWorkspaceAdmin(tx: PoolClient, actorId: string) {
     WHERE person.id = $1 AND person.active`,
     [actorId],
   );
+
   return result.rowCount === 1;
 }

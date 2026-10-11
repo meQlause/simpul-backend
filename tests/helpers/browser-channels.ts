@@ -25,6 +25,7 @@ async function credentialFixture(pool: Pool) {
   ).rows[0];
   const store = createSecretStore(masterKey);
   const client = await pool.connect();
+
   try {
     const tokenRef = await store.put(client, row.workspaceId, {
       purpose: 'bot_token',
@@ -34,6 +35,7 @@ async function credentialFixture(pool: Pool) {
       purpose: 'webhook_secret',
       value: webhookSecret,
     });
+
     await client.query(
       'UPDATE bot_connections SET token_secret_ref = $2,webhook_secret_ref = $3 WHERE id = $1',
       [row.id, tokenRef, webhookRef],
@@ -41,6 +43,7 @@ async function credentialFixture(pool: Pool) {
   } finally {
     client.release();
   }
+
   return row;
 }
 
@@ -70,6 +73,7 @@ export async function browserChannels(pool: Pool) {
     send: async () => ({ providerMessageId: 'browser-indicator' }),
   };
   const now = () => new Date();
+
   return {
     telegram: provider,
     connectionSetup: {

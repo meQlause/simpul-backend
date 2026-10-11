@@ -22,12 +22,15 @@ async function activeGroup(name: string) {
       authorizationAck: true,
       expectedConfigVersion: 1,
     });
+
   expect(response.status).toBe(200);
+
   return draft.channelId;
 }
 
 async function notification(channelId: string, state: 'held' | 'sent' | 'cancelled') {
   const id = randomUUID();
+
   await pool.query(
     `WITH message AS (INSERT INTO messages_raw (id, workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts)
     SELECT $2::uuid, workspace_id, id, $2::uuid::text, 'test-sender', 'Test evidence', 'Test evidence', '2026-10-10T04:00:00Z', '2026-10-10T04:00:00Z' FROM channels WHERE id = $1 RETURNING id, workspace_id, channel_id),
@@ -41,6 +44,7 @@ async function notification(channelId: string, state: 'held' | 'sent' | 'cancell
     CASE WHEN $6 = 'cancelled' THEN '2026-10-10T04:00:00Z'::timestamptz END FROM label`,
     [channelId, randomUUID(), randomUUID(), randomUUID(), id, state],
   );
+
   return id;
 }
 
@@ -52,6 +56,7 @@ async function assertOnlyUnsentCancelled(ids: {
 }) {
   const rows = (await pool.query('SELECT id, sent_at, cancelled_at FROM notifications ORDER BY id'))
     .rows;
+
   expect(rows.find((row) => row.id === ids.held)).toMatchObject({
     sent_at: null,
     cancelled_at: new Date('2026-10-10T04:01:00Z'),
@@ -88,6 +93,7 @@ async function assertPausedWebhookDrops(channelId: string) {
         chat: { id: Number(group.provider_chat_id), type: 'supergroup', title: 'Paused group' },
       },
     });
+
   expect(response.status).toBe(200);
   expect((await pool.query('SELECT count(*)::int AS count FROM messages_raw')).rows[0].count).toBe(
     count,
@@ -111,6 +117,7 @@ test('SRS T-23: pausing one of two channels leaves the other active and the shar
     .post(`/api/v1/channels/${first}/pause`)
     .set('Cookie', cookie)
     .send({ expectedConfigVersion: 1 });
+
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({
     id: first,
@@ -136,6 +143,7 @@ test('Channels §7: pausing with a stale version changes neither channels nor no
     .post(`/api/v1/channels/${group.id}/pause`)
     .set('Cookie', cookie)
     .send({ expectedConfigVersion: 99 });
+
   expect(response.status).toBe(409);
   expect(response.body.error.code).toBe('E-TG-VERSION-CONFLICT');
   expect((await pool.query('SELECT * FROM channels ORDER BY id')).rows).toEqual(before);

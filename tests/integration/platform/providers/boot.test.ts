@@ -20,7 +20,9 @@ beforeAll(async () => {
 
 function environment() {
   const databaseUrl = new URL(String(pool.options.connectionString));
+
   databaseUrl.username = 'boot_app';
+
   return {
     ...process.env,
     PROCESS_ROLE: 'worker',
@@ -48,6 +50,7 @@ test.each(['api', 'webhook', 'worker', 'scheduler'])(
       encoding: 'utf8',
       timeout: 2000,
     });
+
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('UnregisteredProviderError');
     expect(result.stderr).toContain('forgotten-provider');
@@ -58,6 +61,7 @@ test.each(['api', 'webhook', 'worker', 'scheduler'])(
 
 test('NFR-AD-02: the bootstrap inventory returns provider names to the application role without exposing tenant rows', async () => {
   await pool.query('SET ROLE boot_app');
+
   try {
     expect((await pool.query('SELECT * FROM bot_connections')).rows).toEqual([]);
     expect((await pool.query('SELECT * FROM providers_in_use()')).rows).toEqual([
@@ -74,6 +78,7 @@ test('Architecture §9.4: adapter limits come from validated configuration', () 
     encoding: 'utf8',
     timeout: 2000,
   });
+
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('ConfigurationError');
   expect(result.stderr).toContain('TELEGRAM_CALL_TIMEOUT_MS');

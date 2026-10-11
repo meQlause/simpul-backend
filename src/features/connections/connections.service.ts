@@ -19,6 +19,7 @@ export async function verifyConnection(
   const stored = await scopedTransaction(resolveConnection, workspaceId, (tx) =>
     storedAccount(tx, workspaceId),
   );
+
   return {
     botUsername: account.botUsername,
     botName: account.botName,

@@ -14,11 +14,14 @@ export async function verifyChannel(
   services: ActivationServices & { newId: () => string },
 ) {
   const now = services.now();
+
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     const row = await selectReadiness(tx, scope.workspaceId, channelId, now);
+
     if (!row) {
       throw new DomainError('E-NOT-FOUND');
     }
+
     const connection = {
       credential: await services.secretStore.get(tx, scope.workspaceId, 'bot_token', row.tokenRef),
       providerAccountId: row.providerAccountId,
@@ -40,6 +43,7 @@ export async function verifyChannel(
       activationReady: state.ready,
       checks,
     };
+
     await storeReadiness(tx, scope.workspaceId, {
       ...row,
       channelId,
@@ -48,9 +52,11 @@ export async function verifyChannel(
       status: state.status,
       channelStatus: state.channelStatus,
     });
+
     if (row.monitored && state.channelStatus !== 'active') {
       await cancelChannelNotifications(tx, scope.workspaceId, { channelId, now });
     }
+
     return check;
   });
 }

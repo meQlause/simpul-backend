@@ -17,20 +17,26 @@ export function createAdminResolver(
 ) {
   return async (headers: Headers) => {
     const session = await readSession(headers);
+
     if (!session) {
       throw new DomainError('E-AUTH-REQUIRED');
     }
+
     const person = await findSessionPerson(pool, session.user.id);
+
     if (!person?.person_id) {
       throw new DomainError('E-FORBIDDEN');
     }
+
     const actorId = person.person_id;
     const allowed = await scopedTransaction(resolveConnection, person.workspace_id, (tx) =>
       isWorkspaceAdmin(tx, actorId),
     );
+
     if (!allowed) {
       throw new DomainError('E-FORBIDDEN');
     }
+
     return { workspaceId: person.workspace_id, actorId };
   };
 }

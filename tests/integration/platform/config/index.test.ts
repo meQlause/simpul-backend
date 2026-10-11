@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 
 test('Removing DATABASE_URL fails at boot with a named error, not on first request', () => {
   const environment = { ...process.env };
+
   delete environment.DATABASE_URL;
   const result = spawnSync(process.execPath, ['dist/server.js'], {
     env: environment,

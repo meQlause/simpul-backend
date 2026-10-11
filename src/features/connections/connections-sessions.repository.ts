@@ -37,6 +37,7 @@ export async function insertSession(
       input.expiresAt,
     ],
   );
+
   return result.rows[0];
 }
 
@@ -46,6 +47,7 @@ export async function selectSession(tx: PoolClient, workspaceId: string, session
      FROM channel_connection_sessions WHERE workspace_id = $1 AND id = $2`,
     [workspaceId, sessionId],
   );
+
   return result.rows[0];
 }
 
@@ -95,6 +97,7 @@ export async function consumeSession(
      RETURNING candidate_chat_id AS "chatId", candidate_title AS title, candidate_chat_type AS "chatType"`,
     [workspaceId, input.sessionId, input.connectionId, input.now],
   );
+
   return result.rows[0];
 }
 
@@ -111,6 +114,7 @@ export async function storeReceiveCheck(
        AND $5::timestamptz >= date_trunc('second',session.created_at) RETURNING session.id`,
     [input.workspaceId, input.connectionId, input.chatId, input.now, input.sentAt],
   );
+
   if (proof.rowCount) {
     await tx.query(
       'UPDATE channels SET last_inbound_at = $4 WHERE workspace_id = $1 AND bot_connection_id = $2 AND provider_chat_id = $3',

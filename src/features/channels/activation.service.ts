@@ -28,9 +28,11 @@ async function postIndicator(
       chatId,
       text: 'Simpul monitoring is active',
     });
+
     if ('retryAfter' in result) {
       throw new DomainError('E-TG-RATE-LIMITED', undefined, result.retryAfter);
     }
+
     return result;
   } catch (error) {
     if (
@@ -39,6 +41,7 @@ async function postIndicator(
     ) {
       throw error;
     }
+
     throw new DomainError('E-TG-ACTIVATION-FAILED');
   }
 }
@@ -54,11 +57,14 @@ async function completeActivation(
 ) {
   const activation = parseActivationOutcome(outcome);
   const row = await selectActivation(tx, request.scope.workspaceId, request.input);
+
   if (!row) {
     throw new DomainError('E-NOT-FOUND');
   }
+
   assertVerification(row, request.input, request.now);
   const scope = { ...request.scope, actorId: activation.actorId };
+
   await storeActivation(tx, scope, activation);
   await recordConfigChange(tx, {
     ...scope,
@@ -67,6 +73,7 @@ async function completeActivation(
     before: { monitored: false },
     after: { connectionStatus: 'active', monitored: true },
   });
+
   return (await selectChannels(tx, scope.workspaceId)).find(
     (channel: { id: string }) => channel.id === request.input.channelId,
   );
@@ -114,6 +121,7 @@ function assertVerification(
     now: now.getTime(),
     checks: row.checks ?? [],
   });
+
   if (failure) {
     throw new DomainError(failure);
   }
@@ -126,9 +134,11 @@ async function prepareActivation(
   services: ActivationServices,
 ) {
   const row = await selectActivation(tx, workspaceId, input);
+
   if (!row) {
     throw new DomainError('E-NOT-FOUND');
   }
+
   assertVerification(row, input, services.now());
   const connection = {
     credential: await services.secretStore.get(tx, workspaceId, 'bot_token', row.tokenRef),
@@ -136,10 +146,13 @@ async function prepareActivation(
     webhookUrl: `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/telegram/${row.connectionId}`,
   };
   const checks = await services.provider.checkReadiness(connection, row.providerChatId);
+
   if (!checksPass(checks, ['bot_identity', 'group', 'membership', 'privacy_mode', 'webhook'])) {
     throw new DomainError('E-TG-READINESS-INCOMPLETE');
   }
+
   const chat = await services.provider.describeChat(connection, row.providerChatId);
   const indicator = await postIndicator(services.provider, connection, row.providerChatId);
+
   return { ...chat, ...indicator, channelId: input.channelId, now: services.now().toISOString() };
 }

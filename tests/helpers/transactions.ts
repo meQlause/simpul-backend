@@ -3,6 +3,7 @@ import { afterEach, beforeEach } from 'vitest';
 
 export function transactionFixture(pool: Pool) {
   let client: PoolClient;
+
   beforeEach(async () => {
     client = await pool.connect();
     await client.query('BEGIN');
@@ -14,5 +15,6 @@ export function transactionFixture(pool: Pool) {
       client.release();
     }
   });
+
   return () => client;
 }

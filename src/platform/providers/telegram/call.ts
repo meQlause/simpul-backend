@@ -12,6 +12,7 @@ async function readData(response: Response) {
     if (error instanceof SyntaxError) {
       return null;
     }
+
     throw error;
   }
 }
@@ -20,6 +21,7 @@ function responseFailure(response: Response, data: unknown) {
   const limited = schema
     .object({ error_code: schema.literal(RATE_LIMIT_STATUS) })
     .safeParse(data).success;
+
   if (response.status === RATE_LIMIT_STATUS || limited) {
     const wait = schema
       .object({
@@ -34,8 +36,10 @@ function responseFailure(response: Response, data: unknown) {
       .safeParse(response.headers.get('Retry-After') ?? undefined);
     const headerWait = header.success ? header.data : DEFAULT_RETRY_SECONDS;
     const retryAfter = wait.success ? wait.data.parameters.retry_after : headerWait;
+
     return new DomainError('E-TG-RATE-LIMITED', undefined, retryAfter);
   }
+
   return response.ok ? null : new DomainError('E-TG-TOKEN-INVALID');
 }
 
@@ -55,14 +59,17 @@ export function createCall(baseUrl: string, send: typeof fetch, callTimeoutMs = 
       );
       const data = await readData(response);
       const failure = responseFailure(response, data);
+
       if (failure) {
         throw failure;
       }
+
       return data;
     } catch (error) {
       if (error instanceof DomainError) {
         throw error;
       }
+
       throw new DomainError('E-TG-SETUP-TIMEOUT');
     }
   };

@@ -16,6 +16,7 @@ export async function selectCredential(tx: PoolClient, workspaceId: string, conn
      FROM bot_connections WHERE workspace_id = $1 AND id = $2 AND provider = 'telegram' FOR UPDATE`,
     [workspaceId, connectionId],
   );
+
   return result.rows[0];
 }
 

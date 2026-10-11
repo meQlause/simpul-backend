@@ -14,6 +14,7 @@ export const createWorkspaceSchema = zod
       .refine((zone) => {
         try {
           new Intl.DateTimeFormat('en', { timeZone: zone });
+
           return true;
         } catch {
           return false;
@@ -25,6 +26,7 @@ export const createWorkspaceSchema = zod
 const time = zod.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const QUIET_END = 'quietEnd';
 const QUIET_HOURS_EQUAL = 'E-SETTINGS-QUIET-HOURS-EQUAL';
+
 export const settingsSchema = zod
   .strictObject({
     quietStart: time,
@@ -39,10 +41,13 @@ export const settingsSchema = zod
 
 export function parseSettings(input: unknown) {
   const parsed = settingsSchema.safeParse(input);
+
   if (parsed.success) {
     return parsed.data;
   }
+
   const failure = validationError(parsed.error);
   const equal = parsed.error.issues.some((issue) => issue.message === QUIET_HOURS_EQUAL);
+
   throw equal ? new DomainError(QUIET_HOURS_EQUAL, failure.details) : failure;
 }

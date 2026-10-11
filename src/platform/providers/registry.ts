@@ -9,13 +9,17 @@ class UnregisteredProviderError extends Error {
 
 export function createProviderRegistry() {
   const adapters = new Map<string, ProviderAdapter>();
+
   function adapterFor(provider: string) {
     const adapter = adapters.get(provider);
+
     if (!adapter) {
       throw new UnregisteredProviderError(provider);
     }
+
     return adapter;
   }
+
   return {
     register(adapter: ProviderAdapter) {
       adapters.set(adapter.provider, adapter);

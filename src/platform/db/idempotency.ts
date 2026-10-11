@@ -24,9 +24,11 @@ async function previousRequest<Outcome, Result>(tx: PoolClient, request: Request
     [request.workspaceId, request.endpoint, request.key],
   );
   const previous = result.rows[0];
+
   if (previous && !previous.fingerprint.equals(fingerprint(request))) {
     throw new DomainError('E-TG-IDEMPOTENCY-CONFLICT');
   }
+
   return previous;
 }
 
@@ -39,17 +41,22 @@ export async function idempotent<Result>(
     JSON.stringify([request.workspaceId, request.endpoint, request.key]),
   ]);
   const previous = await previousRequest<never, Result>(tx, request);
+
   if (previous) {
     if (previous.response === null) {
       throw new DomainError('E-INTERNAL');
     }
+
     return previous.response;
   }
+
   const response = await operation();
+
   await tx.query(
     'INSERT INTO idempotency_keys (workspace_id, endpoint, key, fingerprint, response) VALUES ($1, $2, $3, $4, $5)',
     [request.workspaceId, request.endpoint, request.key, fingerprint(request), response],
   );
+
   return response;
 }
 
@@ -60,30 +67,40 @@ async function reconcile<Outcome, Result>(
 ) {
   const prepared = await transactionOnClient(client, request.workspaceId, async (tx) => {
     const previous = await previousRequest<Outcome, Result>(tx, request);
+
     if (previous && previous.response !== null) {
       return { response: previous.response, outcome: null };
     }
+
     const outcome = previous?.outcome ?? (await operations.prepare(tx));
+
     await tx.query(
       `INSERT INTO idempotency_keys (workspace_id, endpoint, key, fingerprint, outcome)
       VALUES ($1, $2, $3, $4, $5) ON CONFLICT (workspace_id, endpoint, key) DO UPDATE SET outcome = EXCLUDED.outcome`,
       [request.workspaceId, request.endpoint, request.key, fingerprint(request), outcome],
     );
+
     return { response: null, outcome };
   });
+
   if (prepared.response !== null) {
     return prepared.response;
   }
+
   if (prepared.outcome === null) {
     throw new DomainError('E-INTERNAL');
   }
+
   const outcome = prepared.outcome;
+
   return transactionOnClient(client, request.workspaceId, async (tx) => {
     const response = await operations.complete(tx, outcome);
+
     await tx.query(
       'UPDATE idempotency_keys SET response = $4 WHERE workspace_id = $1 AND endpoint = $2 AND key = $3',
       [request.workspaceId, request.endpoint, request.key, response],
     );
+
     return response;
   });
 }
@@ -96,8 +113,10 @@ export async function reconciledIdempotent<Outcome, Result>(
   const pool = await resolveConnection(request.workspaceId);
   const client = await pool.connect();
   const lock = JSON.stringify([request.workspaceId, request.endpoint, request.key]);
+
   try {
     await client.query('SELECT pg_advisory_lock(hashtextextended($1, 0))', [lock]);
+
     try {
       return await reconcile(client, request, operations);
     } finally {

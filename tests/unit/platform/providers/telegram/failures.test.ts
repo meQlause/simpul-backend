@@ -10,10 +10,12 @@ test('SRS §5.5.4: the call deadline is ten seconds and an aborted call is not r
   vi.useFakeTimers();
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
     const controller = new AbortController();
+
     setTimeout(
       () => controller.abort(new DOMException('Provider deadline', 'TimeoutError')),
       milliseconds,
     );
+
     return controller.signal;
   });
   const send = vi.fn<typeof fetch>(
@@ -28,6 +30,7 @@ test('SRS §5.5.4: the call deadline is ten seconds and an aborted call is not r
   const checked = expect(provider.verifyCredential('test-only-token')).rejects.toMatchObject({
     code: 'E-TG-SETUP-TIMEOUT',
   });
+
   await vi.advanceTimersByTimeAsync(10000);
   await checked;
   expect(timeout).toHaveBeenCalledWith(10000);
@@ -43,6 +46,7 @@ test('The adapter returns a neutral retry instruction for a rate-limited indicat
       ),
   );
   const provider = createTelegramProvider('https://telegram.example', send);
+
   await expect(
     provider.send(
       {

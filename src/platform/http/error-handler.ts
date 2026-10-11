@@ -18,14 +18,19 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _request, resp
   if (error instanceof ZodError) {
     error = validationError(error);
   }
+
   if (!(error instanceof DomainError)) {
     const logger = response.locals.logger as Logger | undefined;
+
     logger?.error({ errorType: error instanceof Error ? 'Error' : typeof error });
   }
+
   const failure = error instanceof DomainError ? error : new DomainError('E-INTERNAL');
+
   if (failure.retryAfter !== undefined) {
     response.setHeader('Retry-After', String(failure.retryAfter));
   }
+
   response.status(failure.status).json({
     error: errorBody(failure, response.getHeader('X-Request-ID')),
   });

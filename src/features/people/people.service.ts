@@ -31,23 +31,30 @@ export async function patchPerson(
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     await lockPerson(tx, scope.workspaceId, personId);
     const before = (await selectPeople(tx, scope.workspaceId, personId))[0];
+
     if (!before) {
       throw new DomainError('E-NOT-FOUND');
     }
+
     const references = [input.managerId, input.backupPersonId].filter((id) => id !== undefined);
     const activeIds = await selectActiveIds(tx, scope.workspaceId, references);
     const invalid = invalidPatchFields(personId, before.role !== null, input, activeIds);
+
     if (invalid.length) {
       throw new DomainError(
         'E-VALIDATION',
         [...new Set(invalid)].map((field) => ({ field, issue: 'invalid' })),
       );
     }
+
     await updatePerson(tx, scope.workspaceId, personId, input);
+
     if (before.role) {
       await updateRole(tx, scope.workspaceId, before.role.id, input);
     }
+
     const after = (await selectPeople(tx, scope.workspaceId, personId))[0];
+
     await recordConfigChange(tx, {
       ...scope,
       tableName: 'people',
@@ -55,6 +62,7 @@ export async function patchPerson(
       before,
       after,
     });
+
     return after;
   });
 }

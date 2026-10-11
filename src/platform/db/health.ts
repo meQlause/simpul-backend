@@ -8,6 +8,7 @@ export async function checkDatabase(connectionString: string) {
     connectionTimeoutMillis: timeoutMilliseconds,
     query_timeout: timeoutMilliseconds,
   });
+
   try {
     await client.connect();
     await client.query('SELECT 1');

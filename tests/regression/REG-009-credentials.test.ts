@@ -42,12 +42,14 @@ let connectionId: string;
 beforeAll(async () => {
   await applyMigrations(pool);
   const now = new Date('2026-10-10T04:01:00Z');
+
   await loadPointStarSeed(pool, pointStarSeed({ now: () => now }));
   await pool.query('TRUNCATE bot_connections CASCADE');
   const session = await signInSeedAdmin(pool, {
     id: 'reg-009-admin',
     email: 'reg-009@pointstar.example',
   });
+
   cookie = session.cookie;
   app = createApp('api', undefined, pino({ level: 'info' }, sink), {
     authentication: session.authentication,
@@ -66,7 +68,9 @@ beforeAll(async () => {
 
 async function assertPrivate(response: { text: string }) {
   const audit = (await pool.query('SELECT * FROM config_audit')).rows;
+
   expect(lines.length).toBeGreaterThan(0);
+
   for (const output of [response.text, lines.join(''), JSON.stringify(audit)]) {
     for (const secret of [token, replacement, webhookSecret]) {
       expect(output).not.toContain(secret);
@@ -79,6 +83,7 @@ test('REG-009 / SRS T-28: after verify, responses, logs and config_audit contain
     .post('/api/v1/telegram/connections/verify')
     .set('Cookie', cookie)
     .send({ botToken: token });
+
   expect(verify.status).toBe(200);
   await assertPrivate(verify);
 });
@@ -89,6 +94,7 @@ test('REG-009 / SRS T-28: after create, responses, logs and config_audit contain
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'REG-009-create')
     .send({ botToken: token, connectionName: 'Regression bot' });
+
   expect(created.status).toBe(201);
   connectionId = created.body.data.id;
   await assertPrivate(created);
@@ -100,12 +106,14 @@ test('REG-009 / SRS T-28: after rotate, responses, logs and config_audit contain
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'REG-009-rotate')
     .send({ botToken: replacement, expectedCredentialVersion: 1 });
+
   expect(rotated.status).toBe(200);
   await assertPrivate(rotated);
 });
 
 test('REG-009 / SRS T-28: after a failed rotate, responses, logs and config_audit contain no token, secret or credential-bearing Telegram URL', async () => {
   const failure = new Error(`https://telegram.example/bot${replacement}/getMe ${webhookSecret}`);
+
   failure.name = `ProviderFailure:${replacement}`;
   provider.verifyCredential.mockRejectedValueOnce(failure);
   const rejected = await request(app)
@@ -113,6 +121,7 @@ test('REG-009 / SRS T-28: after a failed rotate, responses, logs and config_audi
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'REG-009-failed-rotate')
     .send({ botToken: replacement, expectedCredentialVersion: 2 });
+
   expect(rejected.status).toBe(500);
   expect(rejected.body.error.code).toBe('E-INTERNAL');
   await assertPrivate(rejected);

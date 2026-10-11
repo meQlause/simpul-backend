@@ -10,6 +10,7 @@ const dockerExecutable =
 export function databaseFixture(maxConnections = 1) {
   let containerId = '';
   const pool = new postgres.Pool({ max: maxConnections });
+
   beforeAll(async () => {
     containerId = execFileSync(
       dockerExecutable,
@@ -28,6 +29,7 @@ export function databaseFixture(maxConnections = 1) {
     const address = execFileSync(dockerExecutable, ['port', containerId, '5432/tcp'], {
       encoding: 'utf8',
     }).trim();
+
     pool.options.connectionString = `postgresql://postgres@${address}/postgres`;
     await vi.waitFor(
       () =>
@@ -43,9 +45,11 @@ export function databaseFixture(maxConnections = 1) {
   }, 30000);
   afterAll(async () => {
     await pool.end();
+
     if (containerId) {
       execFileSync(dockerExecutable, ['rm', '-f', containerId]);
     }
   });
+
   return pool;
 }

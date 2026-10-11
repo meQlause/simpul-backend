@@ -3,6 +3,7 @@ import { createAuthentication, provisionAdmin } from '../../src/features/auth/in
 
 export async function signInSeedAdmin(pool: Pool, input: { id: string; email: string }) {
   const client = await pool.connect();
+
   try {
     await provisionAdmin(client, {
       ...input,
@@ -18,10 +19,12 @@ export async function signInSeedAdmin(pool: Pool, input: { id: string; email: st
   } finally {
     client.release();
   }
+
   const authentication = createAuthentication(pool, {
     baseUrl: 'https://simpul.example',
     secret: 'test-only-auth-secret-with-more-than-32-characters',
   });
+
   await authentication.api.resetPassword({
     body: { token: `${input.id}-password-token`, newPassword: 'test-password-123' },
   });
@@ -29,5 +32,6 @@ export async function signInSeedAdmin(pool: Pool, input: { id: string; email: st
     body: { email: input.email, password: 'test-password-123' },
     asResponse: true,
   });
+
   return { authentication, cookie: login.headers.get('set-cookie') ?? '' };
 }

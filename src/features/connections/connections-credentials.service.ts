@@ -31,8 +31,10 @@ async function oldTokenRevoked(
   services: Services,
 ) {
   const token = await services.secretStore.get(tx, workspaceId, 'bot_token', stored.tokenRef);
+
   try {
     await services.provider.verifyCredential(token);
+
     return false;
   } catch (error) {
     return error instanceof DomainError && error.code === 'E-TG-TOKEN-INVALID';
@@ -52,13 +54,16 @@ async function recheckWebhook(
     request.stored.webhookRef,
   );
   const url = `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/telegram/${request.stored.id}`;
+
   try {
     await services.provider.registerWebhook({ credential: request.botToken }, url, secret);
+
     return null;
   } catch (error) {
     if (!(await oldTokenRevoked(tx, workspaceId, request.stored, services))) {
       throw error;
     }
+
     return error instanceof DomainError ? error : new DomainError('E-INTERNAL');
   }
 }
@@ -78,18 +83,22 @@ async function storeReplacement(
     purpose: 'bot_token',
     value: input.botToken,
   });
+
   await updateCredential(tx, scope.workspaceId, stored.id, {
     tokenRef,
     account,
     connectionName: input.connectionName,
     now: services.now(),
   });
+
   if (!account.privacyModeOk) {
     await markConnectionNeedsAction(tx, scope, stored.id);
   }
+
   const data = (await selectConnections(tx, scope.workspaceId)).find(
     (row: { id: string }) => row.id === stored.id,
   );
+
   await recordConfigChange(tx, {
     ...scope,
     tableName: 'bot_connections',
@@ -105,6 +114,7 @@ async function storeReplacement(
       status: data.status,
     },
   });
+
   return { data };
 }
 
@@ -115,22 +125,28 @@ async function replaceCredential(
   services: Services,
 ) {
   const stored = await selectCredential(tx, scope.workspaceId, request.connectionId);
+
   if (!stored) {
     throw new DomainError('E-NOT-FOUND');
   }
+
   if (stored.credentialVersion !== request.input.expectedCredentialVersion) {
     throw new DomainError('E-TG-VERSION-CONFLICT');
   }
+
   const account = await services.provider.verifyCredential(request.input.botToken);
+
   if (account.providerAccountId !== stored.providerAccountId) {
     throw new DomainError('E-TG-CREDENTIAL-BOT-MISMATCH');
   }
+
   const failure = await recheckWebhook(
     tx,
     scope.workspaceId,
     { stored, botToken: request.input.botToken },
     services,
   );
+
   if (failure) {
     await degradeConnection(tx, scope.workspaceId, stored.id);
     await markConnectionNeedsAction(tx, scope, stored.id);
@@ -141,8 +157,10 @@ async function replaceCredential(
       before: { status: stored.status },
       after: { status: 'degraded' },
     });
+
     return { error: failure.code };
   }
+
   return storeReplacement(tx, scope, { stored, input: request.input, account }, services);
 }
 
@@ -164,8 +182,10 @@ export async function rotateCredential(
       () => replaceCredential(tx, scope, request, services),
     ),
   );
+
   if ('error' in result) {
     throw new DomainError(result.error);
   }
+
   return result.data;
 }

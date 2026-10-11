@@ -30,10 +30,13 @@ const accountSchema = schema.object({
 
 async function verifyCredential(call: ReturnType<typeof createCall>, credential: string) {
   const parsed = accountSchema.safeParse(await call(credential, 'getMe'));
+
   if (!parsed.success) {
     throw new DomainError(TOKEN_INVALID);
   }
+
   const account = parsed.data.result;
+
   return {
     providerAccountId: String(account.id),
     botUsername: account.username,
@@ -52,6 +55,7 @@ export function createTelegramProvider(
   const setup: SetupProvider & ReceiveProvider = {
     authenticate(request, secret) {
       const supplied = request.headers['x-telegram-bot-api-secret-token'];
+
       return (
         typeof supplied === 'string' &&
         timingSafeEqual(
@@ -66,17 +70,21 @@ export function createTelegramProvider(
       const info = schema
         .object({ ok: schema.literal(true), result: schema.object({ url: schema.string() }) })
         .safeParse(await call(connection.credential, 'getWebhookInfo'));
+
       if (!info.success) {
         throw new DomainError(TOKEN_INVALID);
       }
+
       if (info.data.result.url !== '' && info.data.result.url !== url) {
         throw new DomainError('E-TG-WEBHOOK-CONFLICT');
       }
+
       const result = await call(connection.credential, 'setWebhook', {
         url,
         secret_token: secret,
         allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'],
       });
+
       if (
         !schema.object({ ok: schema.literal(true), result: schema.literal(true) }).safeParse(result)
           .success
@@ -85,6 +93,7 @@ export function createTelegramProvider(
       }
     },
   };
+
   return {
     provider: 'telegram',
     capabilities,

@@ -16,12 +16,15 @@ export async function editChannel(
 ) {
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     const before = await selectEditableChannel(tx, scope.workspaceId, input.channelId);
+
     if (!before) {
       throw new DomainError('E-NOT-FOUND');
     }
+
     if (before.configVersion !== input.expectedConfigVersion) {
       throw new DomainError('E-TG-VERSION-CONFLICT');
     }
+
     const next = {
       displayName: input.displayName ?? before.displayName,
       class: input.class ?? before.class,
@@ -29,10 +32,13 @@ export async function editChannel(
       configVersion: before.configVersion + 1,
       ...channelEditState(before, input.class),
     };
+
     await storeChannelEdit(tx, scope.workspaceId, input.channelId, next);
+
     if (before.monitored && !next.monitored) {
       await cancelChannelNotifications(tx, scope.workspaceId, { channelId: input.channelId, now });
     }
+
     await recordConfigChange(tx, {
       ...scope,
       tableName: 'channels',
@@ -40,6 +46,7 @@ export async function editChannel(
       before,
       after: next,
     });
+
     return (await selectChannels(tx, scope.workspaceId)).find(
       (channel: { id: string }) => channel.id === input.channelId,
     );

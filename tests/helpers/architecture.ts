@@ -55,16 +55,21 @@ const importRules = {
 
 function bindingEntries(clause: compiler.ImportClause, module: string): [string, Binding][] {
   const entries: [string, Binding][] = [];
+
   if (clause.name) {
     entries.push([clause.name.text, { module, name: '*' }]);
   }
+
   const named = clause.namedBindings;
+
   if (!named) {
     return entries;
   }
+
   if (compiler.isNamespaceImport(named)) {
     return [...entries, [named.name.text, { module, name: '*' }]];
   }
+
   return [
     ...entries,
     ...named.elements.map((element): [string, Binding] => [
@@ -80,6 +85,7 @@ function collectBindings(syntax: compiler.SourceFile) {
       if (!statement.importClause || !compiler.isStringLiteral(statement.moduleSpecifier)) {
         return [];
       }
+
       return bindingEntries(statement.importClause, statement.moduleSpecifier.text);
     }),
   );
@@ -90,6 +96,7 @@ function exportsRepository(syntax: compiler.SourceFile, bindings: Map<string, Bi
     if (statement.moduleSpecifier && compiler.isStringLiteral(statement.moduleSpecifier)) {
       return statement.moduleSpecifier.text.includes('.repository.');
     }
+
     if (statement.exportClause && compiler.isNamedExports(statement.exportClause)) {
       return statement.exportClause.elements.some((element) =>
         bindings
@@ -97,6 +104,7 @@ function exportsRepository(syntax: compiler.SourceFile, bindings: Map<string, Bi
           ?.module.includes('.repository.'),
       );
     }
+
     return false;
   });
 }
@@ -105,6 +113,7 @@ function constructorBinding(expression: compiler.Expression, bindings: Map<strin
   if (compiler.isIdentifier(expression)) {
     return bindings.get(expression.text);
   }
+
   if (
     compiler.isPropertyAccessExpression(expression) &&
     compiler.isIdentifier(expression.expression)
@@ -114,16 +123,19 @@ function constructorBinding(expression: compiler.Expression, bindings: Map<strin
       name: expression.name.text,
     };
   }
+
   return undefined;
 }
 
 function createsPgConnection(node: compiler.Node, bindings: Map<string, Binding>): boolean {
   if (compiler.isNewExpression(node)) {
     const binding = constructorBinding(node.expression, bindings);
+
     if (binding?.module === 'pg' && ['Pool', 'Client'].includes(binding.name)) {
       return true;
     }
   }
+
   return compiler.forEachChild(node, (child) => createsPgConnection(child, bindings)) ?? false;
 }
 
@@ -131,6 +143,7 @@ function contextFor(path: string, module: string): ImportContext {
   const target = module.startsWith('.')
     ? posix.normalize(posix.join(posix.dirname(path), module))
     : module;
+
   return {
     path,
     module,
@@ -150,18 +163,23 @@ export function inspectImports(file: string, source: string): string[] {
     .preProcessFile(source, true, true)
     .importedFiles.flatMap((imported) => {
       const context = contextFor(path, imported.fileName);
+
       return Object.entries(importRules)
         .filter(([_rule, violates]) => violates(context))
         .map(([rule]) => rule);
     });
+
   if (path.endsWith('/index.ts') && exportsRepository(syntax, bindings)) {
     violations.push('I-4');
   }
+
   if (!path.startsWith('src/platform/providers/telegram/') && source.includes('api.telegram.org')) {
     violations.push('I-8');
   }
+
   if (!path.startsWith('src/platform/db/') && createsPgConnection(syntax, bindings)) {
     violations.push('I-11');
   }
+
   return [...new Set(violations)];
 }

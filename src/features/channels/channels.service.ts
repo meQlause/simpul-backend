@@ -26,12 +26,15 @@ export async function pauseChannel(
 ) {
   return scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
     const before = await selectChannelState(tx, scope.workspaceId, input.channelId);
+
     if (!before) {
       throw new DomainError(NOT_FOUND);
     }
+
     if (before.configVersion !== input.expectedConfigVersion) {
       throw new DomainError('E-TG-VERSION-CONFLICT');
     }
+
     await storePause(tx, scope.workspaceId, input.channelId);
     await cancelChannelNotifications(tx, scope.workspaceId, { channelId: input.channelId, now });
     await recordConfigChange(tx, {
@@ -41,6 +44,7 @@ export async function pauseChannel(
       before: { connectionStatus: before.connectionStatus, monitored: before.monitored },
       after: { connectionStatus: 'paused', monitored: false },
     });
+
     return (await selectChannels(tx, scope.workspaceId)).find(
       (row: { id: string }) => row.id === input.channelId,
     );
@@ -53,6 +57,7 @@ export async function markConnectionNeedsAction(
   connectionId: string,
 ) {
   const changed = await setConnectionNeedsAction(tx, scope.workspaceId, connectionId);
+
   for (const row of changed) {
     await recordConfigChange(tx, {
       ...scope,
@@ -80,6 +85,7 @@ async function resolveDraft(
       connectionId: input.botConnectionId,
       now,
     });
+
     return {
       ...input,
       providerChatId: candidate.chatId,
@@ -87,9 +93,11 @@ async function resolveDraft(
       providerChatType: candidate.chatType,
     };
   }
+
   if (input.providerChatId === undefined) {
     throw new DomainError('E-TG-INPUT-INVALID');
   }
+
   return {
     ...input,
     providerChatId: input.providerChatId,
@@ -110,9 +118,11 @@ export async function createChannel(
       ...draft,
       providerChatId: draft.providerChatId,
     });
+
     if (!row) {
       throw new DomainError(NOT_FOUND);
     }
+
     await recordConfigChange(tx, {
       ...scope,
       tableName: 'channels',
@@ -120,6 +130,7 @@ export async function createChannel(
       before: null,
       after: { ...draft, connectionStatus: 'draft', monitored: false },
     });
+
     return {
       id: row.id,
       displayName: input.displayName,
@@ -147,9 +158,11 @@ export async function getChannel(
     const channel = (await selectChannels(tx, workspaceId)).find(
       (row: { id: string }) => row.id === channelId,
     );
+
     if (!channel) {
       throw new DomainError(NOT_FOUND);
     }
+
     const check = await selectLatestVerification(tx, workspaceId, channelId);
     const verification = check
       ? {
@@ -160,6 +173,7 @@ export async function getChannel(
           activationReady: check.versionsMatch && checksPass(check.checks),
         }
       : null;
+
     return { ...channel, verification };
   });
 }

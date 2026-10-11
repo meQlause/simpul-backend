@@ -108,9 +108,11 @@ test('Every source file obeys BE/be-architecture section 4 import rules I-2 to I
     .flatMap((entry) => {
       const path = join(entry.parentPath, entry.name);
       const source = readFileSync(path, 'utf8');
+
       return inspectImports(relative(process.cwd(), path), source).map(
         (rule) => `${path}: ${rule}`,
       );
     });
+
   expect(violations).toEqual([]);
 });

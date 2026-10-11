@@ -24,13 +24,17 @@ async function describeChat(call: Call, connection: ConnectionRef, chatId: strin
   const result = chatSchema.safeParse(
     await call(connection.credential, 'getChat', { chat_id: chatId }),
   );
+
   if (!result.success) {
     throw new DomainError('E-TG-GROUP-UNAVAILABLE');
   }
+
   const chat = result.data.result;
+
   if (chat.type === 'private' || chat.type === 'channel') {
     throw new DomainError('E-TG-CHAT-TYPE-UNSUPPORTED');
   }
+
   return { chatType: chat.type, title: chat.title ?? '' };
 }
 
@@ -52,6 +56,7 @@ async function checkReadiness(
   chatId: string,
 ) {
   const account = await verify(connection.credential);
+
   await describeChat(call, connection, chatId);
   const member = memberSchema.safeParse(
     await call(connection.credential, 'getChatMember', {
@@ -59,19 +64,25 @@ async function checkReadiness(
       user_id: Number(account.providerAccountId),
     }),
   );
+
   if (!member.success || ['left', 'kicked'].includes(member.data.result.status)) {
     throw new DomainError('E-TG-GROUP-UNAVAILABLE');
   }
+
   const hook = schema
     .object({ ok: schema.literal(true), result: schema.object({ url: schema.string() }) })
     .safeParse(await call(connection.credential, 'getWebhookInfo'));
+
   if (!hook.success) {
     throw new DomainError('E-TG-TOKEN-INVALID');
   }
+
   if (hook.data.result.url !== '' && hook.data.result.url !== connection.webhookUrl) {
     throw new DomainError('E-TG-WEBHOOK-CONFLICT');
   }
+
   const available = canSend(member.data.result);
+
   return [
     check(
       'bot_identity',
@@ -124,9 +135,11 @@ async function sendMessage(
         result: schema.object({ message_id: schema.number().int().safe() }),
       })
       .safeParse(await call(connection.credential, 'sendMessage', outboundBody(message)));
+
     if (!result.success) {
       throw new DomainError('E-TG-ACTIVATION-FAILED');
     }
+
     return { providerMessageId: String(result.data.result.message_id) };
   } catch (error) {
     if (
@@ -136,6 +149,7 @@ async function sendMessage(
     ) {
       return { retryAfter: error.retryAfter };
     }
+
     throw error;
   }
 }

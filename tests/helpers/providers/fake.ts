@@ -25,11 +25,13 @@ export function createFakeProvider(
   async function perform<T>(payload: unknown, result: T): Promise<T> {
     try {
       await exchange(payload);
+
       return result;
     } catch {
       throw new DomainError('E-INTERNAL');
     }
   }
+
   return {
     provider: 'fake',
     capabilities,
@@ -39,6 +41,7 @@ export function createFakeProvider(
       secret: string,
     ) {
       const value = request.headers['x-fake-secret'];
+
       return (
         typeof value === 'string' &&
         timingSafeEqual(

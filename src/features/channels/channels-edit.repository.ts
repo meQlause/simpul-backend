@@ -19,6 +19,7 @@ export async function selectEditableChannel(
      connection_status AS "connectionStatus", monitored FROM channels WHERE workspace_id = $1 AND id = $2 FOR UPDATE`,
     [workspaceId, channelId],
   );
+
   return result.rows[0];
 }
 

@@ -6,12 +6,15 @@ import type { MailServices } from './workspace-mail.service.js';
 
 export function workspaceRouter(resolveConnection: ConnectionResolver, mail?: MailServices) {
   const router = Router();
+
   router.get('/me', meController(resolveConnection));
   router.get('/settings', getSettingsController(resolveConnection));
   router.put('/settings', settingsController(resolveConnection));
   router.get('/settings/mail', mailController(resolveConnection));
+
   if (mail) {
     router.put('/settings/mail', saveMailController(resolveConnection, mail));
   }
+
   return router;
 }

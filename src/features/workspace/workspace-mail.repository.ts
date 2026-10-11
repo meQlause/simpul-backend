@@ -18,6 +18,7 @@ export async function selectMail(tx: PoolClient, workspaceId: string) {
     FROM mail_connections WHERE workspace_id = $1`,
     [workspaceId],
   );
+
   return result.rows[0];
 }
 
@@ -50,6 +51,7 @@ export async function pendingDigestItems(tx: PoolClient, workspaceId: string) {
     AND people.level = 'executive' AND notifications.sent_at IS NULL AND cancelled_at IS NULL`,
     [workspaceId],
   );
+
   return result.rows[0].count;
 }
 

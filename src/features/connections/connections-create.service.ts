@@ -45,6 +45,7 @@ export async function createConnection(
           purpose: 'webhook_secret',
           value: webhookSecret,
         });
+
         await insertConnection(tx, scope, {
           id,
           connectionName,
@@ -54,6 +55,7 @@ export async function createConnection(
           account,
         });
         const status = account.privacyModeOk ? 'ready' : 'needs_action';
+
         await recordConfigChange(tx, {
           ...scope,
           tableName: 'bot_connections',
@@ -66,6 +68,7 @@ export async function createConnection(
           `${services.publicBaseUrl.replace(/\/$/u, '')}/api/v1/webhooks/telegram/${id}`,
           webhookSecret,
         );
+
         return {
           id,
           provider: 'telegram',

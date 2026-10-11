@@ -18,16 +18,21 @@ beforeAll(async () => {
 
 test('A query run outside the scoped transaction returns zero rows from every table that has workspace_id', async () => {
   const tables = await scopedTableNames(pool);
+
   expect(tables.length).toBeGreaterThan(0);
+
   for (const table of tables) {
     expect(
       (await pool.query(`SELECT * FROM "${table}"`)).rowCount,
       `${table} must be populated`,
     ).toBe(1);
   }
+
   const client = await pool.connect();
+
   try {
     await client.query('SET ROLE test_app');
+
     for (const table of tables) {
       expect((await client.query(`SELECT * FROM "${table}"`)).rows, table).toEqual([]);
     }

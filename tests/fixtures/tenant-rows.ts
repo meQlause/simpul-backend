@@ -258,6 +258,7 @@ async function insertRow(pool: Pool, table: string, values: Record<string, unkno
   const columns = Object.keys(values);
   const placeholders = columns.map((_value, position) => `$${position + 1}`).join(', ');
   const columnList = columns.map((column) => `"${column}"`).join(', ');
+
   await pool.query(
     `INSERT INTO "${table}" (${columnList}) VALUES (${placeholders})`,
     Object.values(values),
@@ -281,8 +282,10 @@ export async function seedTenantRows(pool: Pool, workspaceId: string) {
     ...workRows(workspaceId),
     ...operationalRows(workspaceId),
   ];
+
   for (const [table, values] of rows) {
     const identity = withId.has(table) ? { id: workspaceId } : {};
+
     await insertRow(pool, table, { ...identity, workspace_id: workspaceId, ...values });
   }
 }

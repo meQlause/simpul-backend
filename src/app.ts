@@ -36,11 +36,13 @@ function mountSetup(app: Express, services: ApiServices) {
           provider: services.telegram,
         }
       : undefined;
+
     app.use(
       '/api/v1',
       channelsRouter(services.resolveConnection, services.connectionSetup, activation),
     );
   }
+
   if (services.telegram) {
     const setup = services.connectionSetup
       ? {
@@ -48,6 +50,7 @@ function mountSetup(app: Express, services: ApiServices) {
           secretStore: createSecretStore(services.connectionSetup.masterKey),
         }
       : undefined;
+
     app.use('/api/v1', connectionsRouter(services.resolveConnection, services.telegram, setup));
   }
 }
@@ -56,10 +59,13 @@ function mountApi(app: Express, services?: ApiServices) {
   if (services) {
     app.all('/api/auth/*splat', toNodeHandler(services.authentication));
   }
+
   app.use(express.json());
+
   if (!services) {
     return;
   }
+
   app.use('/api/v1', adminScope(services.authentication.resolveAdmin));
   const mail = services.mail
     ? {
@@ -68,6 +74,7 @@ function mountApi(app: Express, services?: ApiServices) {
         now: services.mail.now,
       }
     : undefined;
+
   app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
   app.use('/api/v1', peopleRouter(services.resolveConnection));
   mountSetup(app, services);
@@ -80,21 +87,28 @@ export function createApp(
   services?: ApiServices,
 ) {
   const app = express();
+
   app.disable('x-powered-by');
   app.use(requestId);
+
   if (logger) {
     app.use(requestLogger(logger));
   }
+
   if (checkDatabase) {
     app.get('/health', health(checkDatabase));
   }
+
   if (role === 'api') {
     mountApi(app, services);
   }
+
   if (role === 'webhook' && services?.webhook) {
     app.use(webhookRouter(services.webhook));
   }
+
   app.use(notFound);
   app.use(errorHandler);
+
   return app;
 }

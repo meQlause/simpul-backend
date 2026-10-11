@@ -6,6 +6,7 @@ const requiredChecks = [
   'webhook',
   'inbound',
 ];
+
 export const VERIFICATION_LIFETIME_MS = 600000;
 
 export function checksPass(checks: { key: string; status: string }[], required = requiredChecks) {
@@ -43,11 +44,14 @@ export function activationFailure(facts: Facts) {
   if (facts.expectedConfigVersion !== facts.configVersion) {
     return 'E-TG-VERSION-CONFLICT';
   }
+
   if (verificationExpired(facts)) {
     return 'E-TG-VERIFICATION-EXPIRED';
   }
+
   if (facts.status !== 'pass' || facts.connectionStatus !== 'ready' || !checksPass(facts.checks)) {
     return 'E-TG-READINESS-INCOMPLETE';
   }
+
   return null;
 }

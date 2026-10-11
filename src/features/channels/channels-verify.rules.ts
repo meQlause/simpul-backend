@@ -45,6 +45,7 @@ function verificationStatus(checks: ReadinessCheck[], ready: boolean) {
   if (ready) {
     return 'pass';
   }
+
   return checks.some((check) => check.status === 'fail') ? 'fail' : 'pending';
 }
 
@@ -52,11 +53,14 @@ export function readinessState(checks: ReadinessCheck[], channelStatus: string) 
   const ready = checksPass(checks);
   const status = verificationStatus(checks, ready);
   let nextStatus = channelStatus;
+
   if (ready && channelStatus !== 'active') {
     nextStatus = 'verified';
   }
+
   if (status === 'fail') {
     nextStatus = 'needs_action';
   }
+
   return { ready, status, channelStatus: nextStatus };
 }

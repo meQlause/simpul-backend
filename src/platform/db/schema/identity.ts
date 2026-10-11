@@ -15,12 +15,15 @@ import {
 } from 'drizzle-orm/pg-core';
 
 export const instant = (name: string) => timestamp(name, { withTimezone: true });
+
 export const bytes = customType<{ data: Buffer }>({ dataType: () => 'bytea' });
+
 export const reference = (
   name: string,
   target: () => AnyPgColumn,
   onDelete: 'restrict' | 'cascade' | 'set null' = 'restrict',
 ) => uuid(name).references(target, { onDelete, onUpdate: 'restrict' });
+
 export const rowColumns = () => ({
   id: uuid('id').defaultRandom().primaryKey(),
   createdAt: instant('created_at').defaultNow().notNull(),
@@ -47,6 +50,7 @@ export const joinColumns = () => ({
   createdAt: instant('created_at').defaultNow().notNull(),
   workspaceId: reference('workspace_id', (): AnyPgColumn => workspaces.id).notNull(),
 });
+
 export const tenantColumns = () => ({ ...rowColumns(), ...joinColumns() });
 
 export const people = pgTable(

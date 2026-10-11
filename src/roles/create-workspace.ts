@@ -24,6 +24,7 @@ export async function runCreateWorkspace(
   const pool = createSystemPool(config.DATABASE_URL);
   const now = new Date();
   const token = randomUUID();
+
   try {
     await createWorkspace(createConnectionResolver(pool), {
       input,
@@ -35,6 +36,7 @@ export async function runCreateWorkspace(
       expiresAt: new Date(now.getTime() + tokenLifetimeMs),
     });
     const link = new URL('/set-password', config.PUBLIC_BASE_URL);
+
     link.searchParams.set('token', token);
     process.stdout.write(`${link.href}\n`);
   } finally {

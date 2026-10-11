@@ -11,16 +11,19 @@ async function waitForDatabase(pool: Pool) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     try {
       await pool.query('SELECT 1');
+
       return;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
+
   throw new Error('Browser fixture database did not start');
 }
 
 async function browserAuthentication(pool: Pool) {
   const client = await pool.connect();
+
   try {
     await provisionAdmin(client, {
       id: 'browser-admin',
@@ -36,13 +39,16 @@ async function browserAuthentication(pool: Pool) {
   } finally {
     client.release();
   }
+
   const authentication = createAuthentication(pool, {
     baseUrl: 'http://127.0.0.1:4173',
     secret: 'browser-test-only-secret-with-more-than-32-characters',
   });
+
   await authentication.api.resetPassword({
     body: { token: 'browser-password-token', newPassword: 'test-password-123' },
   });
+
   return authentication;
 }
 
@@ -65,10 +71,12 @@ export async function startBrowserServer(pool: Pool, port: number) {
       app(request, response);
     }
   }).listen(port, '127.0.0.1');
+
   await new Promise<void>((accept, reject) => {
     server.once('listening', accept);
     server.once('error', reject);
   });
+
   return server;
 }
 
@@ -76,9 +84,11 @@ if (process.env.SIMPUL_BROWSER_FIXTURE === '1') {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const server = await startBrowserServer(pool, 0);
   const address = server.address();
+
   if (!address || typeof address === 'string') {
     throw new Error('Browser fixture has no TCP address');
   }
+
   process.stdout.write(`BROWSER_FIXTURE_READY http://127.0.0.1:${address.port}\n`);
   process.once('SIGTERM', () => {
     server.close(() => {

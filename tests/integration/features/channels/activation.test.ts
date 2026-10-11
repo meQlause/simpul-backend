@@ -31,6 +31,7 @@ async function expectActive(channelId: string) {
       [channelId],
     )
   ).rows[0];
+
   expect(row).toMatchObject({
     monitored: true,
     connection_status: 'active',
@@ -45,6 +46,7 @@ test('SRS T-25: activation with the same Idempotency-Key twice posts one indicat
   const draft = await draftWithVerification('repeat');
   const first = await activate(draft, 'repeat');
   const retry = await activate(draft, 'repeat');
+
   expect(first.status).toBe(200);
   expect(retry.status).toBe(200);
   expect(retry.body.data).toEqual(first.body.data);
@@ -54,6 +56,7 @@ test('SRS T-25: activation with the same Idempotency-Key twice posts one indicat
 test('SRS T-25: two concurrent activation requests post one indicator', async () => {
   const draft = await draftWithVerification('concurrent');
   const replies = await Promise.all([activate(draft, 'concurrent'), activate(draft, 'concurrent')]);
+
   expect(replies.map(({ status }) => status)).toEqual([200, 200]);
   expect(replies[0].body.data).toEqual(replies[1].body.data);
   await expectActive(draft.channelId);
@@ -61,8 +64,10 @@ test('SRS T-25: two concurrent activation requests post one indicator', async ()
 
 test('SRS T-25: reusing an activation key with changed input conflicts without another indicator', async () => {
   const draft = await draftWithVerification('conflict');
+
   expect((await activate(draft, 'conflict')).status).toBe(200);
   const changed = await activate(draft, 'conflict', 2);
+
   expect(changed.status).toBe(409);
   expect(changed.body.error.code).toBe('E-TG-IDEMPOTENCY-CONFLICT');
   await expectActive(draft.channelId);
@@ -70,12 +75,15 @@ test('SRS T-25: reusing an activation key with changed input conflicts without a
 
 test('Channels §6: if the database commit fails after the post, a reconciliation record lets the retry reuse the same message', async () => {
   const draft = await draftWithVerification('commit-failure');
+
   await pool.query(`CREATE FUNCTION fail_activation_commit() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN RAISE EXCEPTION 'Test activation commit failure'; END $$;
     CREATE CONSTRAINT TRIGGER fail_activation_commit AFTER UPDATE ON channels DEFERRABLE INITIALLY DEFERRED
     FOR EACH ROW WHEN (NEW.monitored) EXECUTE FUNCTION fail_activation_commit()`);
+
   try {
     const failed = await activate(draft, 'commit-failure');
+
     expect(failed.status).toBe(500);
     expect(failed.body.error.code).toBe('E-INTERNAL');
     expect(
@@ -87,6 +95,7 @@ test('Channels §6: if the database commit fails after the post, a reconciliatio
         'commit-failure',
       ])
     ).rows[0];
+
     expect(record).toMatchObject({
       response: null,
       outcome: {
@@ -101,6 +110,7 @@ test('Channels §6: if the database commit fails after the post, a reconciliatio
       'DROP TRIGGER fail_activation_commit ON channels; DROP FUNCTION fail_activation_commit()',
     );
   }
+
   expect((await activate(draft, 'commit-failure')).status).toBe(200);
   await expectActive(draft.channelId);
 });

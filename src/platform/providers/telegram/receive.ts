@@ -32,8 +32,10 @@ const ordinary = schema.object({
 
 export const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
   const parsed = command.safeParse(update);
+
   if (parsed.success) {
     const message = parsed.data.message;
+
     return {
       type: 'setup-command',
       code: message.text.split(' ')[1],
@@ -42,10 +44,13 @@ export const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
       chatType: message.chat.type,
     };
   }
+
   const incoming = ordinary.safeParse(update);
+
   if (!incoming.success) {
     return { type: 'ignore' };
   }
+
   return {
     type: 'setup-message',
     chatId: String(incoming.data.message.chat.id),

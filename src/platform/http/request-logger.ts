@@ -5,6 +5,7 @@ export function requestLogger(logger: Logger): RequestHandler {
   return (request, response, next) => {
     const bound = logger.child({ requestId: response.getHeader('X-Request-ID') });
     const started = performance.now();
+
     response.locals.logger = bound;
     response.on('finish', () => {
       bound.info({

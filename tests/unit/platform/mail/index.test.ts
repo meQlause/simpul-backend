@@ -9,6 +9,7 @@ test('SMTP verification refuses a server without TLS before attempting authentic
     socket.write('220 test SMTP\r\n');
     socket.on('data', (data) => {
       commands.push(data.toString());
+
       if (data.toString().startsWith('EHLO')) {
         socket.write('250-test SMTP\r\n250 AUTH PLAIN LOGIN\r\n');
       } else {
@@ -16,13 +17,17 @@ test('SMTP verification refuses a server without TLS before attempting authentic
       }
     });
   });
+
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
+
   try {
     const address = server.address();
+
     if (!address || typeof address === 'string') {
       throw new Error('Missing SMTP test port');
     }
+
     await expect(
       verifyMail({
         host: '127.0.0.1',

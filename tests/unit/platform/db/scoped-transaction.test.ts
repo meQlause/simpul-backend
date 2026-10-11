@@ -10,6 +10,7 @@ test('The scoped transaction runner takes its pool from the connection resolver 
   const pool = { connect: vi.fn().mockResolvedValue(client) } as unknown as Pool;
   const resolver = vi.fn().mockResolvedValue(pool);
   const operation = vi.fn().mockResolvedValue('result');
+
   await expect(scopedTransaction(resolver, workspaceId, operation)).resolves.toBe('result');
   expect(resolver).toHaveBeenCalledExactlyOnceWith(workspaceId);
   expect(pool.connect).toHaveBeenCalledExactlyOnceWith();
@@ -25,6 +26,7 @@ test('The scoped transaction runner takes its pool from the connection resolver 
 test('B1 resolves every workspace to the system pool', async () => {
   const pool = {} as Pool;
   const resolver = createConnectionResolver(pool);
+
   await expect(resolver(workspaceId)).resolves.toBe(pool);
   await expect(resolver('00000000-0000-4000-8000-000000000002')).resolves.toBe(pool);
 });
@@ -33,6 +35,7 @@ test('A rejected connection resolution cannot start a workspace operation', asyn
   const unavailable = new Error('Database unavailable');
   const resolver = vi.fn().mockRejectedValue(unavailable);
   const operation = vi.fn<(tx: PoolClient) => Promise<void>>();
+
   await expect(scopedTransaction(resolver, workspaceId, operation)).rejects.toBe(unavailable);
   expect(operation).not.toHaveBeenCalled();
 });

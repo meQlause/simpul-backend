@@ -10,6 +10,7 @@ test('A thrown non-domain error returns 500 E-INTERNAL with no stack trace, SQL 
   const lines: string[] = [];
   const logger = pino({ level: 'info' }, { write: (line: string) => lines.push(line) });
   const app = express();
+
   app.disable('x-powered-by');
   app.use(requestId, requestLogger(logger));
   app.get('/failure', () =>
@@ -18,6 +19,7 @@ test('A thrown non-domain error returns 500 E-INTERNAL with no stack trace, SQL 
   app.use(errorHandler);
 
   const response = await request(app).get('/failure');
+
   expect(response.status).toBe(500);
   expect(response.body).toEqual({
     error: {

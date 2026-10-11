@@ -31,6 +31,7 @@ let cookie: string;
 let webhookApp: ReturnType<typeof createApp>;
 let instant = new Date('2026-10-10T04:01:00Z');
 const webhookSecret = Buffer.alloc(32, 8).toString('base64url');
+
 afterEach(() => {
   instant = new Date('2026-10-10T04:01:00Z');
 });
@@ -43,6 +44,7 @@ beforeAll(async () => {
     id: 'channels-admin',
     email: 'channels@pointstar.example',
   });
+
   cookie = session.cookie;
   const services = {
     authentication: session.authentication,
@@ -64,6 +66,7 @@ beforeAll(async () => {
       now: () => instant,
     },
   };
+
   app = createApp('api', undefined, undefined, services);
   webhookApp = createApp('webhook', undefined, undefined, services);
 }, 120000);
@@ -74,12 +77,15 @@ async function connectBot() {
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'shared-bot')
     .send({ connectionName: 'Shared bot', botToken: token });
+
   expect(connection.status).toBe(201);
+
   return connection.body.data.id as string;
 }
 
 async function expectConnectionCard(channelIds: string[]) {
   const cards = await request(app).get('/api/v1/telegram/connections').set('Cookie', cookie);
+
   expect(cards.status).toBe(200);
   expect(cards.body.data).toHaveLength(1);
   expect(
@@ -95,12 +101,14 @@ test('SRS T-15: one connection serves two channels; the second channel needs no 
     .post('/api/v1/channels')
     .set('Cookie', cookie)
     .send({ botConnectionId: connectionId, providerChatId: '-12345', displayName: 'First group' });
+
   expect(first.status).toBe(201);
   const second = await request(app).post('/api/v1/channels').set('Cookie', cookie).send({
     botConnectionId: connectionId,
     providerChatId: '-100987654321',
     displayName: 'Second group',
   });
+
   expect(second.status).toBe(201);
   expect(second.body.data.id).not.toBe(first.body.data.id);
   expect(
@@ -119,6 +127,7 @@ test('SRS T-24: a connection code is shown once, stored as a hash and expires af
     .post(`/api/v1/telegram/connections/${sharedConnectionId}/sessions`)
     .set('Cookie', cookie)
     .send({ purpose: 'identify_group' });
+
   expect(issued.status).toBe(201);
   expect(issued.body.data.command).toMatch(/^\/simpul_connect [0-9a-f]{32}$/u);
   expect(issued.body.data.expiresAt).toBe('2026-10-10T04:16:00.000Z');
@@ -126,6 +135,7 @@ test('SRS T-24: a connection code is shown once, stored as a hash and expires af
   const poll = await request(app)
     .get(`/api/v1/telegram/connection-sessions/${issued.body.data.id}`)
     .set('Cookie', cookie);
+
   expect(poll.status).toBe(200);
   expect(poll.body.data).toMatchObject({ state: 'pending', candidate: null });
   expect(poll.text).not.toContain(issued.body.data.command.split(' ')[1]);
@@ -134,6 +144,7 @@ test('SRS T-24: a connection code is shown once, stored as a hash and expires af
       issued.body.data.id,
     ])
   ).rows[0];
+
   expect(row.code_hash).toHaveLength(32);
   expect(JSON.stringify(row)).not.toContain(issued.body.data.command.split(' ')[1]);
 });
@@ -143,7 +154,9 @@ async function issueCode(connectionId: string) {
     .post(`/api/v1/telegram/connections/${connectionId}/sessions`)
     .set('Cookie', cookie)
     .send({ purpose: 'identify_group' });
+
   expect(response.status).toBe(201);
+
   return response.body.data as { id: string; command: string };
 }
 
@@ -172,8 +185,10 @@ test('SRS T-24: one use identifies only a candidate; replay cannot change its gr
   const connectionId = await connectBot();
   const issued = await issueCode(connectionId);
   const count = (await pool.query('SELECT id FROM channels')).rowCount;
+
   expect((await sendCommand(connectionId, issued.command)).status).toBe(200);
   const candidate = await pollCode(issued.id);
+
   expect(candidate.body.data).toMatchObject({
     state: 'identified',
     candidate: { providerChatId: '-54321', title: 'Candidate group', chatType: 'supergroup' },
@@ -187,6 +202,7 @@ test('SRS T-24: one use identifies only a candidate; replay cannot change its gr
 test('SRS T-24: an identified code creates one draft and a replay creates nothing', async () => {
   const connectionId = await connectBot();
   const issued = await issueCode(connectionId);
+
   expect((await sendCommand(connectionId, issued.command, -54322)).status).toBe(200);
   const submit = () =>
     request(app).post('/api/v1/channels').set('Cookie', cookie).send({
@@ -195,6 +211,7 @@ test('SRS T-24: an identified code creates one draft and a replay creates nothin
       displayName: 'Identified group',
     });
   const first = await submit();
+
   expect(first.status).toBe(201);
   expect(first.body.data).toMatchObject({
     monitored: false,
@@ -203,6 +220,7 @@ test('SRS T-24: an identified code creates one draft and a replay creates nothin
     providerChatType: 'supergroup',
   });
   const repeat = await submit();
+
   expect(repeat.status).toBe(410);
   expect(repeat.body.error.code).toBe('E-TG-SESSION-EXPIRED');
   expect((await pollCode(issued.id)).body.data).toMatchObject({
@@ -216,6 +234,7 @@ test('SRS T-24: at exactly 15 minutes a code expires and connects nothing', asyn
   const connectionId = await connectBot();
   const issued = await issueCode(connectionId);
   const count = (await pool.query('SELECT id FROM channels')).rowCount;
+
   instant = new Date('2026-10-10T04:16:00Z');
   expect((await sendCommand(connectionId, issued.command, -54323)).status).toBe(200);
   expect((await pollCode(issued.id)).body.data).toMatchObject({
@@ -226,6 +245,7 @@ test('SRS T-24: at exactly 15 minutes a code expires and connects nothing', asyn
     .post('/api/v1/channels')
     .set('Cookie', cookie)
     .send({ botConnectionId: connectionId, sessionId: issued.id, displayName: 'Expired group' });
+
   expect(submit.status).toBe(410);
   expect(submit.body.error.code).toBe('E-TG-SESSION-EXPIRED');
   expect((await pool.query('SELECT id FROM channels')).rowCount).toBe(count);
@@ -238,6 +258,7 @@ test('SRS T-24: a wrong code and ordinary text store no message or candidate', a
   const before = (
     await pool.query('SELECT * FROM channel_connection_sessions WHERE id = $1', [issued.id])
   ).rows;
+
   expect((await sendCommand(connectionId, `/simpul_connect ${'0'.repeat(32)}`)).status).toBe(200);
   expect((await sendCommand(connectionId, 'private-message-marker')).status).toBe(200);
   expect(
@@ -257,6 +278,7 @@ test('A wrong webhook secret is rejected before the JSON body is parsed', async 
     .set('X-Telegram-Bot-Api-Secret-Token', 'wrong-secret')
     .set('Content-Type', 'application/json')
     .send('{broken');
+
   expect(response.status).toBe(403);
   expect(response.body.error.code).toBe('E-WEBHOOK-FORBIDDEN');
   expect(response.body.error).not.toHaveProperty('message');
@@ -272,12 +294,14 @@ test('SRS T-20: POST /channels twice with the same chat id produces one row and 
       displayName: 'Duplicate group',
     });
   const responses = await Promise.all([submit(), submit()]);
+
   expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
   expect(responses.find((response) => response.status === 409)?.body.error.code).toBe(
     'E-TG-CHANNEL-DUPLICATE',
   );
   const rows = (await pool.query('SELECT id FROM channels WHERE provider_chat_id = $1', ['-54330']))
     .rows;
+
   expect(rows).toHaveLength(1);
   expect(rows[0].id).toBe(responses.find((response) => response.status === 201)?.body.data.id);
   expect(
@@ -300,6 +324,7 @@ test.each(['42', '+42'])(
       .post('/api/v1/channels')
       .set('Cookie', cookie)
       .send({ botConnectionId: connectionId, providerChatId, displayName: 'Private chat' });
+
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('E-TG-CHAT-TYPE-UNSUPPORTED');
     expect((await pool.query('SELECT * FROM channels ORDER BY id')).rows).toEqual(before);
@@ -320,6 +345,7 @@ test('SRS T-17: a saved draft reopens with monitored false, no indicator and no 
     class: 'internal',
     primaryLanguage: 'id',
   });
+
   expect(saved.status).toBe(201);
   expect(saved.body.data).toMatchObject({
     monitored: false,
@@ -331,12 +357,14 @@ test('SRS T-17: a saved draft reopens with monitored false, no indicator and no 
     'SELECT monitored, visible_indicator_message_id, monitoring_started_at FROM channels WHERE id = $1',
     [saved.body.data.id],
   );
+
   expect(stored.rows[0]).toEqual({
     monitored: false,
     visible_indicator_message_id: null,
     monitoring_started_at: null,
   });
   const reopened = await request(app).get('/api/v1/channels').set('Cookie', cookie);
+
   expect(reopened.status).toBe(200);
   expect(
     reopened.body.data.find((channel: { id: string }) => channel.id === saved.body.data.id),
@@ -356,15 +384,18 @@ test('Channels API section 2: GET returns the saved channel and its full latest 
     providerChatId: '-54600',
     displayName: 'Detail group',
   });
+
   expect(saved.status).toBe(201);
   const response = await request(app)
     .get('/api/v1/channels/' + saved.body.data.id)
     .set('Cookie', cookie);
+
   expect(response.status).toBe(200);
   expect(response.body.data).toEqual({ ...saved.body.data, verification: null });
   const missing = await request(app)
     .get('/api/v1/channels/' + randomUUID())
     .set('Cookie', cookie);
+
   expect(missing.status).toBe(404);
   expect(missing.body.error.code).toBe('E-NOT-FOUND');
 });
@@ -385,6 +416,7 @@ test('Channels API section 2: full latest verification carries only current read
     }),
   );
   let latestId = '';
+
   for (const checkedAt of ['2026-10-10T03:59:00Z', '2026-10-10T04:00:00Z']) {
     const inserted = await pool.query(
       `INSERT INTO channel_verifications (workspace_id, channel_id, bot_connection_id, config_version, credential_version, checks, status, checked_at, expires_at)
@@ -393,12 +425,15 @@ test('Channels API section 2: full latest verification carries only current read
        WHERE channel.id = $1 RETURNING id`,
       [saved.body.data.id, JSON.stringify(checks), checkedAt],
     );
+
     latestId = inserted.rows[0].id;
   }
+
   const detail = () =>
     request(app)
       .get('/api/v1/channels/' + saved.body.data.id)
       .set('Cookie', cookie);
+
   expect((await detail()).body.data.verification).toEqual({
     id: latestId,
     checks,

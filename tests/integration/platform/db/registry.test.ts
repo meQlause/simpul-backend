@@ -94,6 +94,7 @@ test.each([
       RETURNING status`,
       [workspaceId, status, reference, acknowledgement, outage],
     );
+
     expect(result.rows).toEqual([{ status }]);
   },
 );

@@ -18,6 +18,7 @@ function scriptedProvider(scenario: string) {
     if (scenario === 'timeout') {
       throw new DOMException('Provider timeout', 'TimeoutError');
     }
+
     if (scenario === 'body-timeout') {
       return new Response(
         new ReadableStream({
@@ -27,6 +28,7 @@ function scriptedProvider(scenario: string) {
         }),
       );
     }
+
     return new Response(
       JSON.stringify({
         ok: false,
@@ -37,6 +39,7 @@ function scriptedProvider(scenario: string) {
       { status: 429 },
     );
   });
+
   return { adapter: createTelegramProvider('https://telegram.example', send), send };
 }
 
@@ -51,10 +54,12 @@ function assertFailure(
 ) {
   expect(response.status).toBe(code === TIMEOUT ? 504 : 429);
   expect(response.body.error.code).toBe(code);
+
   if (code === RATE_LIMITED) {
     expect(response.body.error.retryAfter).toBe(12);
     expect(response.headers['retry-after']).toBe('12');
   }
+
   expect(response.text).not.toContain(credential);
 }
 
@@ -66,11 +71,13 @@ test.each([
   'SRS T-27: credential verification %s maps to %s without automatic retry',
   async (scenario, code) => {
     const { adapter, send } = scriptedProvider(scenario);
+
     provider.verifyCredential.mockImplementationOnce(adapter.verifyCredential);
     const response = await request(app)
       .post('/api/v1/telegram/connections/verify')
       .set('Cookie', cookie)
       .send({ botToken: credential });
+
     assertFailure(response, code);
     expect(send).toHaveBeenCalledTimes(1);
   },
@@ -82,6 +89,7 @@ test.each([
 ])('SRS T-27: indicator %s returns %s and leaves the group unmonitored', async (scenario, code) => {
   const draft = await draftWithVerification(scenario);
   const { adapter, send } = scriptedProvider(scenario);
+
   provider.send.mockImplementationOnce(adapter.send);
   const response = await request(app)
     .post(`/api/v1/channels/${draft.channelId}/activate`)
@@ -92,6 +100,7 @@ test.each([
       authorizationAck: true,
       expectedConfigVersion: 1,
     });
+
   assertFailure(response, code);
   expect(send).toHaveBeenCalledTimes(1);
   expect(

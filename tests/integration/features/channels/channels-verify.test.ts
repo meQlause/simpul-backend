@@ -12,6 +12,7 @@ import {
 import { DomainError } from '../../../../src/platform/errors/domain-error.js';
 
 const instant = new Date('2026-10-10T04:01:00Z');
+
 beforeEach(() => vi.clearAllMocks());
 
 function verify(channelId: string) {
@@ -19,14 +20,18 @@ function verify(channelId: string) {
     .post('/api/v1/channels/' + channelId + '/verify')
     .set('Cookie', cookie);
 }
+
 async function receiveSession(connectionId: string) {
   const issued = await request(app)
     .post('/api/v1/telegram/connections/' + connectionId + '/sessions')
     .set('Cookie', cookie)
     .send({ purpose: 'receive_check' });
+
   expect(issued.status).toBe(201);
+
   return issued.body.data as { id: string; command: string };
 }
+
 function deliver(connectionId: string, text: string, chatId: number, extras: object = {}) {
   return request(webhookApp)
     .post('/api/v1/webhooks/telegram/' + connectionId)
@@ -43,6 +48,7 @@ function deliver(connectionId: string, text: string, chatId: number, extras: obj
       },
     });
 }
+
 async function activitySnapshot() {
   return Promise.all(
     ['messages_raw', 'threads', 'notifications'].map(
@@ -58,6 +64,7 @@ async function target(scenario: string) {
       draft.channelId,
     ])
   ).rows[0];
+
   return {
     ...draft,
     chatId: Number(row.provider_chat_id),
@@ -68,6 +75,7 @@ async function target(scenario: string) {
 test('Channels API section 5: verification is bound to both versions for ten minutes and sends no notification', async () => {
   const draft = await target('Readiness without inbound');
   const response = await verify(draft.channelId);
+
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({
     activationReady: false,
@@ -92,6 +100,7 @@ test('Channels API section 5: verification is bound to both versions for ten min
       [response.body.data.id],
     )
   ).rows[0];
+
   expect(stored).toEqual({ config_version: 1, credential_version: 1, status: 'pending' });
   expect(provider.send).not.toHaveBeenCalled();
 });
@@ -100,6 +109,7 @@ test('Channels API section 5: a command alone is not inbound proof; a fresh ordi
   const draft = await target('Actual ordinary inbound');
   const beforeActivity = await activitySnapshot();
   const session = await receiveSession(draft.connectionId);
+
   expect((await deliver(draft.connectionId, session.command, draft.chatId)).status).toBe(200);
   expect((await verify(draft.channelId)).body.data.activationReady).toBe(false);
   await deliverNonProof(draft);
@@ -108,6 +118,7 @@ test('Channels API section 5: a command alone is not inbound proof; a fresh ordi
     (await deliver(draft.connectionId, 'setup-private-text-marker', draft.chatId)).status,
   ).toBe(200);
   const verified = await verify(draft.channelId);
+
   expect(verified.status).toBe(200);
   expect(verified.body.data.activationReady).toBe(true);
   expect(
@@ -118,6 +129,7 @@ test('Channels API section 5: a command alone is not inbound proof; a fresh ordi
 
 test('Channels API section 5: provider failure stays a failed check with no active state', async () => {
   const draft = await target('Privacy needs action');
+
   provider.checkReadiness.mockResolvedValueOnce(
     ['bot_identity', 'group', 'membership', 'privacy_mode', 'webhook'].map((key) => ({
       key,
@@ -127,6 +139,7 @@ test('Channels API section 5: provider failure stays a failed check with no acti
     })),
   );
   const response = await verify(draft.channelId);
+
   expect(response.status).toBe(200);
   expect(response.body.data.activationReady).toBe(false);
   expect(
@@ -152,10 +165,12 @@ test.each([
         draft.channelId,
       ])
     ).rows;
+
     provider.checkReadiness.mockRejectedValueOnce(
       new DomainError(code, undefined, code === 'E-TG-RATE-LIMITED' ? 30 : undefined),
     );
     const response = await verify(draft.channelId);
+
     expect(response.status).toBe(status);
     expect(response.body.error.code).toBe(code);
     expect(
@@ -179,6 +194,7 @@ async function assertSetupOnly(
   const detail = await request(app)
     .get('/api/v1/channels/' + draft.channelId)
     .set('Cookie', cookie);
+
   expect(detail.body.data.verification).toEqual(verification);
   expect(detail.body.data.monitored).toBe(false);
   expect(provider.send).not.toHaveBeenCalled();
@@ -205,6 +221,7 @@ async function deliverNonProof(draft: Awaited<ReturnType<typeof target>>) {
 test('Channels API section 5: an expired receive-check session cannot prove ordinary inbound', async () => {
   const draft = await target('Expired inbound proof');
   const session = await receiveSession(draft.connectionId);
+
   await deliver(draft.connectionId, session.command, draft.chatId);
   await pool.query(
     `UPDATE channel_connection_sessions SET created_at = $2::timestamptz - interval '15 minutes',expires_at = $2::timestamptz - interval '1 second' WHERE id = $1`,
@@ -218,6 +235,7 @@ test('Channels API section 5: an expired receive-check session cannot prove ordi
 test('Channels API section 5: rotating credentials requires a new inbound proof', async () => {
   const draft = await target('Rotated inbound proof');
   const session = await receiveSession(draft.connectionId);
+
   await deliver(draft.connectionId, session.command, draft.chatId);
   await deliver(draft.connectionId, 'ordinary before rotation', draft.chatId);
   expect((await verify(draft.channelId)).body.data.activationReady).toBe(true);
@@ -226,9 +244,11 @@ test('Channels API section 5: rotating credentials requires a new inbound proof'
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'rotate-inbound-proof')
     .send({ botToken: 'test-only-new-token', expectedCredentialVersion: 1 });
+
   expect(rotated.status).toBe(200);
   expect((await verify(draft.channelId)).body.data.activationReady).toBe(false);
   const fresh = await receiveSession(draft.connectionId);
+
   await deliver(draft.connectionId, fresh.command, draft.chatId);
   await deliver(draft.connectionId, 'ordinary after rotation', draft.chatId);
   expect((await verify(draft.channelId)).body.data.activationReady).toBe(true);

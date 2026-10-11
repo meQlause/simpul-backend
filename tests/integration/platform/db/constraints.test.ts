@@ -31,6 +31,7 @@ test('An edit is a new row, never an update; retention can delete the new raw ro
     VALUES ($1::uuid, $1::uuid, '2', $1::text, '2026-10-10T04:02:00Z', '2026-10-10T04:02:00Z', 'Edited message', $1::uuid) RETURNING id, supersedes`,
     [workspaceId],
   );
+
   expect(result.rows[0].supersedes).toBe(workspaceId);
   expect(
     (await transaction().query('DELETE FROM messages_raw WHERE id = $1', [result.rows[0].id]))
@@ -54,6 +55,7 @@ test('A label with a source message in evidence_message_ids can be inserted', as
     VALUES ($1, $1, 'progress', 'sudah_terjadi', ARRAY[$1::uuid], 1, 1) RETURNING evidence_message_ids`,
     [workspaceId],
   );
+
   expect(result.rows).toEqual([{ evidence_message_ids: [workspaceId] }]);
 });
 
@@ -66,6 +68,7 @@ async function storeMonitoredChannel(overrides: Record<string, unknown>) {
     provider_chat_type: 'supergroup',
     ...overrides,
   };
+
   return transaction().query(
     `INSERT INTO channels (workspace_id, bot_connection_id, provider, provider_chat_id, display_name, monitored, connection_status, authorization_ack_at, monitoring_started_at, visible_indicator_message_id, provider_chat_type)
     VALUES ($1, $1, 'telegram', $2, 'Test active channel', true, $3, $4, $5, $6, $7) RETURNING monitored`,
@@ -121,6 +124,7 @@ function storeThread(overrides: Partial<ThreadState>) {
     expiresAt: null,
     ...overrides,
   };
+
   return transaction().query(
     `INSERT INTO threads (workspace_id, domain_id, channel_id, display_id, summary, genesis_confidence, status, closed_at, closure_kind, expires_at)
     VALUES ($1, $1, $1, $2, 'Test lifecycle', 1, $3, $4, $5, $6) RETURNING status`,

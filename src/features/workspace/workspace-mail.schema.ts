@@ -19,9 +19,11 @@ const mailSchema = zod.strictObject({
 
 export function parseMail(input: unknown) {
   const parsed = mailSchema.safeParse(input);
+
   if (!parsed.success) {
     throw validationError(parsed.error);
   }
+
   return parsed.data;
 }
 
@@ -30,10 +32,12 @@ export function requireMailPassword(input: zod.infer<typeof mailSchema>, storedP
     .string()
     .min(1)
     .safeParse(input.password ?? storedPassword);
+
   if (!parsed.success) {
     throw validationError(
       new zod.ZodError(parsed.error.issues.map((issue) => ({ ...issue, path: ['password'] }))),
     );
   }
+
   return parsed.data;
 }

@@ -20,9 +20,11 @@ export async function authenticateWebhook(
   request: Parameters<ReceiveProvider['authenticate']>[0],
 ) {
   const connection = await services.lookupConnection(connectionId);
+
   if (!connection) {
     throw new DomainError('E-NOT-FOUND');
   }
+
   const secret = await scopedTransaction(services.resolveConnection, connection.workspaceId, (tx) =>
     services.secretStore.get(
       tx,
@@ -31,9 +33,11 @@ export async function authenticateWebhook(
       connection.webhookSecretRef,
     ),
   );
+
   if (!services.provider.authenticate(request, secret)) {
     throw new DomainError('E-WEBHOOK-FORBIDDEN');
   }
+
   return { workspaceId: connection.workspaceId, connectionId };
 }
 
@@ -43,11 +47,13 @@ export async function receiveUpdate(
   update: unknown,
 ) {
   const event = services.provider.parse(update);
+
   if (event.type === 'setup-message') {
     await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
       recordReceiveCheck(tx, scope, event, services.now()),
     );
   }
+
   if (event.type === 'setup-command') {
     await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
       recordCandidate(tx, scope, event, services.now()),

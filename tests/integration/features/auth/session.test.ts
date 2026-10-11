@@ -15,6 +15,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   const client = await pool.connect();
+
   try {
     await provisionAdmin(client, {
       id: 'non-admin',
@@ -39,6 +40,7 @@ beforeAll(async () => {
   } finally {
     client.release();
   }
+
   auth = createAuthentication(pool, {
     baseUrl: 'https://simpul.example',
     secret: 'test-only-auth-secret-with-more-than-32-characters',
@@ -57,6 +59,7 @@ beforeAll(async () => {
 
 test('GET /api/v1/me returns 401 E-AUTH-REQUIRED without a session', async () => {
   const response = await supertest(app).get('/api/v1/me');
+
   expect(response.status).toBe(401);
   expect(response.body.error.code).toBe('E-AUTH-REQUIRED');
 });
@@ -69,6 +72,7 @@ test('GET /api/v1/me returns 403 E-FORBIDDEN for a signed-in non-admin', async (
   const response = await supertest(app)
     .get('/api/v1/me')
     .set('Cookie', login.headers.get('set-cookie') ?? '');
+
   expect(response.status).toBe(403);
   expect(response.body.error.code).toBe('E-FORBIDDEN');
 });
@@ -81,6 +85,7 @@ test('The workspace admin resolves to their own workspace and actor scope', asyn
   const person = await pool.query('SELECT id, workspace_id FROM people WHERE auth_user_id = $1', [
     'workspace-admin',
   ]);
+
   await expect(
     auth.resolveAdmin(new Headers({ cookie: login.headers.get('set-cookie') ?? '' })),
   ).resolves.toEqual({ actorId: person.rows[0].id, workspaceId: person.rows[0].workspace_id });

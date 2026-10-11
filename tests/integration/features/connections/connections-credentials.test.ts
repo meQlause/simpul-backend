@@ -33,6 +33,7 @@ async function expectReplacement(
   responseText: string,
 ) {
   const after = await storedBot();
+
   expect(after.provider_account_id).toBe(before.provider_account_id);
   expect(after.webhook_secret_ref).toBe(before.webhook_secret_ref);
   expect(after.token_secret_ref).not.toBe(before.token_secret_ref);
@@ -44,8 +45,10 @@ async function expectReplacement(
       after.token_secret_ref,
     ),
   );
+
   expect(token).toBe('test-only-rotated-token');
   expect(responseText).not.toContain(token);
+
   return after;
 }
 
@@ -59,6 +62,7 @@ async function expectVerificationExpired(draft: { channelId: string; verificatio
       authorizationAck: true,
       expectedConfigVersion: 1,
     });
+
   expect(invalidated.status).toBe(409);
   expect(invalidated.body.error.code).toBe('E-TG-VERIFICATION-EXPIRED');
 }
@@ -70,6 +74,7 @@ test('SRS T-22: rotating to the same bot increments credentialVersion, replaces 
   ]);
   const before = await storedBot();
   const response = await rotate(before, 'same-bot');
+
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({
     id: before.id,
@@ -77,9 +82,11 @@ test('SRS T-22: rotating to the same bot increments credentialVersion, replaces 
     credentialVersion: before.credential_version + 1,
   });
   const after = await expectReplacement(before, response.text);
+
   await Promise.all(drafts.map(expectVerificationExpired));
   expect(provider.send).not.toHaveBeenCalled();
   const replay = await rotate(before, 'same-bot');
+
   expect(replay.status).toBe(200);
   expect(replay.body.data).toEqual(response.body.data);
   expect((await storedBot()).credential_version).toBe(after.credential_version);
@@ -99,6 +106,7 @@ async function snapshot() {
 
 test('SRS T-22: a different bot returns 422 E-TG-CREDENTIAL-BOT-MISMATCH and changes nothing', async () => {
   const before = await snapshot();
+
   provider.verifyCredential.mockResolvedValueOnce({
     providerAccountId: 'different-bot',
     botUsername: 'other_bot',
@@ -107,6 +115,7 @@ test('SRS T-22: a different bot returns 422 E-TG-CREDENTIAL-BOT-MISMATCH and cha
     privacyModeOk: true,
   });
   const response = await rotate(await storedBot(), 'different-bot');
+
   expect(response.status).toBe(422);
   expect(response.body.error.code).toBe('E-TG-CREDENTIAL-BOT-MISMATCH');
   expect(await snapshot()).toEqual(before);
@@ -120,6 +129,7 @@ test('Connections §4: a stale credential version changes nothing and does not c
     { ...bot, credential_version: bot.credential_version + 1 },
     'stale-version',
   );
+
   expect(response.status).toBe(409);
   expect(response.body.error.code).toBe('E-TG-VERSION-CONFLICT');
   expect(await snapshot()).toEqual(before);
@@ -128,6 +138,7 @@ test('Connections §4: a stale credential version changes nothing and does not c
 
 test('Connections §4: if the old token is revoked and the new webhook check fails, the connection is degraded and its groups need action', async () => {
   const bot = await storedBot();
+
   provider.verifyCredential
     .mockResolvedValueOnce({
       providerAccountId: bot.provider_account_id,
@@ -139,6 +150,7 @@ test('Connections §4: if the old token is revoked and the new webhook check fai
     .mockRejectedValueOnce(new DomainError('E-TG-TOKEN-INVALID'));
   provider.registerWebhook.mockRejectedValueOnce(new DomainError('E-TG-WEBHOOK-CONFLICT'));
   const response = await rotate(bot, 'revoked-token');
+
   expect(response.status).toBe(409);
   expect(response.body.error.code).toBe('E-TG-WEBHOOK-CONFLICT');
   expect(await storedBot()).toMatchObject({
@@ -147,7 +159,9 @@ test('Connections §4: if the old token is revoked and the new webhook check fai
     token_secret_ref: bot.token_secret_ref,
   });
   const groups = (await pool.query('SELECT monitored, connection_status FROM channels')).rows;
+
   expect(groups).toHaveLength(2);
+
   for (const group of groups) {
     expect(group).toEqual({ monitored: false, connection_status: 'needs_action' });
   }

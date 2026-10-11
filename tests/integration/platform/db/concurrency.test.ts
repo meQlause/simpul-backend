@@ -15,10 +15,12 @@ beforeAll(async () => {
 test('Two concurrent inserts of the same (workspace_id, provider, provider_chat_id) produce one row and one unique violation', async () => {
   const chatId = randomUUID();
   const clients = await Promise.all([pool.connect(), pool.connect()]);
+
   try {
     const processes = await Promise.all(
       clients.map((client) => client.query('SELECT pg_backend_pid() AS pid')),
     );
+
     expect(new Set(processes.map((result) => result.rows[0].pid)).size).toBe(2);
     const results = await Promise.allSettled(
       clients.map((client) =>
@@ -29,13 +31,16 @@ test('Two concurrent inserts of the same (workspace_id, provider, provider_chat_
         ),
       ),
     );
+
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     const failures = results.filter((result) => result.status === 'rejected');
+
     expect(failures).toHaveLength(1);
     expect(failures[0].reason).toMatchObject({ code: '23505', constraint: 'channels_chat_uq' });
   } finally {
     clients.forEach((client) => client.release());
   }
+
   expect(
     (
       await pool.query(

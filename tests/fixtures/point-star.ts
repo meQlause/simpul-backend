@@ -319,8 +319,10 @@ async function seedDelivery(client: PoolClient, seed: Seed) {
 
 export async function loadPointStarSeed(pool: Pool, seed: Seed) {
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
+
     for (const populate of [
       seedPeople,
       seedConfiguration,
@@ -334,6 +336,7 @@ export async function loadPointStarSeed(pool: Pool, seed: Seed) {
     ]) {
       await populate(client, seed);
     }
+
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

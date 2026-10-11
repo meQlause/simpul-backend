@@ -30,6 +30,7 @@ beforeAll(() => {
   const address = execFileSync(dockerExecutable, ['port', containerId, '5432/tcp'], {
     encoding: 'utf8',
   }).trim();
+
   connectionString = `postgresql://postgres@${address}/postgres`;
 }, 30000);
 
@@ -55,10 +56,12 @@ test('GET /health returns 200 with the database up and 503 with it down', async 
     .toContain('accepting connections');
   const app = createApp('api', () => checkDatabase(connectionString));
   const healthy = await request(app).get('/health');
+
   expect(healthy.status).toBe(200);
 
   execFileSync(dockerExecutable, ['stop', containerId]);
   containerId = '';
   const unavailable = await request(app).get('/health');
+
   expect(unavailable.status).toBe(503);
 }, 30000);

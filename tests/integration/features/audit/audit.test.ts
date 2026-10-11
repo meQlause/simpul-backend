@@ -49,6 +49,7 @@ test.each([
     tokenSecretRef: secret,
     credentials: { password: secret },
   };
+
   await recordConfigChange(transaction(), {
     workspaceId,
     actorId,
@@ -60,11 +61,13 @@ test.each([
   const rows = await transaction().query(
     'SELECT actor_id, table_name, "before", "after" FROM config_audit',
   );
+
   expect(rows.rows).toHaveLength(1);
   expect(JSON.stringify(rows.rows)).not.toContain(secret);
   expect(rows.rows[0]).toMatchObject({ actor_id: actorId, table_name: tableName });
   const expected =
     'role' in visible ? { ...visible, role: { id: actorId, name: 'Role', team: 'Team' } } : visible;
+
   expect(rows.rows[0].before).toEqual(expected);
   expect(rows.rows[0].after).toEqual(expected);
 });

@@ -40,6 +40,7 @@ async function verifySetPasswordLink(link: string) {
       .set('Origin', 'https://simpul.example')
       .send(body);
   const attempts = await Promise.all([reset(), reset()]);
+
   expect(attempts.map((response) => response.status).sort()).toEqual([200, 400]);
   expect(
     (await auth.handler(request('reset-password', { ...body, newPassword: 'replay-password-123' })))
@@ -48,6 +49,7 @@ async function verifySetPasswordLink(link: string) {
   const login = await auth.handler(
     request('sign-in/email', { email: 'siti@pointstar.example', password: body.newPassword }),
   );
+
   expect(login.status).toBe(200);
   expect(login.headers.get('set-cookie')).toContain('HttpOnly');
   expect(login.headers.get('set-cookie')).toContain('Secure');
@@ -71,6 +73,7 @@ async function verifyInitialConfiguration(link: string) {
   const audit = await pool.query(
     'SELECT actor_id, table_name, record_id, "before", "after" FROM config_audit',
   );
+
   expect(audit.rows).toHaveLength(1);
   expect(audit.rows[0]).toMatchObject({
     table_name: 'workspaces',
@@ -131,11 +134,13 @@ test('create-workspace creates a workspace, an admin person and a sign-in accoun
       },
     },
   );
+
   expect(result.stdout.trim()).toMatch(/^https:\/\/simpul\.example\/set-password\?token=[^\s]+$/u);
   const rows = await pool.query(`SELECT workspace.name, person.name AS admin, person.email,
     person.auth_user_id = account."userId" AS linked FROM workspaces AS workspace
     JOIN people AS person ON person.id = workspace.admin_person_id
     JOIN account ON account."userId" = person.auth_user_id`);
+
   expect(rows.rows).toEqual([
     { name: 'Point Star', admin: 'Siti Aminah', email: 'siti@pointstar.example', linked: true },
   ]);
@@ -145,6 +150,7 @@ test('create-workspace creates a workspace, an admin person and a sign-in accoun
 
 test('A rejected workspace insert rolls back its admin account and set-password link', async () => {
   const authUserId = '00000000-0000-4000-8000-000000000003';
+
   await expect(
     createWorkspace(createConnectionResolver(pool), {
       input: {

@@ -4,6 +4,7 @@ export function channelEditState(
 ) {
   const clearReadiness = audience !== undefined && audience !== before.class;
   const statuses: Record<string, string> = { active: 'paused', verified: 'draft' };
+
   return {
     clearReadiness,
     connectionStatus: clearReadiness

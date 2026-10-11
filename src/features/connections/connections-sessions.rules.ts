@@ -5,5 +5,6 @@ export function sessionState(
   if (session.consumed || session.expiresAt <= now) {
     return 'expired';
   }
+
   return session.identified ? 'identified' : 'pending';
 }

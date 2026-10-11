@@ -4,6 +4,7 @@ export function mailDto(row: Awaited<ReturnType<typeof selectMail>>) {
   if (!row) {
     return null;
   }
+
   return {
     host: row.host,
     port: row.port,
@@ -18,5 +19,6 @@ export function mailAudit(row: Awaited<ReturnType<typeof selectMail>>) {
   if (!row) {
     return null;
   }
+
   return { host: row.host, port: row.port, username: row.username, fromAddress: row.fromAddress };
 }

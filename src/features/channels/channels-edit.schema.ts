@@ -12,15 +12,19 @@ const editSchema = schema.strictObject({
 
 export function parseChannelEdit(input: unknown, channelId: unknown) {
   const fields = schema.record(schema.string(), schema.unknown()).safeParse(input);
+
   if (
     fields.success &&
     (Object.hasOwn(fields.data, 'providerChatId') || Object.hasOwn(fields.data, 'botConnectionId'))
   ) {
     throw new DomainError('E-CHANNEL-IDENTITY-FIXED');
   }
+
   const parsed = editSchema.safeParse(input);
+
   if (!parsed.success) {
     throw new DomainError('E-TG-INPUT-INVALID', validationError(parsed.error).details);
   }
+
   return { ...parsed.data, channelId: parseChannelId(channelId) };
 }

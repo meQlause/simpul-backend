@@ -64,8 +64,10 @@ function mountedRoutes(stack: Layer[]): Route[] {
   return stack.flatMap((layer) => {
     if (layer.route) {
       const route = layer.route;
+
       return Object.keys(route.methods).map((method) => ({ method, path: route.path }));
     }
+
     return mountedRoutes(layer.handle?.stack ?? []);
   });
 }
@@ -140,12 +142,14 @@ async function prepareRouteParameters() {
   ).rows[0].id;
   const workspaceId = pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }).workspaceId;
   const client = await pool.connect();
+
   try {
     const tokenRef = await createSecretStore(Buffer.alloc(32, 7).toString('base64')).put(
       client,
       workspaceId,
       { purpose: 'bot_token', value: 'test-only-admin-route-token' },
     );
+
     await client.query('UPDATE bot_connections SET token_secret_ref = $2 WHERE id = $1', [
       connectionA,
       tokenRef,
@@ -153,17 +157,20 @@ async function prepareRouteParameters() {
   } finally {
     client.release();
   }
+
   bodies['post /channels'] = { ...bodies['post /channels'], botConnectionId: connectionA };
   const session = await supertest(app)
     .post(`/api/v1/telegram/connections/${connectionA}/sessions`)
     .set('Cookie', adminCookie)
     .send({ purpose: 'identify_group' });
+
   expect(session.status).toBe(201);
   sessionA = session.body.data.id;
 }
 
 async function login(name: string, email: string) {
   const client = await pool.connect();
+
   try {
     await provisionAdmin(client, {
       id: email,
@@ -177,11 +184,13 @@ async function login(name: string, email: string) {
   } finally {
     client.release();
   }
+
   await auth.api.resetPassword({ body: { token: email, newPassword: 'test-password-123' } });
   const response = await auth.api.signInEmail({
     body: { email, password: 'test-password-123' },
     asResponse: true,
   });
+
   return response.headers.get('set-cookie') ?? '';
 }
 
@@ -207,26 +216,33 @@ beforeAll(async () => {
 function request(route: Route, personId = personA) {
   const path = `/api/v1${route.path.replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
+
   if (route.method === 'get') {
     return agent.get(path);
   }
+
   if (route.method === 'put') {
     return agent.put(path);
   }
+
   if (route.method === 'patch') {
     return agent.patch(path);
   }
+
   if (route.method === 'post') {
     return agent.post(path);
   }
+
   throw new Error(`Add a valid request for ${route.method} ${route.path}`);
 }
 
 async function foreignSnapshot() {
   const client = await pool.connect();
+
   try {
     await client.query('RESET ROLE');
     const rows: Record<string, unknown> = {};
+
     for (const table of tables) {
       rows[table] = (
         await client.query(
@@ -235,9 +251,11 @@ async function foreignSnapshot() {
         )
       ).rows;
     }
+
     rows.workspaces = (
       await client.query('SELECT * FROM workspaces WHERE id = $1', [workspaceB])
     ).rows;
+
     return rows;
   } finally {
     await client.query('SET ROLE test_app');
@@ -255,9 +273,11 @@ test('REG-007 iterates every mounted admin route and passes', () => {
 test.each(routes)('REG-007: $method $path requires an admin session', async (route) => {
   const body = bodies[`${route.method} ${route.path}`];
   const anonymous = await request(route).send(body);
+
   expect(anonymous.status).toBe(401);
   expect(anonymous.body.error.code).toBe('E-AUTH-REQUIRED');
   const member = await request(route).set('Cookie', memberCookie).send(body);
+
   expect(member.status).toBe(403);
   expect(member.body.error.code).toBe('E-FORBIDDEN');
 });
@@ -269,6 +289,7 @@ test.each(routes)('REG-007: $method $path as A reads or changes no row of B', as
     .set('Idempotency-Key', 'admin-route-isolation')
     .set('X-Workspace-ID', workspaceB)
     .send(bodies[`${route.method} ${route.path}`]);
+
   expect(response.status).toBe(statuses[`${route.method} ${route.path}`] ?? 200);
   expect(JSON.stringify(response.body)).not.toContain(workspaceB);
   expect(JSON.stringify(response.body)).not.toContain('Test operator');
@@ -283,6 +304,7 @@ test.each(routes.filter((route) => route.method !== 'get'))(
     const response = await request(route)
       .set('Cookie', adminCookie)
       .send({ ...bodies[`${route.method} ${route.path}`], workspaceId: workspaceB });
+
     expect(response.status).toBe(422);
     expect(response.body.error).toMatchObject({
       code:
@@ -301,10 +323,12 @@ test('REG-007: a foreign person and foreign backup cannot be changed or assigned
   const foreign = await request(route, workspaceB)
     .set('Cookie', adminCookie)
     .send({ availability: 'leave' });
+
   expect(foreign.status).toBe(404);
   const backup = await request(route)
     .set('Cookie', adminCookie)
     .send({ backupPersonId: workspaceB });
+
   expect(backup.status).toBe(422);
   expect(backup.body.error.code).toBe('E-VALIDATION');
   expect(await foreignSnapshot()).toEqual(before);
@@ -316,16 +340,19 @@ test('REG-007: a foreign connection and session cannot identify or create a grou
     .post(`/api/v1/telegram/connections/${workspaceB}/sessions`)
     .set('Cookie', adminCookie)
     .send({ purpose: 'identify_group' });
+
   expect(issue.status).toBe(404);
   const poll = await supertest(app)
     .get(`/api/v1/telegram/connection-sessions/${workspaceB}`)
     .set('Cookie', adminCookie);
+
   expect(poll.status).toBe(404);
   const create = await supertest(app).post('/api/v1/channels').set('Cookie', adminCookie).send({
     botConnectionId: connectionA,
     sessionId: workspaceB,
     displayName: 'Foreign candidate',
   });
+
   expect(create.status).toBe(410);
   expect(create.body.error.code).toBe('E-TG-SESSION-EXPIRED');
   expect(await foreignSnapshot()).toEqual(before);

@@ -14,6 +14,7 @@ import {
 import { sessionState } from './connections-sessions.rules.js';
 
 const CODE_TTL_MS = 900000;
+
 type Scope = { workspaceId: string; actorId: string };
 
 export async function issueSession(
@@ -34,9 +35,11 @@ export async function issueSession(
       expiresAt,
     }),
   );
+
   if (!row) {
     throw new DomainError('E-NOT-FOUND');
   }
+
   return {
     id: row.id,
     purpose: input.purpose,
@@ -54,9 +57,11 @@ export async function pollSession(
   const row = await scopedTransaction(resolveConnection, scope.workspaceId, (tx) =>
     selectSession(tx, scope.workspaceId, scope.sessionId),
   );
+
   if (!row) {
     throw new DomainError('E-NOT-FOUND');
   }
+
   const state = sessionState(
     {
       expiresAt: row.expires_at.getTime(),
@@ -65,6 +70,7 @@ export async function pollSession(
     },
     now.getTime(),
   );
+
   return {
     id: row.id,
     state,
@@ -100,9 +106,11 @@ export async function consumeCandidate(
   input: { sessionId: string; connectionId: string; now: Date },
 ) {
   const candidate = await consumeSession(tx, workspaceId, input);
+
   if (!candidate) {
     throw new DomainError('E-TG-SESSION-EXPIRED');
   }
+
   return candidate;
 }
 

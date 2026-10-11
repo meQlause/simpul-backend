@@ -18,10 +18,12 @@ const commandArgumentsOffset = 3;
 
 if (process.argv[2] === 'create-workspace') {
   const { runCreateWorkspace } = await import('./roles/create-workspace.js');
+
   await runCreateWorkspace(config, process.argv.slice(commandArgumentsOffset));
 } else {
   const pool = createSystemPool(config.DATABASE_URL);
   const providers = createProviderRegistry();
+
   providers.register(
     createTelegramProvider(config.TELEGRAM_API_BASE, undefined, {
       callTimeoutMs: config.TELEGRAM_CALL_TIMEOUT_MS,
@@ -29,15 +31,18 @@ if (process.argv[2] === 'create-workspace') {
       sendPerChatPerMinute: config.TELEGRAM_SEND_PER_CHAT_PER_MINUTE,
     }),
   );
+
   try {
     const inventory = await pool.query<{ provider: string }>(
       'SELECT provider FROM providers_in_use()',
     );
+
     providers.assertCovers(inventory.rows.map((row) => row.provider));
   } catch (error) {
     await pool.end();
     throw error;
   }
+
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
   const services = ['api', 'webhook'].includes(config.PROCESS_ROLE)
@@ -66,14 +71,17 @@ if (process.argv[2] === 'create-workspace') {
         },
       }
     : undefined;
+
   if (!services) {
     await pool.end();
   }
+
   const app = createApp(
     config.PROCESS_ROLE,
     () => checkDatabase(config.DATABASE_URL),
     createLogger(config.LOG_LEVEL),
     services,
   );
+
   app.listen(port);
 }

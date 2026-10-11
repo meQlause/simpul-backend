@@ -31,6 +31,7 @@ export async function selectReadiness(
      WHERE channel.workspace_id = $1 AND channel.id = $2 FOR UPDATE OF channel,connection`,
     [workspaceId, channelId, now],
   );
+
   return result.rows[0];
 }
 
@@ -55,6 +56,7 @@ export async function storeReadiness(
   },
 ) {
   const check = input.check;
+
   await tx.query(
     `INSERT INTO channel_verifications (id,workspace_id,channel_id,bot_connection_id,config_version,credential_version,checks,status,checked_at,expires_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,

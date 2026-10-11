@@ -6,6 +6,7 @@ import { parseSettings } from './workspace.schema.js';
 export function meController(resolveConnection: ConnectionResolver): RequestHandler {
   return async (_request, response) => {
     const scope = response.locals.scope as { workspaceId: string; actorId: string };
+
     response.json({ data: await getMe(resolveConnection, scope) });
   };
 }
@@ -14,6 +15,7 @@ export function settingsController(resolveConnection: ConnectionResolver): Reque
   return async (request, response) => {
     const scope = response.locals.scope as { workspaceId: string; actorId: string };
     const input = parseSettings(request.body);
+
     response.json({ data: await saveSettings(resolveConnection, scope, input) });
   };
 }
@@ -21,6 +23,7 @@ export function settingsController(resolveConnection: ConnectionResolver): Reque
 export function getSettingsController(resolveConnection: ConnectionResolver): RequestHandler {
   return async (_request, response) => {
     const scope = response.locals.scope as { workspaceId: string };
+
     response.json({ data: await getSettings(resolveConnection, scope.workspaceId) });
   };
 }

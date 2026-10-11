@@ -7,6 +7,7 @@ export async function storedAccount(tx: PoolClient, workspaceId: string) {
     "SELECT provider_account_id FROM bot_connections WHERE workspace_id = $1 AND provider = 'telegram'",
     [workspaceId],
   );
+
   return result.rows[0]?.provider_account_id;
 }
 
@@ -22,6 +23,7 @@ export async function selectConnections(tx: PoolClient, workspaceId: string) {
      FROM bot_connections AS connection WHERE connection.workspace_id = $1 AND connection.provider = 'telegram' ORDER BY connection.id`,
     [workspaceId],
   );
+
   return result.rows;
 }
 
@@ -38,6 +40,7 @@ export async function insertConnection(
   },
 ) {
   const { id, connectionName, tokenRef, webhookRef, verifiedAt, account } = input;
+
   try {
     await tx.query(
       `INSERT INTO bot_connections
@@ -68,6 +71,7 @@ export async function insertConnection(
     ) {
       throw new DomainError('E-TG-BOT-IN-USE');
     }
+
     throw error;
   }
 }

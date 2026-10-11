@@ -25,12 +25,14 @@ beforeAll(async () => {
 
 async function foreignRow(table: string) {
   const admin = await pool.connect();
+
   try {
     await admin.query('RESET ROLE');
     const result = await admin.query(
       `SELECT row_to_json(record) AS snapshot FROM "${table}" AS record WHERE workspace_id = $1`,
       [workspaceB],
     );
+
     return result.rows[0].snapshot;
   } finally {
     await admin.query('SET ROLE test_app');
@@ -52,11 +54,15 @@ async function rejectForeignInsert(tx: PoolClient, table: string, snapshot: unkn
 
 test('REG-007: With two seeded workspaces, a scoped transaction for A reads and writes no row of B, in every table', async () => {
   const tables = await scopedTableNames(pool);
+
   expect(tables.length).toBeGreaterThan(0);
+
   for (const table of tables) {
     const original = await foreignRow(table);
+
     await scopedTransaction(resolveConnection, workspaceA, async (tx) => {
       const result = await tx.query(`SELECT workspace_id FROM "${table}"`);
+
       expect(result.rows, table).toEqual([{ workspace_id: workspaceA }]);
       expect(
         (
@@ -89,6 +95,7 @@ test('The transaction scope is local: returning a connection to the pool exposes
 
 test('A failed operation rolls back its changes and clears its workspace scope', async () => {
   const failure = new Error('Test operation failed');
+
   await expect(
     scopedTransaction(resolveConnection, workspaceA, async (tx) => {
       await tx.query("UPDATE people SET name = 'Changed' WHERE workspace_id = $1", [workspaceA]);

@@ -18,6 +18,7 @@ test('Credential verification calls only getMe and reads the bot identity and pr
     ),
   );
   const provider = createTelegramProvider('https://telegram.example/', send);
+
   await expect(provider.verifyCredential('test-only-token')).resolves.toEqual({
     providerAccountId: '7214905513',
     botUsername: 'simpul_workspace_bot',
@@ -39,6 +40,7 @@ test.each([
     .fn<typeof fetch>()
     .mockResolvedValue(new Response(JSON.stringify({ ok: true, result: { url } })));
   const provider = createTelegramProvider('https://telegram.example', send);
+
   await expect(
     provider.registerWebhook(
       { credential: 'test-only-token' },
@@ -59,6 +61,7 @@ test('Missing optional flags report false and a non-bot account is refused', asy
       new Response(JSON.stringify({ ok: true, result: { ...result, is_bot: false } })),
     );
   const provider = createTelegramProvider('https://telegram.example', send);
+
   await expect(provider.verifyCredential('test-only-token')).resolves.toMatchObject({
     canJoinGroups: false,
     privacyModeOk: false,
@@ -79,6 +82,7 @@ test.each(['', 'https://simpul.example/api/v1/webhooks/telegram/this-connection'
       .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: true })));
     const provider = createTelegramProvider('https://telegram.example', send);
     const url = 'https://simpul.example/api/v1/webhooks/telegram/this-connection';
+
     await provider.registerWebhook(
       { credential: 'test-only-token' },
       url,

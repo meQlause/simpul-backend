@@ -28,10 +28,12 @@ const provider = {
 };
 let app: ReturnType<typeof createApp>;
 let cookie: string;
+
 beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   const client = await pool.connect();
+
   try {
     await provisionAdmin(client, {
       id: 'connections-admin',
@@ -47,10 +49,12 @@ beforeAll(async () => {
   } finally {
     client.release();
   }
+
   const authentication = createAuthentication(pool, {
     baseUrl: 'https://simpul.example',
     secret: 'test-only-auth-secret-with-more-than-32-characters',
   });
+
   await authentication.api.resetPassword({
     body: { token: 'connections-password-token', newPassword: 'test-password-123' },
   });
@@ -58,6 +62,7 @@ beforeAll(async () => {
     body: { email: 'connections@pointstar.example', password: 'test-password-123' },
     asResponse: true,
   });
+
   cookie = login.headers.get('set-cookie') ?? '';
   const services = {
     authentication,
@@ -72,6 +77,7 @@ beforeAll(async () => {
       newCode: () => Buffer.alloc(16, 9).toString('hex'),
     },
   };
+
   app = createApp('api', undefined, undefined, services);
 }, 120000);
 
@@ -89,6 +95,7 @@ async function snapshot() {
       )
       .join(' UNION ALL '),
   );
+
   return Object.fromEntries(snapshots.rows.map((row) => [row.table_name, row.snapshot]));
 }
 
@@ -98,6 +105,7 @@ test('POST /telegram/connections/verify stores nothing and changes no webhook', 
     .post('/api/v1/telegram/connections/verify')
     .set('Cookie', cookie)
     .send({ botToken: ` ${token} ` });
+
   expect(response.status).toBe(200);
   expect(response.body).toEqual({
     data: {
@@ -121,6 +129,7 @@ test('Verification reports null when the workspace has no stored connection', as
     .post('/api/v1/telegram/connections/verify')
     .set('Cookie', cookie)
     .send({ botToken: token });
+
   expect(response.status).toBe(200);
   expect(response.body.data.sameBotAsStored).toBeNull();
   expect(await snapshot()).toEqual(before);
@@ -135,6 +144,7 @@ test.each([{}, { botToken: ' ' }, { botToken: token, unexpected: true }])(
       .post('/api/v1/telegram/connections/verify')
       .set('Cookie', cookie)
       .send(input);
+
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('E-TG-INPUT-INVALID');
     expect(provider.verifyCredential).not.toHaveBeenCalled();
@@ -150,6 +160,7 @@ async function claimAsAppRole() {
   );
   await pool.query('GRANT EXECUTE ON FUNCTION workspace_for_session(text) TO test_app');
   await pool.query('SET ROLE test_app');
+
   try {
     return await request(app)
       .post('/api/v1/telegram/connections')
@@ -163,6 +174,7 @@ async function claimAsAppRole() {
 
 test('SRS T-21: a second workspace cannot claim the same bot or change its webhook', async () => {
   const foreignWorkspace = '00000000-0000-4000-8000-000000100002';
+
   await seedTenantRows(pool, foreignWorkspace);
   provider.verifyCredential.mockResolvedValueOnce({
     ...account,
@@ -171,6 +183,7 @@ test('SRS T-21: a second workspace cannot claim the same bot or change its webho
   provider.registerWebhook.mockClear();
   const before = await snapshot();
   const response = await claimAsAppRole();
+
   expect(response.status).toBe(409);
   expect(response.body.error.code).toBe('E-TG-BOT-IN-USE');
   expect(response.text).not.toContain(foreignWorkspace);
@@ -183,6 +196,7 @@ async function expectSecretReferences(id: string, state: unknown) {
     'SELECT token_secret_ref, webhook_secret_ref FROM bot_connections WHERE id = $1',
     [id],
   );
+
   expect(stored.rows[0].token_secret_ref).not.toBe(token);
   expect(
     (
@@ -203,6 +217,7 @@ test('SRS T-21: a foreign webhook conflict rolls back the connection and all sec
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'foreign-webhook')
     .send({ connectionName: 'My bot', botToken: token });
+
   expect(response.status).toBe(409);
   expect(response.body.error.code).toBe('E-TG-WEBHOOK-CONFLICT');
   expect(await snapshot()).toEqual(before);
@@ -218,6 +233,7 @@ test('Creating a connection stores encrypted references, audits safe metadata, a
       .set('Idempotency-Key', 'successful-create')
       .send({ connectionName, botToken: token });
   const first = await create();
+
   expect(first.status).toBe(201);
   expect(first.body.data).toMatchObject({
     provider: 'telegram',
@@ -228,6 +244,7 @@ test('Creating a connection stores encrypted references, audits safe metadata, a
   });
   const beforeReplay = await snapshot();
   const replay = await create();
+
   expect(replay.status).toBe(201);
   expect(replay.body).toEqual(first.body);
   expect(await snapshot()).toEqual(beforeReplay);
@@ -246,6 +263,7 @@ test('A reused connection key with a changed payload returns an idempotency conf
     .set('Cookie', cookie)
     .set('Idempotency-Key', 'successful-create')
     .send({ connectionName: 'Changed bot name', botToken: token });
+
   expect(changed.status).toBe(409);
   expect(changed.body.error.code).toBe('E-TG-IDEMPOTENCY-CONFLICT');
   expect(await snapshot()).toEqual(before);

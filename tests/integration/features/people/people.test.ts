@@ -20,6 +20,7 @@ let originChannelId: string;
 
 async function prepareRecipientChain() {
   const people = await pool.query<{ id: string; name: string }>('SELECT id, name FROM people');
+
   budi = people.rows.find((person) => person.name === 'Budi Santoso')?.id ?? '';
   rina = people.rows.find((person) => person.name === 'Rina Anggraini')?.id ?? '';
   siti = people.rows.find((person) => person.name === 'Siti Aminah')?.id ?? '';
@@ -39,6 +40,7 @@ beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
   const client = await pool.connect();
+
   try {
     await provisionAdmin(client, {
       id: 'people-test-admin',
@@ -51,6 +53,7 @@ beforeAll(async () => {
   } finally {
     client.release();
   }
+
   await pool.query(
     "UPDATE people SET auth_user_id = 'people-test-admin' WHERE name = 'Siti Aminah'",
   );
@@ -59,6 +62,7 @@ beforeAll(async () => {
     baseUrl: 'https://simpul.example',
     secret: 'test-only-auth-secret-with-more-than-32-characters',
   });
+
   await auth.api.resetPassword({
     body: { token: 'people-test-password-token', newPassword: 'test-password-123' },
   });
@@ -66,6 +70,7 @@ beforeAll(async () => {
     body: { email: 'siti@pointstar.example', password: 'test-password-123' },
     asResponse: true,
   });
+
   cookie = login.headers.get('set-cookie') ?? '';
   app = createApp('api', undefined, undefined, {
     authentication: auth,
@@ -78,6 +83,7 @@ test('PATCH /people/{id} changes availability immediately', async () => {
     .patch(`/api/v1/people/${budi}`)
     .set('Cookie', cookie)
     .send({ availability: 'leave' });
+
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({
     id: budi,
@@ -87,17 +93,20 @@ test('PATCH /people/{id} changes availability immediately', async () => {
   const resolveConnection = createConnectionResolver(pool);
   const resolve = () =>
     resolveRoleRecipient(resolveConnection, workspaceId, roleId, originChannelId);
+
   expect(await resolve()).toEqual({ kind: 'person', personId: rina, via: 'backup' });
   const backupAway = await supertest(app)
     .patch(`/api/v1/people/${rina}`)
     .set('Cookie', cookie)
     .send({ availability: 'leave' });
+
   expect(backupAway.status).toBe(200);
   expect(await resolve()).toEqual({ kind: 'person', personId: siti, via: 'admin' });
   const adminAway = await supertest(app)
     .patch(`/api/v1/people/${siti}`)
     .set('Cookie', cookie)
     .send({ availability: 'leave' });
+
   expect(adminAway.status).toBe(200);
   expect(await resolve()).toEqual({ kind: 'channel', channelId: originChannelId });
   expect(
@@ -111,6 +120,7 @@ test('PATCH /people/{id} changes availability immediately', async () => {
 
 test('GET /people includes the complete known roster and roleless executive', async () => {
   const response = await supertest(app).get('/api/v1/people').set('Cookie', cookie);
+
   expect(response.status).toBe(200);
   expect(response.body.data).toHaveLength(5);
   expect(response.body.data).toContainEqual(
@@ -129,6 +139,7 @@ test.each([
     .patch(`/api/v1/people/${budi}`)
     .set('Cookie', cookie)
     .send({ [field]: value });
+
   expect(response.status).toBe(422);
   expect(response.body.error).toMatchObject({
     code: 'E-VALIDATION',
@@ -142,6 +153,7 @@ test.each(['managerId', 'backupPersonId'])('a self-reference in %s is refused', 
     .patch(`/api/v1/people/${budi}`)
     .set('Cookie', cookie)
     .send({ [field]: budi });
+
   expect(response.status).toBe(422);
   expect(response.body.error.details).toEqual([{ field, issue: 'invalid' }]);
 });
@@ -151,6 +163,7 @@ test('role, supervisor and backup edits persist together without changing the ro
     .patch(`/api/v1/people/${budi}`)
     .set('Cookie', cookie)
     .send({ roleName: ' Warehouse Coordinator ', managerId: siti, backupPersonId: siti });
+
   expect(response.status).toBe(200);
   expect(response.body.data).toMatchObject({
     role: { id: roleId, name: 'Warehouse Coordinator' },
@@ -175,6 +188,7 @@ test.each(['id', 'workspaceId', 'level'])(
       .patch(`/api/v1/people/${budi}`)
       .set('Cookie', cookie)
       .send({ availability: 'available', [field]: 'client-owned-value' });
+
     expect(response.status).toBe(422);
     expect(response.body.error).toMatchObject({
       code: 'E-VALIDATION',

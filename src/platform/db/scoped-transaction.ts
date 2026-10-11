@@ -10,7 +10,9 @@ export async function transactionOnClient<Result>(
     await client.query('BEGIN');
     await client.query("SELECT set_config('app.workspace_id', $1, true)", [workspaceId]);
     const result = await operation(client);
+
     await client.query('COMMIT');
+
     return result;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -25,6 +27,7 @@ export async function scopedTransaction<Result>(
 ) {
   const pool = await resolveConnection(workspaceId);
   const client = await pool.connect();
+
   try {
     return await transactionOnClient(client, workspaceId, operation);
   } finally {

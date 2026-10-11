@@ -10,8 +10,11 @@ export function validationError(error: ZodError, messages: Readonly<Record<strin
     if (issue.code === 'unrecognized_keys') {
       return issue.keys.map((field) => ({ field, issue: 'unknown' }));
     }
+
     const field = issue.path.join('.');
+
     return [{ field, issue: 'invalid', message: messages[field] }];
   });
+
   return new DomainError('E-VALIDATION', details);
 }
