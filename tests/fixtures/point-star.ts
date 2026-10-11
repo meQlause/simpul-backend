@@ -1,7 +1,11 @@
 import type { Pool, PoolClient } from 'pg';
 
-export function pointStarSeed(clock: { now: () => Date }) {
-  return { now: clock.now(), workspaceId: '00000000-0000-4000-8000-000000100001' };
+export function pointStarSeed(clock: { now: () => Date; workspaceId?: string; botId?: string }) {
+  return {
+    now: clock.now(),
+    workspaceId: clock.workspaceId ?? '00000000-0000-4000-8000-000000100001',
+    botId: clock.botId ?? '1007fbf0-af1c-573c-8fc9-a619528d69cb',
+  };
 }
 
 type Seed = ReturnType<typeof pointStarSeed>;
@@ -113,35 +117,35 @@ async function seedChannels(client: PoolClient, seed: Seed) {
     `INSERT INTO bot_connections (id, workspace_id, provider, connection_name,
     provider_account_id, bot_username, bot_name, token_secret_ref, webhook_secret_ref, status,
     verified_at, webhook_checked_at, created_by, created_at, updated_at)
-    VALUES (md5('point-star-bot')::uuid, $1, 'telegram', 'Simpul workspace bot', '240000000',
+    VALUES ($3, $1, 'telegram', 'Simpul workspace bot', '240000000',
       '@simpul_workspace_bot', 'Simpul workspace bot', 'point-star-token', 'point-star-webhook',
       'ready', $2, $2, md5('point-star-person-1')::uuid, $2, $2)`,
-    [seed.workspaceId, seed.now],
+    [seed.workspaceId, seed.now, seed.botId],
   );
   await client.query(
     `INSERT INTO channels (id, workspace_id, provider, bot_connection_id,
     provider_chat_id, provider_chat_type, provider_chat_title, member_count, display_name, class,
     connection_status, monitored, privacy_mode_ok, visible_indicator_message_id, verified_at,
     monitoring_started_at, verified_config_version, authorization_ack_at, authorization_ack_by, created_at)
-    SELECT md5('point-star-channel-' || num)::uuid, $1, 'telegram', md5('point-star-bot')::uuid,
+    SELECT md5('point-star-channel-' || num)::uuid, $1, 'telegram', $3,
       '-10024000000' || num, 'supergroup', name, members, name, class, 'active', true, true,
       'point-star-indicator-' || num, $2::timestamptz - interval '3 hours',
       $2::timestamptz - interval '3 hours', 1, $2::timestamptz - interval '3 hours',
       md5('point-star-person-1')::uuid, $2
     FROM (VALUES (1, 'Operations', 12, 'internal'), (2, 'Sales & Order', 8, 'external'),
       (3, 'Warehouse & Shipping', 6, 'internal')) AS sample(num, name, members, class)`,
-    [seed.workspaceId, seed.now],
+    [seed.workspaceId, seed.now, seed.botId],
   );
   await client.query(
     `INSERT INTO channel_verifications (id, workspace_id, channel_id, bot_connection_id,
     config_version, credential_version, checks, status, checked_at, expires_at, created_at)
     SELECT md5('point-star-verification-' || num)::uuid, $1, md5('point-star-channel-' || num)::uuid,
-      md5('point-star-bot')::uuid, 1, 1,
+      $3, 1, 1,
       '[{"key":"bot_identity","status":"pass","message":"The bot identity matches","action":null},{"key":"group","status":"pass","message":"The group is reachable","action":null},{"key":"membership","status":"pass","message":"The bot is a member","action":null},{"key":"privacy_mode","status":"pass","message":"Privacy mode allows reading","action":null},{"key":"webhook","status":"pass","message":"The webhook is live","action":null}]'::jsonb,
       'pass', $2::timestamptz - interval '3 hours',
       $2::timestamptz + interval '30 days', $2
     FROM generate_series(1, 3) AS num`,
-    [seed.workspaceId, seed.now],
+    [seed.workspaceId, seed.now, seed.botId],
   );
 }
 

@@ -3,6 +3,7 @@ import { z as schema } from 'zod';
 import { coalesce, type CoalesceServices } from './ingest.coalesce.service.js';
 import { processMedia } from './ingest.media.service.js';
 
+const workOptions = { pollingIntervalSeconds: 0.5 };
 const coalescePayload = schema
   .object({
     workspaceId: schema.guid(),
@@ -12,7 +13,7 @@ const coalescePayload = schema
   .strict();
 
 export async function registerIngestJobs(queue: PgBoss, services: CoalesceServices) {
-  await queue.work('ingest.coalesce', async (jobs) => {
+  await queue.work('ingest.coalesce', workOptions, async (jobs) => {
     for (const job of jobs) {
       await coalesce(services, coalescePayload.parse(job.data));
     }
@@ -23,7 +24,7 @@ export async function registerMediaJobs(
   queue: PgBoss,
   services: Parameters<typeof processMedia>[0],
 ) {
-  await queue.work('ingest.media', async (jobs) => {
+  await queue.work('ingest.media', workOptions, async (jobs) => {
     for (const job of jobs) {
       await processMedia(
         services,

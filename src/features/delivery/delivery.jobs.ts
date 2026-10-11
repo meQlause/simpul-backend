@@ -12,24 +12,25 @@ type Services = Parameters<typeof routeLabel>[0] &
 const routingScope = z.strictObject({ workspaceId: z.guid(), labelId: z.guid() });
 const sendingScope = z.strictObject({ workspaceId: z.guid(), notificationId: z.guid() });
 const workspaceScope = z.strictObject({ workspaceId: z.guid() });
+const workOptions = { pollingIntervalSeconds: 0.5 };
 
 export async function registerDeliveryJobs(queue: PgBoss, services: Services) {
-  await queue.work('delivery.gate', async (jobs) => {
+  await queue.work('delivery.gate', workOptions, async (jobs) => {
     for (const job of jobs) {
       await routeLabel(services, routingScope.parse(job.data));
     }
   });
-  await queue.work('delivery.send', async (jobs) => {
+  await queue.work('delivery.send', workOptions, async (jobs) => {
     for (const job of jobs) {
       await sendNotification(services, sendingScope.parse(job.data));
     }
   });
-  await queue.work('delivery.staleness', async (jobs) => {
+  await queue.work('delivery.staleness', workOptions, async (jobs) => {
     for (const job of jobs) {
       await runStaleness(services, workspaceScope.parse(job.data));
     }
   });
-  await queue.work('delivery.digest', async (jobs) => {
+  await queue.work('delivery.digest', workOptions, async (jobs) => {
     for (const job of jobs) {
       await runDigests(services, workspaceScope.parse(job.data));
     }
