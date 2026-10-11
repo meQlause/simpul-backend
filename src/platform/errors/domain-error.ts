@@ -88,7 +88,7 @@ export class DomainError extends Error {
     readonly code: keyof typeof errors,
     readonly details?: {
       field: string;
-      issue: 'invalid' | 'unknown' | 'required';
+      issue: 'invalid' | 'unknown' | 'required' | 'duplicate';
       message?: string;
     }[],
     readonly retryAfter?: number,

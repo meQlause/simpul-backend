@@ -1,3 +1,4 @@
+import { vocabularyRouter } from './features/vocabulary/index.js';
 import { workRouter } from './features/work/index.js';
 import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
@@ -83,6 +84,7 @@ function mountApi(app: Express, services?: ApiServices) {
     '/api/v1',
     workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
   );
+  app.use('/api/v1', vocabularyRouter(services.resolveConnection));
   mountSetup(app, services);
 }
 

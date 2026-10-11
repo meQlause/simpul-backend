@@ -4,6 +4,17 @@ const namedPerson = zod.object({ id: zod.guid(), name: zod.string() });
 const role = namedPerson.extend({ team: zod.string() });
 
 export const configAuditSchemas = {
+  vocab_domains: zod
+    .object({
+      id: zod.guid(),
+      name: zod.string(),
+      description: zod.string().nullable(),
+      example: zod.string().nullable(),
+      idPrefix: zod.string().nullable(),
+      prefixInUse: zod.boolean(),
+    })
+    .partial(),
+  aliases: zod.object({ id: zod.guid(), alias: zod.string(), person: namedPerson }).partial(),
   channels: zod
     .object({
       botConnectionId: zod.guid(),

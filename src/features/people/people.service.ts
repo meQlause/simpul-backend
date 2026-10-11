@@ -77,3 +77,7 @@ export async function resolveRoleRecipient(
     resolveRecipient(await selectRecipientCandidates(tx, workspaceId, roleId), originChannelId),
   );
 }
+
+export async function findActivePerson(...parameters: Parameters<typeof selectPeople>) {
+  return (await selectPeople(...parameters))[0] ?? null;
+}

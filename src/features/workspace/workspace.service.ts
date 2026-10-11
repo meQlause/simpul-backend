@@ -4,6 +4,8 @@ import { provisionAdmin } from '../auth/index.js';
 import { createAdminPerson } from '../people/index.js';
 import {
   insertWorkspace,
+  selectVocabularyVersion,
+  incrementVocabularyVersion,
   finishWorkspaceProvision,
   selectMe,
   selectSettings,
@@ -119,4 +121,16 @@ export async function getMe(
       },
     };
   });
+}
+
+export async function getVocabularyVersion(
+  ...parameters: Parameters<typeof selectVocabularyVersion>
+) {
+  return selectVocabularyVersion(...parameters);
+}
+
+export async function advanceVocabularyVersion(
+  ...parameters: Parameters<typeof incrementVocabularyVersion>
+) {
+  return incrementVocabularyVersion(...parameters);
 }

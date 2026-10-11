@@ -95,3 +95,21 @@ export async function updateSettings(
     [workspaceId, input.quietStart, input.quietEnd, input.budgetPerHour, input.digestTime],
   );
 }
+
+export async function selectVocabularyVersion(tx: PoolClient, workspaceId: string) {
+  return (
+    await tx.query<{ version: number }>(
+      'SELECT vocab_version AS version FROM workspaces WHERE id = $1',
+      [workspaceId],
+    )
+  ).rows[0].version;
+}
+
+export async function incrementVocabularyVersion(tx: PoolClient, workspaceId: string) {
+  return (
+    await tx.query<{ version: number }>(
+      'UPDATE workspaces SET vocab_version = vocab_version + 1 WHERE id = $1 RETURNING vocab_version AS version',
+      [workspaceId],
+    )
+  ).rows[0].version;
+}
