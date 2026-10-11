@@ -20,3 +20,7 @@ export function quantityCandidates<Candidate extends { quantity: number | null }
       quantity === null || candidate.quantity === null || candidate.quantity === quantity,
   );
 }
+
+export function genesisGate(intent: string) {
+  return ['status_query', 'ack', 'noise'].includes(intent) ? 'G1' : null;
+}

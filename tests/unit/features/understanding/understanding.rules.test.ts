@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import {
+  genesisGate,
   quantityCandidates,
   verdict,
 } from '../../../../src/features/understanding/understanding.rules.js';
@@ -39,4 +40,8 @@ test('SRS §6.1: a contradicting quantity removes a candidate regardless of its 
   expect(quantityCandidates(5, candidates)).toEqual([candidates[1], candidates[2]]);
   expect(quantityCandidates(null, candidates)).toEqual(candidates);
   expect(quantityCandidates(0, [{ quantity: 1 }, { quantity: 0 }])).toEqual([{ quantity: 0 }]);
+});
+
+test.each(['status_query', 'ack', 'noise'])('SRS §7.3: genesisGate rejects %s at G1', (intent) => {
+  expect(genesisGate(intent)).toBe('G1');
 });
