@@ -92,3 +92,37 @@ export async function databaseSummary(tx: PoolClient, workspaceId: string) {
 
   return result.rows[0];
 }
+
+export async function lockDatabaseProbe(tx: PoolClient, workspaceId: string) {
+  const result = await tx.query<{
+    workspace_name: string;
+    host: string;
+    email: string;
+    status: 'connected' | 'unreachable';
+    probe_streak: number;
+    url_secret_ref: string;
+  }>(
+    `SELECT registry.workspace_name, registry.host, admin.email, registry.status,
+      registry.probe_streak, registry.url_secret_ref FROM workspace_databases registry
+      JOIN "user" admin ON admin.id = registry.admin_auth_user_id
+      WHERE registry.workspace_id = $1 AND registry.status IN ('connected', 'unreachable')
+      FOR UPDATE OF registry`,
+    [workspaceId],
+  );
+
+  return result.rows[0];
+}
+
+export async function updateDatabaseProbe(
+  tx: PoolClient,
+  workspaceId: string,
+  state: { status: string; streak: number },
+  now: Date,
+) {
+  await tx.query(
+    `UPDATE workspace_databases SET status = $2, probe_streak = $3,
+    unreachable_since = CASE WHEN $2 = 'unreachable' THEN coalesce(unreachable_since, $4) ELSE NULL END,
+    updated_at = $4 WHERE workspace_id = $1`,
+    [workspaceId, state.status, state.streak, now],
+  );
+}

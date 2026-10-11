@@ -17,6 +17,7 @@ import { createConnectionLookup } from './platform/db/connection-lookup.js';
 import { createSecretStore } from './platform/secrets/index.js';
 import { ownDatabaseQueues } from './platform/db/own-database-queues.js';
 import { createAccountClaims } from './platform/db/connection-claims.js';
+import { createSystemMailer } from './platform/mail/system.js';
 
 const config = readConfig(process.env);
 
@@ -163,7 +164,19 @@ if (process.argv[2] === 'create-workspace') {
   if (queue && config.PROCESS_ROLE === 'scheduler') {
     const { registerSchedulerJobs } = await import('./roles/scheduler.js');
 
-    await registerSchedulerJobs(queue, pool);
+    const database =
+      config.SYSTEM_SMTP_URL && config.SYSTEM_MAIL_FROM
+        ? {
+            ...tenantOptions,
+            systemPool: pool,
+            now: () => new Date(),
+            sendMail: createSystemMailer(config.SYSTEM_SMTP_URL, config.SYSTEM_MAIL_FROM),
+            alert: (event: { workspaceId: string; code: string }) =>
+              createLogger(config.LOG_LEVEL).error(event, 'Database probe unavailable'),
+          }
+        : undefined;
+
+    await registerSchedulerJobs(queue, pool, database);
     const ownQueues = ownDatabaseQueues(pool, {
       ...tenantOptions,
       scheduling: true,

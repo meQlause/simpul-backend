@@ -10,7 +10,7 @@ const execute = promisify(execFile);
 
 beforeAll(() => applyMigrations(pool), 120000);
 
-function provision(email: string, smtp?: string, mode = 'own') {
+function provision(email: string, smtp?: string, mode = 'own', sender = true) {
   return execute(
     process.execPath,
     [
@@ -41,6 +41,7 @@ function provision(email: string, smtp?: string, mode = 'own') {
         SECRETS_MASTER_KEY: Buffer.alloc(32, 1).toString('base64'),
         LOG_LEVEL: 'silent',
         SYSTEM_SMTP_URL: smtp,
+        SYSTEM_MAIL_FROM: sender ? 'noreply@simpul.example' : undefined,
       },
     },
   );
@@ -107,5 +108,14 @@ test('create-workspace refuses an unknown database mode before storing anything 
   ).rejects.toThrow();
   expect(
     (await pool.query('SELECT id FROM "user" WHERE email = $1', ['invalid@example.test'])).rows,
+  ).toEqual([]);
+});
+
+test('own database provisioning requires SYSTEM_MAIL_FROM for system outage notices (be-stack)', async () => {
+  await expect(
+    provision('no-sender@example.test', 'smtp://mailer.example', 'own', false),
+  ).rejects.toThrow('SYSTEM_MAIL_FROM');
+  expect(
+    (await pool.query('SELECT id FROM "user" WHERE email = $1', ['no-sender@example.test'])).rows,
   ).toEqual([]);
 });

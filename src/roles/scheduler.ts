@@ -1,7 +1,13 @@
 import type { PgBoss } from 'pg-boss';
 import type { Pool } from 'pg';
+import { probeDatabases, type ProbeServices } from '../platform/db/database-probe.job.js';
 
-export async function registerSchedulerJobs(queue: PgBoss, pool: Pool) {
+export async function registerSchedulerJobs(queue: PgBoss, pool: Pool, database?: ProbeServices) {
+  if (database) {
+    await queue.work('database.probe', () => probeDatabases(database));
+    await queue.schedule('database.probe', '* * * * *');
+  }
+
   await queue.work('scheduler.tick', async () => {
     const workspaces = await pool.query<{ id: string }>('SELECT id FROM workspaces ORDER BY id');
 

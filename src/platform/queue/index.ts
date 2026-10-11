@@ -27,6 +27,7 @@ export async function createQueue(pool: Pool, scheduling = false, onError?: () =
     'delivery.digest',
     'scheduler.tick',
     'scheduler.retention',
+    'database.probe',
     'work.lifecycle',
     'workspace.erase',
   ]) {

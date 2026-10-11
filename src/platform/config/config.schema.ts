@@ -28,7 +28,11 @@ export const configSchema = zod.object({
     .string()
     .base64()
     .refine((value) => Buffer.byteLength(value, 'base64') === 32),
-  SYSTEM_SMTP_URL: zod.string().url().optional(),
+  SYSTEM_SMTP_URL: zod
+    .string()
+    .url()
+    .regex(/^smtps?:\/\//u)
+    .optional(),
   SYSTEM_MAIL_FROM: zod.email().optional(),
   LOG_LEVEL: zod
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])

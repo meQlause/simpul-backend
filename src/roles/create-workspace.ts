@@ -23,8 +23,8 @@ export async function runCreateWorkspace(
   });
   const input = createWorkspaceSchema.parse(values);
 
-  if (input.database === 'own' && !config.SYSTEM_SMTP_URL) {
-    throw new Error('SYSTEM_SMTP_URL is required for --database own');
+  if (input.database === 'own' && (!config.SYSTEM_SMTP_URL || !config.SYSTEM_MAIL_FROM)) {
+    throw new Error('SYSTEM_SMTP_URL and SYSTEM_MAIL_FROM are required for --database own');
   }
 
   const pool = createSystemPool(config.DATABASE_URL);

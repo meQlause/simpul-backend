@@ -8,15 +8,18 @@ type Credentials = {
   port: number;
   username: string;
   password: string;
+  secure?: boolean;
 };
 
 function mailTransport(credentials: Credentials) {
   return nodemailer.createTransport({
     host: credentials.host,
     port: credentials.port,
-    secure: credentials.port === TLS_PORT,
+    secure: credentials.secure ?? credentials.port === TLS_PORT,
     requireTLS: true,
-    auth: { user: credentials.username, pass: credentials.password },
+    auth: credentials.username
+      ? { user: credentials.username, pass: credentials.password }
+      : undefined,
     connectionTimeout: TIMEOUT_MS,
     greetingTimeout: TIMEOUT_MS,
     socketTimeout: TIMEOUT_MS,

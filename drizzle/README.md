@@ -15,6 +15,10 @@ need execution on `own_database_workspaces()`, which returns workspace ids and a
 version derived from the encryption nonce, never a URL or ciphertext. These functions revoke
 execution from `PUBLIC`.
 
+The system scheduler also needs execution on `own_database_probes()`, which lists only
+connected or unreachable own workspace ids. Health probes use the system SMTP sender;
+their notices contain only the workspace name, host and transition time.
+
 The API role also needs execution on `bot_account_available(uuid, text)` and
 `claim_own_bot_account(uuid, uuid, text)`. The latter verifies the transaction's workspace
 scope and commits an own-database route before the customer write. Its account lock is
