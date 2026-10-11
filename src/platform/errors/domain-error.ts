@@ -1,4 +1,8 @@
 const errors = {
+  'E-VOCAB-PREFIX-FIXED': {
+    status: 409,
+    message: 'This prefix is already used by work items and cannot be changed.',
+  },
   'E-TEMPLATE-FIELD-NOT-ALLOWED': {
     status: 422,
     message: 'Use only work_id, customer and summary template fields.',

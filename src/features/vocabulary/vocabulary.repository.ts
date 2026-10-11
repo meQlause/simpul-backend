@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { parseCategory } from './vocabulary.schema.js';
+import type { parseCategory, parseCategoryEdit } from './vocabulary.schema.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 
 const duplicateFields: Record<string, string> = {
@@ -63,7 +63,7 @@ export async function insertAlias(
 
 export async function selectVocabulary(tx: PoolClient, workspaceId: string) {
   const categories = await tx.query(
-    'SELECT domain.id, domain.name, domain.description, domain.examples[1] AS example, domain.id_prefix AS "idPrefix", EXISTS(SELECT 1 FROM threads WHERE workspace_id = $1 AND domain_id = domain.id) AS "prefixInUse" FROM vocab_domains AS domain WHERE domain.workspace_id = $1 AND domain.active ORDER BY domain.name',
+    'SELECT domain.id, domain.name, domain.description, domain.examples[1] AS example, domain.id_prefix AS "idPrefix", (EXISTS(SELECT 1 FROM display_id_counters WHERE workspace_id = $1 AND domain_id = domain.id AND last_value > 0) OR EXISTS(SELECT 1 FROM threads WHERE workspace_id = $1 AND domain_id = domain.id)) AS "prefixInUse" FROM vocab_domains AS domain WHERE domain.workspace_id = $1 AND domain.active ORDER BY domain.name',
     [workspaceId],
   );
   const aliases = await tx.query(
@@ -102,4 +102,39 @@ export async function storeInternalTemplate(tx: PoolClient, workspaceId: string,
       [workspaceId, body],
     )
   ).rows[0];
+}
+
+type Category = {
+  id: string;
+  name: string;
+  description: string | null;
+  example: string | null;
+  idPrefix: string | null;
+  prefixInUse: boolean;
+};
+
+export async function lockCategory(tx: PoolClient, workspaceId: string, id: string) {
+  await tx.query('SELECT id FROM vocab_domains WHERE workspace_id = $1 AND id = $2 FOR UPDATE', [
+    workspaceId,
+    id,
+  ]);
+
+  return (
+    await tx.query<Category>(
+      'SELECT domain.id, domain.name, domain.description, domain.examples[1] AS example, domain.id_prefix AS "idPrefix", (EXISTS(SELECT 1 FROM display_id_counters WHERE workspace_id = $1 AND domain_id = domain.id AND last_value > 0) OR EXISTS(SELECT 1 FROM threads WHERE workspace_id = $1 AND domain_id = domain.id)) AS "prefixInUse" FROM vocab_domains AS domain WHERE domain.workspace_id = $1 AND domain.id = $2',
+      [workspaceId, id],
+    )
+  ).rows[0];
+}
+
+export async function editCategory(
+  tx: PoolClient,
+  workspaceId: string,
+  id: string,
+  input: ReturnType<typeof parseCategoryEdit>,
+) {
+  await tx.query(
+    'UPDATE vocab_domains SET description = COALESCE($3, description), examples = CASE WHEN $4::text IS NULL THEN examples ELSE ARRAY[$4] || COALESCE(examples[2:array_length(examples, 1)], ARRAY[]::text[]) END, id_prefix = COALESCE($5, id_prefix) WHERE workspace_id = $1 AND id = $2',
+    [workspaceId, id, input.description, input.example, input.idPrefix],
+  );
 }

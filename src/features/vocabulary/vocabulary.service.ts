@@ -7,13 +7,20 @@ import { advanceVocabularyVersion, getVocabularyVersion } from '../workspace/ind
 import { findActivePerson } from '../people/index.js';
 import {
   configurationWrite,
+  lockCategory,
+  editCategory,
   lockInternalTemplate,
   storeInternalTemplate,
   insertCategory,
   insertAlias,
   selectVocabulary,
 } from './vocabulary.repository.js';
-import type { parseAlias, parseCategory, parseTemplate } from './vocabulary.schema.js';
+import type {
+  parseAlias,
+  parseCategory,
+  parseCategoryEdit,
+  parseTemplate,
+} from './vocabulary.schema.js';
 
 type Scope = { workspaceId: string; actorId: string };
 
@@ -111,4 +118,44 @@ export async function saveInternalTemplate(
 
     return { body: after.body, allowedFields: allowedTemplateFields };
   });
+}
+
+export async function updateCategory(
+  resolveConnection: ConnectionResolver,
+  scope: Scope,
+  id: string,
+  input: ReturnType<typeof parseCategoryEdit>,
+) {
+  return configurationWrite(() =>
+    scopedTransaction(resolveConnection, scope.workspaceId, async (tx) => {
+      const before = await lockCategory(tx, scope.workspaceId, id);
+
+      if (!before) {
+        throw new DomainError('E-NOT-FOUND');
+      }
+
+      if (input.idPrefix !== undefined && before.prefixInUse) {
+        throw new DomainError('E-VOCAB-PREFIX-FIXED', [{ field: 'idPrefix', issue: 'invalid' }]);
+      }
+
+      await editCategory(tx, scope.workspaceId, id, input);
+      const category = { ...before, ...input };
+      const promptChanged =
+        (input.description !== undefined && input.description !== before.description) ||
+        (input.example !== undefined && input.example !== before.example);
+      const version = promptChanged
+        ? await advanceVocabularyVersion(tx, scope.workspaceId)
+        : await getVocabularyVersion(tx, scope.workspaceId);
+
+      await recordConfigChange(tx, {
+        ...scope,
+        tableName: 'vocab_domains',
+        recordId: id,
+        before,
+        after: category,
+      });
+
+      return { category, version };
+    }),
+  );
 }

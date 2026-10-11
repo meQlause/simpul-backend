@@ -126,3 +126,90 @@ test('An alias requires an active person and rejects duplicates without changing
     before,
   );
 });
+
+test('A category idPrefix cannot change once a work item uses it: 409 E-VOCAB-PREFIX-FIXED', async () => {
+  const domain = (await pool.query("SELECT id FROM vocab_domains WHERE id_prefix = 'ORD'")).rows[0];
+  const before = (await pool.query('SELECT vocab_version FROM workspaces')).rows[0].vocab_version;
+  const response = await request(app)
+    .patch('/api/v1/categories/' + domain.id)
+    .set('Cookie', cookie)
+    .send({ idPrefix: 'RET' });
+
+  expect(response.status).toBe(409);
+  expect(response.body.error.code).toBe('E-VOCAB-PREFIX-FIXED');
+  expect(response.body.error.details).toEqual([{ field: 'idPrefix', issue: 'invalid' }]);
+  expect(
+    (await pool.query('SELECT id_prefix FROM vocab_domains WHERE id = $1', [domain.id])).rows,
+  ).toEqual([{ id_prefix: 'ORD' }]);
+  expect((await pool.query('SELECT vocab_version FROM workspaces')).rows[0].vocab_version).toBe(
+    before,
+  );
+});
+
+test('Unused prefix edits do not advance vocabulary; changed prompt fields do', async () => {
+  const created = await request(app)
+    .post('/api/v1/categories')
+    .set('Cookie', cookie)
+    .send({ ...category, name: 'Draft prefix', idPrefix: 'NEW' });
+
+  expect(created.status).toBe(201);
+  const id = created.body.data.category.id;
+  const version = created.body.data.version;
+  const prefix = await request(app)
+    .patch('/api/v1/categories/' + id)
+    .set('Cookie', cookie)
+    .send({ idPrefix: 'FRS' });
+
+  expect(prefix.status).toBe(200);
+  expect(prefix.body.data).toMatchObject({ category: { idPrefix: 'FRS' }, version });
+  const description = 'A changed category description';
+  const prompt = await request(app)
+    .patch('/api/v1/categories/' + id)
+    .set('Cookie', cookie)
+    .send({ description });
+
+  expect(prompt.status).toBe(200);
+  expect(prompt.body.data.version).toBe(version + 1);
+  const replay = await request(app)
+    .patch('/api/v1/categories/' + id)
+    .set('Cookie', cookie)
+    .send({ description });
+
+  expect(replay.status).toBe(200);
+  expect(replay.body.data.version).toBe(version + 1);
+});
+
+test('A previously allocated prefix stays fixed after all work items are gone', async () => {
+  const created = await request(app)
+    .post('/api/v1/categories')
+    .set('Cookie', cookie)
+    .send({ ...category, name: 'Historical allocation', idPrefix: 'HIS' });
+
+  expect(created.status).toBe(201);
+  const id = created.body.data.category.id;
+
+  await pool.query('UPDATE display_id_counters SET last_value = 1 WHERE domain_id = $1', [id]);
+  const response = await request(app)
+    .patch('/api/v1/categories/' + id)
+    .set('Cookie', cookie)
+    .send({ idPrefix: 'GON' });
+
+  expect(response.status).toBe(409);
+  const vocabulary = await request(app).get('/api/v1/vocabulary').set('Cookie', cookie);
+
+  expect(vocabulary.body.data.categories).toContainEqual(
+    expect.objectContaining({ id, prefixInUse: true }),
+  );
+});
+
+test('Category names cannot be edited', async () => {
+  const {
+    rows: [categoryRow],
+  } = await pool.query("SELECT id FROM vocab_domains WHERE id_prefix = 'ORD'");
+  const response = await request(app)
+    .patch('/api/v1/categories/' + categoryRow.id)
+    .set('Cookie', cookie)
+    .send({ name: 'Renamed' });
+
+  expect(response.status).toBe(422);
+});
