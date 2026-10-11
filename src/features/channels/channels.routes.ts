@@ -1,3 +1,5 @@
+import { verifyChannel } from './channels-verify.service.js';
+import { parseChannelVerification } from './channels-verify.schema.js';
 import { editChannel } from './channels-edit.service.js';
 import { parseChannelEdit } from './channels-edit.schema.js';
 import { Router } from 'express';
@@ -42,6 +44,16 @@ export function channelsRouter(
       .json({ data: await createChannel(resolveConnection, scope, input, services) });
   });
   if (activation) {
+    router.post('/channels/:channelId/verify', async (request, response) => {
+      const scope = response.locals.scope as { workspaceId: string; actorId: string };
+      const channelId = parseChannelVerification(request.body, request.params.channelId);
+      response.json({
+        data: await verifyChannel(resolveConnection, scope, channelId, {
+          ...activation,
+          newId: services.newId,
+        }),
+      });
+    });
     router.post('/channels/:channelId/activate', async (request, response) => {
       const scope = response.locals.scope as { workspaceId: string; actorId: string };
       const input = parseActivation(

@@ -4,7 +4,7 @@ import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
 import type { ReceiveProvider } from '../../platform/providers/index.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
-import { recordCandidate } from '../connections/index.js';
+import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
 
 export type WebhookServices = {
   resolveConnection: ConnectionResolver;
@@ -43,6 +43,11 @@ export async function receiveUpdate(
   update: unknown,
 ) {
   const event = services.provider.parse(update);
+  if (event.type === 'setup-message') {
+    await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
+      recordReceiveCheck(tx, scope, event, services.now()),
+    );
+  }
   if (event.type === 'setup-command') {
     await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
       recordCandidate(tx, scope, event, services.now()),

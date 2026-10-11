@@ -81,7 +81,9 @@ export type ReceiveProvider = {
     request: { headers: Record<string, string | string[] | undefined> },
     secret: string,
   ) => boolean;
-  parse: (update: unknown) => SetupEvent | { type: 'ignore' };
+  parse: (
+    update: unknown,
+  ) => SetupEvent | { type: 'setup-message'; chatId: string; sentAt: number } | { type: 'ignore' };
 };
 
 export type ProviderAdapter = ActivationProvider &

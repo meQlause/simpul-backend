@@ -6,7 +6,7 @@ const requiredChecks = [
   'webhook',
   'inbound',
 ];
-const VERIFICATION_LIFETIME_MS = 600000;
+export const VERIFICATION_LIFETIME_MS = 600000;
 
 export function checksPass(checks: { key: string; status: string }[], required = requiredChecks) {
   return required.every((key) =>

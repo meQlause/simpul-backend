@@ -1,3 +1,4 @@
+import { createSecretStore } from '../../src/platform/secrets/index.js';
 import { beforeAll, expect, test } from 'vitest';
 import supertest from 'supertest';
 import { randomUUID } from 'node:crypto';
@@ -86,6 +87,7 @@ const mail = {
   fromAddress: 'admin@example.com',
 };
 const bodies: Record<string, object> = {
+  'post /channels/:channelId/verify': {},
   'patch /channels/:channelId': { displayName: 'Updated group', expectedConfigVersion: 99 },
   'post /channels/:channelId/pause': { expectedConfigVersion: 99 },
   'put /telegram/connections/:connectionId/credentials': {
@@ -136,6 +138,21 @@ async function prepareRouteParameters() {
   connectionA = (
     await pool.query("SELECT id FROM bot_connections WHERE provider_account_id = '240000000'")
   ).rows[0].id;
+  const workspaceId = pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }).workspaceId;
+  const client = await pool.connect();
+  try {
+    const tokenRef = await createSecretStore(Buffer.alloc(32, 7).toString('base64')).put(
+      client,
+      workspaceId,
+      { purpose: 'bot_token', value: 'test-only-admin-route-token' },
+    );
+    await client.query('UPDATE bot_connections SET token_secret_ref = $2 WHERE id = $1', [
+      connectionA,
+      tokenRef,
+    ]);
+  } finally {
+    client.release();
+  }
   bodies['post /channels'] = { ...bodies['post /channels'], botConnectionId: connectionA };
   const session = await supertest(app)
     .post(`/api/v1/telegram/connections/${connectionA}/sessions`)

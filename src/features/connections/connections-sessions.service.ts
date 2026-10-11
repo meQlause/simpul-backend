@@ -6,6 +6,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import type { ConnectionSetup } from './connections-create.service.js';
 import {
   insertSession,
+  storeReceiveCheck,
   selectSession,
   identifySession,
   consumeSession,
@@ -103,4 +104,18 @@ export async function consumeCandidate(
     throw new DomainError('E-TG-SESSION-EXPIRED');
   }
   return candidate;
+}
+
+export async function recordReceiveCheck(
+  tx: PoolClient,
+  scope: { workspaceId: string; connectionId: string },
+  event: { chatId: string; sentAt: number },
+  now: Date,
+) {
+  await storeReceiveCheck(tx, {
+    ...scope,
+    chatId: event.chatId,
+    sentAt: new Date(event.sentAt),
+    now,
+  });
 }

@@ -23,8 +23,8 @@ export async function insertSession(
 ) {
   const result = await tx.query<{ id: string }>(
     `INSERT INTO channel_connection_sessions
-     (id, workspace_id, bot_connection_id, created_by, code_hash, purpose, created_at, expires_at)
-     SELECT $3, $1, connection.id, $4, $5, $6, $7, $8 FROM bot_connections AS connection
+     (id, workspace_id, bot_connection_id, created_by, code_hash, purpose, created_at, expires_at, credential_version)
+     SELECT $3, $1, connection.id, $4, $5, $6, $7, $8, connection.credential_version FROM bot_connections AS connection
      WHERE connection.workspace_id = $1 AND connection.id = $2 RETURNING id`,
     [
       scope.workspaceId,
@@ -64,7 +64,9 @@ export async function identifySession(
   await tx.query(
     `UPDATE channel_connection_sessions SET candidate_chat_id = $4, candidate_title = $5, candidate_chat_type = $6
      WHERE workspace_id = $1 AND bot_connection_id = $2 AND code_hash = $3
-       AND purpose = 'identify_group' AND expires_at > $7 AND consumed_at IS NULL AND candidate_chat_id IS NULL`,
+       AND purpose IN ('identify_group','receive_check')
+       AND credential_version = (SELECT credential_version FROM bot_connections WHERE workspace_id = $1 AND id = $2)
+       AND expires_at > $7 AND consumed_at IS NULL AND candidate_chat_id IS NULL`,
     [
       input.workspaceId,
       input.connectionId,
@@ -94,4 +96,25 @@ export async function consumeSession(
     [workspaceId, input.sessionId, input.connectionId, input.now],
   );
   return result.rows[0];
+}
+
+export async function storeReceiveCheck(
+  tx: PoolClient,
+  input: { workspaceId: string; connectionId: string; chatId: string; sentAt: Date; now: Date },
+) {
+  const proof = await tx.query(
+    `UPDATE channel_connection_sessions AS session SET received_at = $4 FROM bot_connections AS connection
+     WHERE session.workspace_id = $1 AND session.bot_connection_id = $2 AND session.candidate_chat_id = $3
+       AND session.purpose = 'receive_check' AND session.received_at IS NULL AND session.expires_at > $4
+       AND connection.workspace_id = session.workspace_id AND connection.id = session.bot_connection_id
+       AND connection.credential_version = session.credential_version
+       AND $5::timestamptz >= date_trunc('second',session.created_at) RETURNING session.id`,
+    [input.workspaceId, input.connectionId, input.chatId, input.now, input.sentAt],
+  );
+  if (proof.rowCount) {
+    await tx.query(
+      'UPDATE channels SET last_inbound_at = $4 WHERE workspace_id = $1 AND bot_connection_id = $2 AND provider_chat_id = $3',
+      [input.workspaceId, input.connectionId, input.chatId, input.now],
+    );
+  }
 }

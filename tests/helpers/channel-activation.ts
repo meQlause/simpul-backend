@@ -32,7 +32,7 @@ export const provider = {
     privacyModeOk: true,
   })),
   registerWebhook: vi.fn(async () => {}),
-  checkReadiness: vi.fn(async () => checks),
+  checkReadiness: vi.fn<ActivationProvider['checkReadiness']>(async () => checks),
   describeChat: async () => ({ chatType: 'supergroup' as const, title: 'Test group' }),
   send: vi.fn<ActivationProvider['send']>(async () => ({ providerMessageId: 'test-indicator' })),
 };

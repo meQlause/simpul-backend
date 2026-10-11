@@ -110,6 +110,8 @@ export const channelConnectionSessions = pgTable(
     createdBy: reference('created_by', () => people.id).notNull(),
     codeHash: bytes('code_hash').notNull(),
     purpose: text('purpose').notNull(),
+    credentialVersion: integer('credential_version').default(1).notNull(),
+    receivedAt: instant('received_at'),
     candidateChatId: text('candidate_chat_id'),
     candidateTitle: text('candidate_title'),
     candidateChatType: text('candidate_chat_type'),

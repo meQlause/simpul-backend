@@ -1,3 +1,4 @@
+import { parseSetupUpdate } from './receive.js';
 import { z as schema } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { DomainError } from '../../errors/domain-error.js';
@@ -24,17 +25,6 @@ const accountSchema = schema.object({
     username: schema.string(),
     can_join_groups: schema.boolean().optional(),
     can_read_all_group_messages: schema.boolean().optional(),
-  }),
-});
-
-const setupUpdate = schema.object({
-  message: schema.object({
-    text: schema.string().regex(/^\/simpul_connect(?:@\w+)? [0-9a-f]{32}$/u),
-    chat: schema.object({
-      id: schema.number().int().safe().negative(),
-      title: schema.string(),
-      type: schema.enum(['group', 'supergroup']),
-    }),
   }),
 });
 
@@ -70,20 +60,7 @@ export function createTelegramProvider(
         )
       );
     },
-    parse(update) {
-      const parsed = setupUpdate.safeParse(update);
-      if (!parsed.success) {
-        return { type: 'ignore' };
-      }
-      const { message } = parsed.data;
-      return {
-        type: 'setup-command',
-        code: message.text.split(' ')[1],
-        chatId: String(message.chat.id),
-        title: message.chat.title,
-        chatType: message.chat.type,
-      };
-    },
+    parse: parseSetupUpdate,
     verifyCredential: (credential) => verifyCredential(call, credential),
     async registerWebhook(connection, url, secret) {
       const info = schema

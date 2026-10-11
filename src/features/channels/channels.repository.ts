@@ -51,7 +51,7 @@ export async function selectChannels(tx: PoolClient, workspaceId: string) {
      FROM channels AS channel JOIN bot_connections AS connection
        ON connection.id = channel.bot_connection_id AND connection.workspace_id = channel.workspace_id
      LEFT JOIN LATERAL (SELECT id, status, checked_at FROM channel_verifications
-       WHERE workspace_id = $1 AND channel_id = channel.id ORDER BY checked_at DESC, id DESC LIMIT 1) AS verification ON true
+       WHERE workspace_id = $1 AND channel_id = channel.id ORDER BY checked_at DESC, created_at DESC, id DESC LIMIT 1) AS verification ON true
      WHERE channel.workspace_id = $1 ORDER BY channel.display_name, channel.id`,
     [workspaceId],
   );
@@ -122,7 +122,7 @@ export async function selectLatestVerification(
      JOIN bot_connections AS connection ON connection.id = channel.bot_connection_id
        AND connection.workspace_id = channel.workspace_id
      WHERE channel.workspace_id = $1 AND channel.id = $2
-     ORDER BY verification.checked_at DESC, verification.id DESC LIMIT 1`,
+     ORDER BY verification.checked_at DESC, verification.created_at DESC, verification.id DESC LIMIT 1`,
     [workspaceId, channelId],
   );
   return result.rows[0];
