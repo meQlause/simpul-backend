@@ -122,7 +122,7 @@ export async function updateRole(
 export async function selectRecipientCandidates(
   tx: PoolClient,
   workspaceId: string,
-  roleId: string,
+  roleId: string | null,
 ) {
   const result = await tx.query<Parameters<typeof resolveRecipient>[0]>(
     `SELECT

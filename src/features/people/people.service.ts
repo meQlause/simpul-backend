@@ -82,7 +82,7 @@ export async function resolveRoleRecipient(
 export async function resolveRoleRecipientInTransaction(
   tx: PoolClient,
   workspaceId: string,
-  roleId: string,
+  roleId: string | null,
   originChannelId: string,
 ) {
   return resolveRecipient(

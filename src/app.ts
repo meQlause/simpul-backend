@@ -2,6 +2,7 @@ import { vocabularyRouter } from './features/vocabulary/index.js';
 import { reviewRouter, type ReviewServices } from './features/review-queue/index.js';
 import { workRouter } from './features/work/index.js';
 import { rulesRouter } from './features/rules/index.js';
+import { deliveryRouter } from './features/delivery/index.js';
 import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import type { createAuthentication } from './features/auth/index.js';
@@ -75,6 +76,10 @@ function mountFeatures(
     workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
   );
   app.use('/api/v1', vocabularyRouter(services.resolveConnection));
+  app.use(
+    '/api/v1',
+    deliveryRouter(services.resolveConnection, services.overview?.now ?? (() => new Date())),
+  );
   app.use('/api/v1', reviewRouter(services.resolveConnection, services.review));
   app.use(
     '/api/v1',
