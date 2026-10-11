@@ -20,9 +20,9 @@ const secretStore = createSecretStore(masterKey);
 const connectionString =
   'postgres://postgres:fixture-secret@customer.example/postgres?sslmode=require';
 
-export function databaseFixture(maxConnections = 1) {
+export function databaseFixture(maxConnections = 1, options: { dataTmpfsSize?: string } = {}) {
   const own = process.env.PSPT_TEST_DATABASE_MODE === 'own';
-  const customer = disposableDatabase(maxConnections, { tls: own });
+  const customer = disposableDatabase(maxConnections, { tls: own, ...options });
 
   if (!own) {
     return customer;

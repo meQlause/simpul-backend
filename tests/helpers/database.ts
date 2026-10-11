@@ -7,10 +7,15 @@ const dockerExecutable =
     ? 'C:/Program Files/Docker/Docker/resources/bin/docker.exe'
     : '/usr/bin/docker';
 
-export function databaseFixture(
-  maxConnections = 1,
-  options: { image?: string; tls?: boolean; passwordAuth?: boolean; restartable?: boolean } = {},
-) {
+type DatabaseFixtureOptions = {
+  image?: string;
+  tls?: boolean;
+  passwordAuth?: boolean;
+  restartable?: boolean;
+  dataTmpfsSize?: string;
+};
+
+export function databaseFixture(maxConnections = 1, options: DatabaseFixtureOptions = {}) {
   let containerId = '';
   let certificate = '';
   const pool = new postgres.Pool({ max: maxConnections });
@@ -27,7 +32,7 @@ export function databaseFixture(
         '--label',
         'pspt.test.disposable=true',
         '--tmpfs',
-        '/var/lib/postgresql/data:rw,size=256m',
+        `/var/lib/postgresql/data:rw,size=${options.dataTmpfsSize ?? '256m'}`,
         '-e',
         options.passwordAuth
           ? 'POSTGRES_HOST_AUTH_METHOD=scram-sha-256'

@@ -19,7 +19,7 @@ import { applyMigrations } from './migrations.js';
 import { signInSeedAdmin } from './admin-session.js';
 import { loadPointStarSeed, pointStarSeed } from '../fixtures/point-star.js';
 
-export const pool = databaseFixture(2);
+export const pool = databaseFixture(50, { dataTmpfsSize: '1g' });
 
 let now = new Date('2026-10-10T04:01:00Z');
 
