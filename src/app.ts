@@ -1,3 +1,4 @@
+import { workRouter } from './features/work/index.js';
 import express, { type Express } from 'express';
 import { toNodeHandler } from 'better-auth/node';
 import type { createAuthentication } from './features/auth/index.js';
@@ -25,6 +26,7 @@ type ApiServices = {
   telegram?: ActivationProvider;
   connectionSetup?: Omit<ConnectionSetup, 'secretStore'> & { masterKey: string };
   webhook?: WebhookServices;
+  work?: { now: () => Date };
 };
 
 function mountSetup(app: Express, services: ApiServices) {
@@ -77,6 +79,10 @@ function mountApi(app: Express, services?: ApiServices) {
 
   app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
   app.use('/api/v1', peopleRouter(services.resolveConnection));
+  app.use(
+    '/api/v1',
+    workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),
+  );
   mountSetup(app, services);
 }
 
