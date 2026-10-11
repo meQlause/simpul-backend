@@ -108,3 +108,35 @@ test('The same message_id in two groups stores two rows (SRS T-30)', async () =>
     [channelId, second.channelId].sort(),
   );
 });
+
+test('An update for a paused, draft or unknown chat is acknowledged and stores nothing', async () => {
+  const version = (
+    await pool.query('SELECT config_version FROM channels WHERE id = $1', [channelId])
+  ).rows[0].config_version;
+  const paused = await request(app)
+    .post('/api/v1/channels/' + channelId + '/pause')
+    .set('Cookie', cookie)
+    .send({ expectedConfigVersion: version });
+
+  expect(paused.status).toBe(200);
+  const draft = await draftWithVerification('Unmonitored draft');
+  const draftChatId = Number(
+    (await pool.query('SELECT provider_chat_id FROM channels WHERE id = $1', [draft.channelId]))
+      .rows[0].provider_chat_id,
+  );
+  const before = await pool.query(
+    'SELECT (SELECT count(*) FROM messages_raw) AS messages, (SELECT count(*) FROM units) AS units, (SELECT count(*) FROM provider_updates) AS updates, (SELECT count(*) FROM pgboss.job) AS jobs',
+  );
+  const responses = await Promise.all([
+    deliver(3001, 3001),
+    deliver(3002, 3002, draftChatId),
+    deliver(3003, 3003, -100999999999),
+  ]);
+
+  expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+  const after = await pool.query(
+    'SELECT (SELECT count(*) FROM messages_raw) AS messages, (SELECT count(*) FROM units) AS units, (SELECT count(*) FROM provider_updates) AS updates, (SELECT count(*) FROM pgboss.job) AS jobs',
+  );
+
+  expect(after.rows).toEqual(before.rows);
+});
