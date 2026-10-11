@@ -9,18 +9,24 @@ export async function createQueue(pool: Pool, scheduling = false) {
   });
 
   await boss.start();
-  await boss.createQueue('ingest.coalesce', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('ingest.media', { retryLimit: 5, retryBackoff: true });
 
-  await boss.createQueue('understanding.triage', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('understanding.resolve', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('understanding.comprehend', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('delivery.gate', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('delivery.send', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('delivery.staleness', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('delivery.digest', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('scheduler.tick', { retryLimit: 5, retryBackoff: true });
-  await boss.createQueue('work.lifecycle', { retryLimit: 5, retryBackoff: true });
+  for (const name of [
+    'ingest.coalesce',
+    'ingest.media',
+    'ingest.retention',
+    'understanding.triage',
+    'understanding.resolve',
+    'understanding.comprehend',
+    'delivery.gate',
+    'delivery.send',
+    'delivery.staleness',
+    'delivery.digest',
+    'scheduler.tick',
+    'scheduler.retention',
+    'work.lifecycle',
+  ]) {
+    await boss.createQueue(name, { retryLimit: 5, retryBackoff: true });
+  }
 
   return boss;
 }

@@ -29,7 +29,7 @@ export const messagesRaw = pgTable(
     serverTs: instant('server_ts').notNull(),
     receivedTs: instant('received_ts').notNull(),
     origin: text('origin').default('user').notNull(),
-    supersedes: reference('supersedes', (): AnyPgColumn => messagesRaw.id),
+    supersedes: reference('supersedes', (): AnyPgColumn => messagesRaw.id, 'set null'),
   },
   (table) => [
     check('messages_origin_valid', sql`${table.origin} IN ('user','simpul')`),

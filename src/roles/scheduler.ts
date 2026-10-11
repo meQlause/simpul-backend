@@ -12,4 +12,12 @@ export async function registerSchedulerJobs(queue: PgBoss, pool: Pool) {
     }
   });
   await queue.schedule('scheduler.tick', '* * * * *');
+  await queue.work('scheduler.retention', async () => {
+    const workspaces = await pool.query<{ id: string }>('SELECT id FROM workspaces ORDER BY id');
+
+    for (const workspace of workspaces.rows) {
+      await queue.send('ingest.retention', { workspaceId: workspace.id });
+    }
+  });
+  await queue.schedule('scheduler.retention', '0 3 * * *');
 }
