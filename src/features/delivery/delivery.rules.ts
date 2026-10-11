@@ -1,5 +1,9 @@
 const minimumConfidence = 0.75;
 
+export function exceedsBudget(used: number, budget: number) {
+  return used >= budget;
+}
+
 type RoutedRule = { ruleId: string; personId: string; urgency: string; priority: number };
 
 export function mergeRecipientRules(matches: RoutedRule[]) {

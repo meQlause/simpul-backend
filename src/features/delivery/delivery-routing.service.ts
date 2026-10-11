@@ -5,6 +5,7 @@ import { DomainError } from '../../platform/errors/domain-error.js';
 import { resolveRoleRecipientInTransaction } from '../people/index.js';
 import { raiseUnrouted } from '../review-queue/index.js';
 import { recordDecision } from '../audit/index.js';
+import { budgetDigest } from './delivery-budget.service.js';
 import { claimGate, mergeRecipientRules, renderNotification } from './delivery.rules.js';
 import {
   lockRoutingLabel,
@@ -49,7 +50,13 @@ export async function routeLabel(services: Services, scope: Scope) {
     );
 
     for (const recipient of mergeRecipientRules(matches)) {
-      await prepareNotification(tx, scope, { label, recipient, body }, now);
+      const digestId = await budgetDigest(
+        tx,
+        { workspaceId: scope.workspaceId, personId: recipient.personId },
+        now,
+      );
+
+      await prepareNotification(tx, scope, { label, recipient, body, digestId }, now);
     }
 
     await markRouted(tx, scope, now);

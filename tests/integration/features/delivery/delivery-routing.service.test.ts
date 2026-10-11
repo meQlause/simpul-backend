@@ -144,3 +144,42 @@ test('Delivery L5.3–5.4: no matching rule raises one unrouted review item and 
     (await pool.query('SELECT * FROM notifications WHERE label_id = $1', [freshLabel])).rows,
   ).toHaveLength(0);
 });
+
+test('SRS 8.4: the seventh notification to one person within an hour joins a digest and is not sent', async () => {
+  await pool.query('DELETE FROM notifications WHERE workspace_id = $1', [seed.workspaceId]);
+  const labels = (
+    await pool.query(
+      `INSERT INTO labels (workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, created_at)
+    SELECT workspace_id, unit_id, thread_id, domain_id, type, tense, evidence_message_ids, confidence, vocab_version, $2
+    FROM labels CROSS JOIN generate_series(1, 7) WHERE id = $1 RETURNING id`,
+      [labelId, now],
+    )
+  ).rows as { id: string }[];
+
+  for (const label of labels.slice(0, 6)) {
+    await pool.query(
+      `INSERT INTO notifications (workspace_id, label_id, thread_id, recipient_person_id, channel, body_rendered, held_until, sent_at)
+      VALUES ($1, $2, md5('point-star-thread-ORD-0091')::uuid, md5('point-star-person-2')::uuid,
+        'telegram', 'Safe update', $3, $3)`,
+      [seed.workspaceId, label.id, new Date(now.getTime() - 1000)],
+    );
+  }
+
+  await routeLabel(
+    { resolveConnection: createConnectionResolver(pool), now: () => now },
+    { workspaceId: seed.workspaceId, labelId: labels[6].id },
+  );
+
+  const notification = (
+    await pool.query(
+      `SELECT n.digest_id, n.sent_at, d.recipient_person_id FROM notifications n
+    JOIN people p ON p.id = n.recipient_person_id LEFT JOIN digests d ON d.id = n.digest_id
+    WHERE n.label_id = $1 AND p.name = 'Budi Santoso'`,
+      [labels[6].id],
+    )
+  ).rows[0];
+
+  expect(notification.digest_id).not.toBeNull();
+  expect(notification.sent_at).toBeNull();
+  expect(notification.recipient_person_id).toBeTruthy();
+});
