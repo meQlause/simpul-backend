@@ -1,5 +1,6 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { ModelPort } from '../../platform/llm/port.js';
+import { z } from 'zod';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { modelInput } from './understanding.triage.repository.js';
 import { comprehensionScope, comprehensionOutput } from './understanding.schema.js';
@@ -65,6 +66,7 @@ export async function comprehendUnit(dependencies: Dependencies, payload: Scope)
       tier: 'standard',
       bodySafe: input.bodySafe,
       temperature,
+      responseSchema: z.toJSONSchema(comprehensionOutput),
     });
     const decoded = decode(output);
 

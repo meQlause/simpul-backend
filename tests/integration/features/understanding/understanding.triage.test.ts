@@ -3,6 +3,7 @@ import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 import { seedTenantRows } from '../../../fixtures/tenant-rows.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
+import { comprehendUnit } from '../../../../src/features/understanding/understanding.comprehension.js';
 import { triageUnit } from '../../../../src/features/understanding/understanding.triage.js';
 
 const pool = databaseFixture();
@@ -66,4 +67,29 @@ test('SRS §7.1: a model response containing routing instructions is rejected', 
   const unit = await pool.query('SELECT triage_class, injection_suspected FROM units');
 
   expect(unit.rows).toEqual([{ triage_class: null, injection_suspected: true }]);
+});
+
+test('SRS §7.1: the model receives body_safe, never the raw database body', async () => {
+  await pool.query(
+    "INSERT INTO messages_raw (id, workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts) VALUES ($1, $2, $2, 'privacy', 'customer', $3, $4, now(), now())",
+    ['00000000-0000-4000-8000-000000000105', workspaceId, 'private-phone-number', '[REDACTED]'],
+  );
+  await pool.query('UPDATE unit_messages SET message_id = $1 WHERE unit_id = $2', [
+    '00000000-0000-4000-8000-000000000105',
+    workspaceId,
+  ]);
+  model.generate.mockClear();
+  await triageUnit(dependencies, payload);
+
+  expect(model.generate).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ bodySafe: '[REDACTED]' }),
+  );
+  await pool.query('TRUNCATE labels CASCADE');
+  model.generate.mockResolvedValue(JSON.stringify({ operations: [] }));
+  await comprehendUnit({ ...dependencies, alert: vi.fn() }, { ...payload, threadId: workspaceId });
+  expect(model.generate).toHaveBeenCalledTimes(2);
+  expect(model.generate.mock.calls[1]).toEqual([
+    expect.objectContaining({ bodySafe: '[REDACTED]' }),
+  ]);
+  expect(JSON.stringify(model.generate.mock.calls)).not.toContain('private-phone-number');
 });
