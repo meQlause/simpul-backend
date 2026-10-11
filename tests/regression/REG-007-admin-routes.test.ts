@@ -128,6 +128,7 @@ const bodies: Record<string, object> = {
     displayName: 'Test draft',
   },
   'get /me': {},
+  'get /overview': {},
   'post /telegram/connections/verify': { botToken: 'test-only-credential' },
   'post /telegram/connections': { connectionName: 'My bot', botToken: 'test-only-credential' },
   'get /people': {},

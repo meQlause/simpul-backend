@@ -27,6 +27,18 @@ const time = zod.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const QUIET_END = 'quietEnd';
 const QUIET_HOURS_EQUAL = 'E-SETTINGS-QUIET-HOURS-EQUAL';
 
+export function parseOverviewQuery(input: unknown) {
+  const parsed = zod
+    .strictObject({ period: zod.enum(['today', 'week']).default('today') })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}
+
 export const settingsSchema = zod
   .strictObject({
     quietStart: time,

@@ -236,8 +236,8 @@ async function seedAggregates(client: PoolClient, seed: Seed) {
     sender_external_id, body, body_safe, server_ts, received_ts, created_at)
     SELECT md5('point-star-message-' || num)::uuid, $1, md5('point-star-channel-2')::uuid,
       num::text, 'point-star-sender', 'Sample order update ' || num, 'Sample order update ' || num,
-      $2::timestamptz - CASE WHEN num <= 1284 THEN interval '1 hour' ELSE interval '2 days' END,
-      $2::timestamptz - CASE WHEN num <= 1284 THEN interval '1 hour' ELSE interval '2 days' END, $2
+      $2::timestamptz - CASE WHEN num <= 1284 THEN interval '1 hour' WHEN num <= 2422 THEN interval '1 day' ELSE interval '2 days' END,
+      $2::timestamptz - CASE WHEN num <= 1284 THEN interval '1 hour' WHEN num <= 2422 THEN interval '1 day' ELSE interval '2 days' END, $2
     FROM generate_series(1, 8426) AS num`,
     [seed.workspaceId, seed.now],
   );

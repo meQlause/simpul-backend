@@ -28,6 +28,7 @@ type ApiServices = {
   connectionSetup?: Omit<ConnectionSetup, 'secretStore'> & { masterKey: string };
   webhook?: WebhookServices;
   work?: { now: () => Date };
+  overview?: { now: () => Date };
 };
 
 function mountSetup(app: Express, services: ApiServices) {
@@ -78,7 +79,7 @@ function mountApi(app: Express, services?: ApiServices) {
       }
     : undefined;
 
-  app.use('/api/v1', workspaceRouter(services.resolveConnection, mail));
+  app.use('/api/v1', workspaceRouter(services.resolveConnection, mail, services.overview?.now));
   app.use('/api/v1', peopleRouter(services.resolveConnection));
   app.use(
     '/api/v1',
