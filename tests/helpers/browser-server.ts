@@ -49,7 +49,7 @@ async function browserAuthentication(pool: Pool) {
   }
 
   const authentication = createAuthentication(pool, {
-    baseUrl: 'http://127.0.0.1:4173',
+    baseUrl: process.env.SIMPUL_BROWSER_BASE_URL ?? 'http://127.0.0.1:4173',
     secret: 'browser-test-only-secret-with-more-than-32-characters',
   });
 
