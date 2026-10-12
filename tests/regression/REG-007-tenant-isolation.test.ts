@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
 import { beforeAll, expect, test } from 'vitest';
 import { createConnectionResolver } from '../../src/platform/db/connection-resolver.js';
@@ -40,7 +41,21 @@ async function foreignRow(table: string) {
   }
 }
 
-async function rejectForeignInsert(tx: PoolClient, table: string, snapshot: unknown) {
+// A bot's account id is claimed globally by a BEFORE trigger that answers "already in use" before
+// row-level security is consulted. A fresh id lets the insert reach the policy this test is about.
+function withFreshBotAccount(snapshot: unknown) {
+  const row = { ...(snapshot as Record<string, unknown>) };
+
+  if ('provider_account_id' in row) {
+    row.provider_account_id = `fresh-${randomUUID()}`;
+  }
+
+  return row;
+}
+
+async function rejectForeignInsert(tx: PoolClient, table: string, original: unknown) {
+  const snapshot = withFreshBotAccount(original);
+
   await tx.query('SAVEPOINT foreign_insert');
   await expect(
     tx.query(
