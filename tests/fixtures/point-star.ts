@@ -153,7 +153,7 @@ async function seedWork(client: PoolClient, seed: Seed) {
   await client.query(
     `INSERT INTO threads (id, workspace_id, display_id, status, domain_id, channel_id,
     customer_label, summary, owner_person_id, genesis_confidence, last_activity_at, expires_at,
-    closed_at, closure_kind, closure_reason, created_at)
+    closed_at, closure_kind, closure_reason, created_at, next_step)
     SELECT md5('point-star-thread-' || display)::uuid, $1, display, status,
       md5('point-star-domain-' || domain)::uuid, md5('point-star-channel-' || channel)::uuid,
       customer, summary, md5('point-star-person-' || owner)::uuid, 0.95,
@@ -161,18 +161,28 @@ async function seedWork(client: PoolClient, seed: Seed) {
       CASE WHEN status IN ('completed', 'cancelled', 'archived') THEN $2::timestamptz - age END,
       CASE WHEN status = 'cancelled' THEN 'cancelled'
         WHEN status IN ('completed', 'archived') THEN 'completed' END,
-      CASE WHEN status = 'cancelled' THEN 'Cancelled by the customer' END, $2::timestamptz - interval '20 days'
+      CASE WHEN status = 'cancelled' THEN 'Cancelled by the customer' END,
+      $2::timestamptz - created, next
     FROM (VALUES
-      ('ORD-0091', 'active', 'Order', 3, 'Mrs. Sri', 'Aqua 600 ml · 3 cases', 2, interval '19 hours'),
-      ('ORD-0098', 'active', 'Order', 2, 'Toko Berkah', 'Indomie noodles · 12 cases', 2, interval '12 minutes'),
-      ('PAY-0034', 'active', 'Finance', 1, 'CV Maju Jaya', 'Payment confirmation · IDR 4.8m', 4, interval '38 minutes'),
-      ('ORD-0095', 'completed', 'Order', 2, 'Mr. Hasan', 'Teh Pucuk · 8 cases', 3, interval '1 hour'),
-      ('STK-0018', 'active', 'Stock', 3, 'Warehouse stock', 'Cooking oil 1 L · low stock', 2, interval '2 hours'),
-      ('ORD-0087', 'completed', 'Order', 2, 'Toko Sumber Rezeki', 'Premium rice · 10 bags', 3, interval '3 hours'),
-      ('ORD-0100', 'tentative', 'Order', 2, 'Toko Melati', 'Indomie noodles · 12 cases', 2, interval '8 minutes'),
-      ('ORD-0083', 'cancelled', 'Order', 3, 'Toko Amanah', 'Aqua 600 ml · 3 cases', 2, interval '1 day'),
-      ('ORD-0070', 'archived', 'Order', 2, 'Toko Sentosa', 'Teh Pucuk · 8 cases', 3, interval '14 days')
-    ) AS sample(display, status, domain, channel, customer, summary, owner, age)`,
+      ('ORD-0091', 'active', 'Order', 3, 'Mrs. Sri', 'Aqua 600 ml · 3 cases', 2, interval '19 hours',
+        interval '18 hours 59 minutes', 'A reminder for Budi is scheduled at 11:30.'),
+      ('ORD-0098', 'active', 'Order', 2, 'Toko Berkah', 'Indomie noodles · 12 cases', 2, interval '12 minutes',
+        interval '12 minutes', 'Waiting for a warehouse update.'),
+      ('PAY-0034', 'active', 'Finance', 1, 'CV Maju Jaya', 'Payment confirmation · IDR 4.8m', 4, interval '38 minutes',
+        interval '38 minutes', 'Waiting for payment verification.'),
+      ('ORD-0095', 'completed', 'Order', 2, 'Mr. Hasan', 'Teh Pucuk · 8 cases', 3, interval '1 hour',
+        interval '1 hour', 'Completed. Reminders for this work have stopped.'),
+      ('STK-0018', 'active', 'Stock', 3, 'Warehouse stock', 'Cooking oil 1 L · low stock', 2, interval '2 hours',
+        interval '2 hours', 'Siti receives updates in the operations digest.'),
+      ('ORD-0087', 'completed', 'Order', 2, 'Toko Sumber Rezeki', 'Premium rice · 10 bags', 3, interval '3 hours',
+        interval '3 hours', 'Completed. No follow-up needed.'),
+      ('ORD-0100', 'tentative', 'Order', 2, 'Toko Melati', 'Indomie noodles · 12 cases', 2, interval '8 minutes',
+        interval '8 minutes', 'No notifications. A silent 24-hour tentative period applies.'),
+      ('ORD-0083', 'cancelled', 'Order', 3, 'Toko Amanah', 'Aqua 600 ml · 3 cases', 2, interval '1 day',
+        interval '1 day', 'Reminders stopped. Archive after 14 days.'),
+      ('ORD-0070', 'archived', 'Order', 2, 'Toko Sentosa', 'Teh Pucuk · 8 cases', 3, interval '14 days',
+        interval '14 days', 'Reopen only when a new message clearly refers to this work.')
+    ) AS sample(display, status, domain, channel, customer, summary, owner, age, created, next)`,
     [seed.workspaceId, seed.now],
   );
   await client.query(
@@ -222,7 +232,7 @@ async function seedReview(client: PoolClient, seed: Seed) {
     SELECT $1, kind, title, detail, md5('point-star-channel-' || channel)::uuid,
       detected, $2::timestamptz - age, $2::timestamptz - age
     FROM (VALUES
-      ('unrouted', 'Returns need a routing rule', 'Toko Makmur requested a return for 2 damaged cases.', 2, 'Returns', interval '18 minutes'),
+      ('unrouted', 'Returns need a routing rule', 'Toko Makmur requested a return of 2 damaged cases.', 2, 'Returns', interval '18 minutes'),
       ('unrouted', 'Delivery schedule changed', 'A redelivery request for order ORD-0093.', 3, 'Order', interval '42 minutes'),
       ('unrouted', 'Customer pricing adjustment', 'Special customer pricing needs an owner.', 2, 'Finance', interval '1 hour'),
       ('alias', 'Who does “Pak Bud” refer to?', 'This name appears in 3 warehouse updates.', 1, 'Pak Bud', interval '24 minutes'),
