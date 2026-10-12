@@ -74,6 +74,7 @@ export async function comprehendUnit(dependencies: Dependencies, payload: Scope)
 
   for (const temperature of [defaultTemperature, 0]) {
     const output = await dependencies.model.generate({
+      workspaceId: scope.workspaceId,
       mode: 'comprehend',
       tier: 'standard',
       bodySafe: input.bodySafe,

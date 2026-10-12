@@ -1,11 +1,16 @@
 import { GoogleGenAI } from '@google/genai';
 import type { GenerateContentParameters } from '@google/genai';
+import type { MetricSink } from '../metrics/index.js';
+import { recordTokens } from './usage.js';
 
-type Generate = (request: GenerateContentParameters) => Promise<{ text?: string }>;
+type Generate = (request: GenerateContentParameters) => Promise<{
+  text?: string;
+  usageMetadata?: { totalTokenCount?: number };
+}>;
 const TIMEOUT_MS = 20000;
 
 export function createGeminiTranscriber(
-  settings: { apiKey: string; model: string },
+  settings: { apiKey: string; model: string; emit?: MetricSink },
   generate?: Generate,
 ) {
   const client = new GoogleGenAI({ apiKey: settings.apiKey });
@@ -13,7 +18,7 @@ export function createGeminiTranscriber(
     generate ?? ((request: GenerateContentParameters) => client.models.generateContent(request));
 
   return {
-    async transcribe(audio: { data: Uint8Array; mimeType: string }) {
+    async transcribe(audio: { data: Uint8Array; mimeType: string; workspaceId?: string }) {
       const result = await generateContent({
         model: settings.model,
         contents: [
@@ -37,6 +42,13 @@ export function createGeminiTranscriber(
           httpOptions: { timeout: TIMEOUT_MS, retryOptions: { attempts: 1 } },
         },
       });
+
+      recordTokens(
+        settings.emit,
+        audio.workspaceId,
+        'transcription',
+        result.usageMetadata?.totalTokenCount,
+      );
 
       return result.text?.trim() ?? '';
     },

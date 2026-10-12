@@ -37,6 +37,7 @@ export async function triageUnit(dependencies: Dependencies, payload: Payload) {
   }
 
   const output = await dependencies.model.generate({
+    workspaceId: scope.workspaceId,
     mode: 'triage',
     tier: 'triage',
     bodySafe: input.bodySafe,

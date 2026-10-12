@@ -1,9 +1,18 @@
 import type { ModelPort } from './port.js';
 import { GoogleGenAI } from '@google/genai';
 import type { GenerateContentParameters } from '@google/genai';
+import type { MetricSink } from '../metrics/index.js';
+import { recordTokens } from './usage.js';
 
-type Settings = { apiKey: string; models: { triage: string; standard: string; strong: string } };
-type Generate = (request: GenerateContentParameters) => Promise<{ text?: string }>;
+type Settings = {
+  apiKey: string;
+  models: { triage: string; standard: string; strong: string };
+  emit?: MetricSink;
+};
+type Generate = (request: GenerateContentParameters) => Promise<{
+  text?: string;
+  usageMetadata?: { totalTokenCount?: number };
+}>;
 const timeoutMs = 20000;
 const instructions = {
   triage:
@@ -37,6 +46,13 @@ export function createGeminiModel(settings: Settings, generate?: Generate): Mode
             : {}),
         },
       });
+
+      recordTokens(
+        settings.emit,
+        request.workspaceId,
+        request.mode,
+        output.usageMetadata?.totalTokenCount,
+      );
 
       return output.text ?? '';
     },

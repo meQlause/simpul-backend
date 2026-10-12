@@ -14,7 +14,13 @@ type Services = {
   providers: ReturnType<typeof createProviderRegistry>;
   now: () => Date;
   publicBaseUrl: string;
-  transcriber: { transcribe: (audio: { data: Uint8Array; mimeType: string }) => Promise<string> };
+  transcriber: {
+    transcribe: (audio: {
+      data: Uint8Array;
+      mimeType: string;
+      workspaceId?: string;
+    }) => Promise<string>;
+  };
   publishUnit?: ReturnType<typeof publishUnit>;
 };
 
@@ -42,6 +48,7 @@ export async function processMedia(
     };
     const adapter = services.providers.adapterFor(media.provider);
     const transcript = await transcribeVoice(services, {
+      workspaceId: scope.workspaceId,
       adapter,
       connection,
       mediaRef: media.mediaRef,
@@ -70,6 +77,7 @@ export async function processMedia(
 async function transcribeVoice(
   services: Services,
   input: {
+    workspaceId: string;
     adapter: ReturnType<Services['providers']['adapterFor']>;
     connection: { credential: string; providerAccountId: string; webhookUrl: string };
     mediaRef: string;
@@ -78,7 +86,9 @@ async function transcribeVoice(
   try {
     const audio = await input.adapter.downloadVoice?.(input.connection, input.mediaRef);
 
-    return audio ? (await services.transcriber.transcribe(audio)).trim() : '';
+    return audio
+      ? (await services.transcriber.transcribe({ ...audio, workspaceId: input.workspaceId })).trim()
+      : '';
   } catch {
     return '';
   }

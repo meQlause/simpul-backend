@@ -160,6 +160,7 @@ export async function comprehendGenesisUnit(services: Services, scope: Scope) {
 
   for (const temperature of [defaultTemperature, 0]) {
     const text = await services.model.generate({
+      workspaceId: scope.workspaceId,
       mode: 'genesis',
       tier: 'standard',
       bodySafe: context.bodySafe,

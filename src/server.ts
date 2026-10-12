@@ -18,6 +18,7 @@ import { createSecretStore } from './platform/secrets/index.js';
 import { ownDatabaseQueues } from './platform/db/own-database-queues.js';
 import { createAccountClaims } from './platform/db/connection-claims.js';
 import { createSystemMailer } from './platform/mail/system.js';
+import { createMetricSink } from './platform/metrics/index.js';
 
 const config = readConfig(process.env);
 
@@ -38,6 +39,7 @@ if (process.argv[2] === 'create-workspace') {
   await runMigrations(config);
 } else {
   const pool = createSystemPool(config.DATABASE_URL);
+  const emit = createMetricSink(createLogger(config.LOG_LEVEL));
   const providers = createProviderRegistry();
 
   providers.register(
@@ -69,6 +71,7 @@ if (process.argv[2] === 'create-workspace') {
   const { createApp } = await import('./app.js');
   const { createAuthentication } = await import('./features/auth/index.js');
   const tenantOptions = {
+    emit,
     systemHost: new URL(config.DATABASE_URL).hostname,
     secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
   };
@@ -138,6 +141,7 @@ if (process.argv[2] === 'create-workspace') {
       secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
       publicBaseUrl: config.PUBLIC_BASE_URL,
       model: createGeminiModel({
+        emit,
         apiKey: config.GEMINI_API_KEY,
         models: {
           triage: config.GEMINI_MODEL_TRIAGE,
@@ -146,6 +150,7 @@ if (process.argv[2] === 'create-workspace') {
         },
       }),
       transcriber: createGeminiTranscriber({
+        emit,
         apiKey: config.GEMINI_API_KEY,
         model: config.GEMINI_MODEL_STANDARD,
       }),
@@ -181,11 +186,21 @@ if (process.argv[2] === 'create-workspace') {
           }
         : undefined;
 
-    await registerSchedulerJobs(queue, pool, database);
+    await registerSchedulerJobs(queue, pool, database, { emit, now: () => new Date() });
     const ownQueues = ownDatabaseQueues(pool, {
       ...tenantOptions,
       scheduling: true,
-      register: registerSchedulerJobs,
+      register: async (tenantQueue, tenantPool) => {
+        const workspace = (
+          await tenantPool.query<{ id: string }>('SELECT id FROM scheduled_workspaces()')
+        ).rows[0];
+
+        await registerSchedulerJobs(tenantQueue, tenantPool, undefined, {
+          emit,
+          now: () => new Date(),
+          databaseId: workspace.id,
+        });
+      },
       alert: (event) =>
         createLogger(config.LOG_LEVEL).error(event, 'Database scheduler unavailable'),
     });

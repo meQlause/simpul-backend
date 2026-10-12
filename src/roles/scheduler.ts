@@ -1,8 +1,19 @@
 import type { PgBoss } from 'pg-boss';
 import type { Pool } from 'pg';
 import { probeDatabases, type ProbeServices } from '../platform/db/database-probe.job.js';
+import { reportMetrics, type MetricServices } from '../platform/db/metrics.js';
 
-export async function registerSchedulerJobs(queue: PgBoss, pool: Pool, database?: ProbeServices) {
+export async function registerSchedulerJobs(
+  queue: PgBoss,
+  pool: Pool,
+  database?: ProbeServices,
+  metrics?: MetricServices,
+) {
+  if (metrics) {
+    await queue.work('metrics.snapshot', () => reportMetrics(queue, pool, metrics));
+    await queue.schedule('metrics.snapshot', '* * * * *');
+  }
+
   if (database) {
     await queue.work('database.probe', () => probeDatabases(database));
     await queue.schedule('database.probe', '* * * * *');

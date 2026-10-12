@@ -14,3 +14,14 @@ export function connectionFailed(error: unknown) {
     )
   );
 }
+
+export function rlsRejected(error: unknown) {
+  return (
+    error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === '42501' &&
+    'routine' in error &&
+    error.routine === 'ExecWithCheckOptions'
+  );
+}

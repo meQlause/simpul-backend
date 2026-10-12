@@ -6,6 +6,39 @@ const settings = {
   models: { triage: 'triage-model', standard: 'standard-model', strong: 'strong-model' },
 };
 
+test('SRS §11.6: token metrics use provider usage per agent and workspace without message text', async () => {
+  const emit = vi.fn();
+  const generate = vi.fn(async () => ({ text: 'EVENT', usageMetadata: { totalTokenCount: 42 } }));
+  const model = createGeminiModel({ ...settings, emit }, generate);
+
+  await model.generate({
+    workspaceId: 'workspace-a',
+    mode: 'triage',
+    tier: 'triage',
+    bodySafe: 'customer text must not enter metrics',
+    temperature: 0,
+  });
+
+  expect(emit.mock.calls).toEqual([
+    [{ name: 'llm_tokens', kind: 'delta', value: 42, agent: 'triage', workspaceId: 'workspace-a' }],
+  ]);
+  expect(JSON.stringify(generate.mock.calls)).not.toContain('workspace-a');
+});
+
+test('SRS §11.6: missing provider usage is not reported as zero or estimated from message text', async () => {
+  const emit = vi.fn();
+  const model = createGeminiModel({ ...settings, emit }, async () => ({ text: 'EVENT' }));
+
+  await model.generate({
+    workspaceId: 'workspace-a',
+    mode: 'triage',
+    tier: 'triage',
+    bodySafe: 'safe',
+    temperature: 0,
+  });
+  expect(emit).not.toHaveBeenCalled();
+});
+
 test('SRS §7.1: a Gemini call receives body_safe, never body', async () => {
   const generate = vi.fn(async () => ({ text: 'EVENT' }));
   const model = createGeminiModel(settings, generate);

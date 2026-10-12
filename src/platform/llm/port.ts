@@ -1,4 +1,5 @@
 type ModelRequest = {
+  workspaceId?: string;
   mode: 'triage' | 'comprehend' | 'genesis';
   tier: 'triage' | 'standard' | 'strong';
   bodySafe: string;

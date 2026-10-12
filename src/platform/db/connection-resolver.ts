@@ -8,12 +8,14 @@ import {
 import { openTenantPool, type TenantPoolOptions } from './tenant-pool.js';
 import { DomainError } from '../errors/domain-error.js';
 import { schemaVersion } from './migrate-tenant.js';
+import type { MetricSink } from '../metrics/index.js';
 
-export type ConnectionResolver = (workspaceId: string) => Promise<Pool>;
+export type ConnectionResolver = ((workspaceId: string) => Promise<Pool>) & { emit?: MetricSink };
 
 type Options = TenantPoolOptions & {
   secretStore: ReturnType<typeof createSecretStore>;
   idleMs?: number;
+  emit?: MetricSink;
 };
 const UNAVAILABLE = 'E-DB-UNAVAILABLE';
 const RETRY_SECONDS = 60;
@@ -90,7 +92,7 @@ export function createConnectionResolver(systemPool: Pool, options?: Options) {
     });
   };
 
-  return Object.assign(resolve, { close });
+  return Object.assign(resolve, { close, emit: options?.emit });
 }
 
 async function cachedTenantPool(
