@@ -27,6 +27,11 @@ need execution on `own_database_workspaces()`, which returns workspace ids and a
 version derived from the encryption nonce, never a URL or ciphertext. These functions revoke
 execution from `PUBLIC`.
 
+The application role also needs `USAGE` on the `pgboss` schema and read and write access to
+its tables, sequences and functions, including tables pg-boss creates later (default
+privileges): the webhook stores a received update and queues its processing in one
+transaction on that role. Without it every webhook call answers 500 and Telegram retries.
+
 The system scheduler also needs execution on `own_database_probes()`, which lists only
 connected or unreachable own workspace ids. Health probes use the system SMTP sender;
 their notices contain only the workspace name, host and transition time.
