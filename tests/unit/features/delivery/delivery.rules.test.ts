@@ -66,3 +66,30 @@ test.each([
     ).toBe(expected);
   },
 );
+
+test('SRS §6.7 (FR-UI-19): a clarification lists its candidates numbered, with None of these last', () => {
+  const id = '00000000-0000-4000-8000-000000000f01';
+  const labels = ['ORD-0001 — Toko Berkah', 'ORD-0002 — Toko Maju', 'ORD-0003 — Toko Jaya'];
+
+  expect(delivery.questionActions(id, labels, true)).toEqual([
+    { id: `q:${id}:1`, label: '1 · ORD-0001 — Toko Berkah' },
+    { id: `q:${id}:2`, label: '2 · ORD-0002 — Toko Maju' },
+    { id: `q:${id}:3`, label: '3 · ORD-0003 — Toko Jaya' },
+    { id: `q:${id}:4`, label: '4 · None of these' },
+  ]);
+  expect(delivery.questionActions(id, labels, false).map((action) => action.label)).toEqual([
+    ...labels,
+    'None of these',
+  ]);
+});
+
+test('SRS §6.7 (FR-RES-02): a question answer maps a number to a candidate, and the last number to none', () => {
+  const threads = ['t1', 't2', 't3'];
+
+  expect(delivery.questionAnswer(1, threads)).toBe('t1');
+  expect(delivery.questionAnswer(3, threads)).toBe('t3');
+  expect(delivery.questionAnswer(4, threads)).toBe('none');
+  expect(delivery.questionAnswer(0, threads)).toBeUndefined();
+  expect(delivery.questionAnswer(5, threads)).toBeUndefined();
+  expect(delivery.questionAnswer(2, ['t1'])).toBe('none');
+});

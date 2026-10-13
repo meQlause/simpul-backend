@@ -76,3 +76,22 @@ export function claimGate(
     !thread.historical
   );
 }
+
+// The candidates of a clarification, numbered, with "None of these" as the last choice (FR-UI-19).
+export function questionActions(questionId: string, labels: readonly string[], numbered: boolean) {
+  const choices = [...labels, 'None of these'];
+
+  return choices.map((label, index) => ({
+    id: `q:${questionId}:${index + 1}`,
+    label: numbered ? `${index + 1} · ${label}` : label,
+  }));
+}
+
+// A chosen number is a candidate thread, or 'none' for the last choice; anything else is no answer.
+export function questionAnswer(choice: number, threadIds: readonly string[]) {
+  if (choice >= 1 && choice <= threadIds.length) {
+    return threadIds[choice - 1];
+  }
+
+  return choice === threadIds.length + 1 ? 'none' : undefined;
+}
