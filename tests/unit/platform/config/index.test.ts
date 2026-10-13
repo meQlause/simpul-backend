@@ -28,3 +28,9 @@ test('be-stack §5: model ids remain configurable without changing a feature', (
       .GEMINI_MODEL_STANDARD,
   ).toBe('replacement-model');
 });
+
+test('be-stack §5: every role listens on 3000 unless PORT names another port', () => {
+  expect(readConfig(environment).PORT).toBe(3000);
+  expect(readConfig({ ...environment, PORT: '3001' }).PORT).toBe(3001);
+  expect(() => readConfig({ ...environment, PORT: '0' })).toThrow();
+});

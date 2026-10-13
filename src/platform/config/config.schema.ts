@@ -9,6 +9,8 @@ const modelId = zod.string().min(1);
 
 export const configSchema = zod.object({
   PROCESS_ROLE: zod.enum(['api', 'webhook', 'worker', 'scheduler']),
+  // One port per role lets every role run on one machine; a deployment keeps the default.
+  PORT: zod.coerce.number().int().positive().max(65535).default(3000),
   DATABASE_URL: databaseUrl,
   DATABASE_MIGRATION_URL: databaseUrl,
   DATABASE_QUEUE_URL: databaseUrl,

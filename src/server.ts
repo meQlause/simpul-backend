@@ -22,7 +22,6 @@ import { createMetricSink } from './platform/metrics/index.js';
 
 const config = readConfig(process.env);
 
-const port = 3000;
 const WEBHOOK_SECRET_BYTES = 32;
 const CONNECTION_CODE_BYTES = 16;
 const commandArgumentsOffset = 3;
@@ -222,5 +221,5 @@ if (process.argv[2] === 'create-workspace') {
     services,
   );
 
-  app.listen(port);
+  app.listen(config.PORT);
 }
