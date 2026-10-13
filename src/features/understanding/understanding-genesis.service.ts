@@ -11,6 +11,7 @@ import { hasOutcome, lockUnlabelledUnit, insertOrphan } from './understanding.re
 import { persistOperation, type OperationOptions } from './understanding-operation.service.js';
 import { genesisOutput } from './understanding.schema.js';
 import { genesisGate } from './understanding.rules.js';
+import { conversationContext, settleResolution } from './understanding-resolution.repository.js';
 
 type Scope = { workspaceId: string; unitId: string };
 type Services = {
@@ -39,6 +40,7 @@ async function loadContext(services: Services, scope: Scope) {
           ...input,
           channelId: source.channelId,
           categories: await modelCategories(tx, scope.workspaceId),
+          conversation: await conversationContext(tx, scope),
         }
       : null;
   });
@@ -166,6 +168,7 @@ export async function comprehendGenesisUnit(services: Services, scope: Scope) {
         operations: [],
         evidenceMessageIds: context.evidenceMessageIds,
         categories: context.categories,
+        conversation: context.conversation,
       },
     });
     const output = decode(text, context);
@@ -173,6 +176,7 @@ export async function comprehendGenesisUnit(services: Services, scope: Scope) {
     if (output?.success) {
       await scopedTransaction(services.resolveConnection, scope.workspaceId, async (tx) => {
         if (await lockUnlabelledUnit(tx, scope)) {
+          await settleResolution(tx, scope, { contextMessageCount: context.conversation.length });
           await writeGenesis(tx, { services, scope, context, output: output.data });
         }
       });

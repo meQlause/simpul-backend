@@ -67,17 +67,19 @@ export function rankedCandidates(
     /\b(\d+(?:\.\d+)?)\s*(?:dus|cases?|karton|boxes?)\b/iu,
   )?.[1];
   const quantity = quantityText === undefined ? null : Number(quantityText);
-  const ranked = candidates.map((candidate) => ({
-    id: candidate.id,
-    quantity:
-      candidate.items.length === 1
-        ? (candidate.items[0]?.quantity ?? candidate.items[0]?.qty ?? null)
-        : null,
-    score:
-      candidate.reply || source.explicitIds.includes(candidate.displayId)
-        ? shortcutScore
-        : rank(candidate, source, weights, now),
-  }));
+  const ranked = candidates.map((candidate) => {
+    const reference = candidate.reply || source.explicitIds.includes(candidate.displayId);
+
+    return {
+      id: candidate.id,
+      reference,
+      quantity:
+        candidate.items.length === 1
+          ? (candidate.items[0]?.quantity ?? candidate.items[0]?.qty ?? null)
+          : null,
+      score: reference ? shortcutScore : rank(candidate, source, weights, now),
+    };
+  });
 
   return {
     quantity,

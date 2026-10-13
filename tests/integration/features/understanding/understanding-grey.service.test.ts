@@ -5,6 +5,8 @@ import { seedTenantRows } from '../../../fixtures/tenant-rows.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../../../src/platform/db/scoped-transaction.js';
 import { comprehendGreyUnit } from '../../../../src/features/understanding/understanding-grey.service.js';
+import { runComprehension } from '../../../../src/features/understanding/understanding.jobs.js';
+import { resolveCandidates } from '../../../../src/features/understanding/understanding.resolve.js';
 import { recordResolution } from '../../../../src/features/understanding/understanding-resolution.repository.js';
 
 const pool = databaseFixture();
@@ -108,6 +110,9 @@ beforeAll(async () => {
   await seedTenantRows(pool, workspaceId);
   fixtureThread = workspaceId;
   secondThread = await thread('ORD-0002');
+  await pool.query('UPDATE display_id_counters SET last_value = 100 WHERE workspace_id = $1', [
+    workspaceId,
+  ]);
 }, 120000);
 
 beforeEach(async () => {
@@ -334,4 +339,145 @@ test('SRS §8.4: two concurrent runs on one unit make one question and one publi
     1,
   );
   expect(publishQuestion).toHaveBeenCalledOnce();
+});
+
+const jobServices = () => ({ ...services, publishComprehend: vi.fn() });
+
+test('SRS §6.7 (FR-RES-02): through the job, a grey choice of ORD-0002 labels that work, and the comprehension request has no conversation', async () => {
+  const earlier = await message('ada pesanan baru toko berkah', day(30) - 2 * minute);
+  const own = await message('uda di konfirm', day(30));
+  const id = await greyUnit([fixtureThread, secondThread], day(30), own);
+
+  generate.mockImplementation(async (request) =>
+    request.mode === 'grey'
+      ? reply({ choice: 'candidate', threadId: secondThread, supportingMessageIds: [earlier] })
+      : reply({
+          operations: [
+            {
+              type: 'progress',
+              tense: 'sudah_terjadi',
+              confidence: 0.9,
+              evidenceMessageIds: [own],
+            },
+          ],
+        }),
+  );
+
+  await runComprehension(jobServices(), { workspaceId, unitId: id, threadId: null });
+
+  expect((await pool.query('SELECT thread_id FROM labels WHERE unit_id = $1', [id])).rows).toEqual([
+    { thread_id: secondThread },
+  ]);
+  const comprehend = generate.mock.calls.find(
+    ([request]) => request.mode === 'comprehend',
+  )?.[0] as {
+    context: object;
+  };
+
+  expect(comprehend.context).not.toHaveProperty('conversation');
+});
+
+// The Toko Berkah threads of this workspace.
+async function tokoThreads() {
+  const { rows } = await pool.query<{ id: string }>(
+    "SELECT id FROM threads WHERE workspace_id = $1 AND customer_label = 'Toko Berkah'",
+    [workspaceId],
+  );
+
+  return rows.map((row) => row.id);
+}
+
+// The grey verdict the resolve step writes for a unit.
+function greyVerdict(unitId: string, candidates: { threadId: string; score: number }[]) {
+  return scopedTransaction(resolve, workspaceId, (tx) =>
+    recordResolution(
+      tx,
+      { workspaceId, unitId },
+      { verdict: 'GREY', decidedBy: 'score', candidates, chosenThreadId: null },
+    ),
+  );
+}
+
+// The model for the first message: a new-work choice that cites it, and the genesis that creates the work.
+function firstAnswer(first: string) {
+  return async (request: Record<string, unknown>) => {
+    if (request.mode === 'genesis') {
+      const context = request.context as {
+        categories: { id: string }[];
+        evidenceMessageIds: string[];
+      };
+
+      return reply({
+        genesis: {
+          domainId: context.categories[0]?.id,
+          intent: 'work_event',
+          tense: 'sudah_terjadi',
+          who: 'Toko Berkah',
+          what: 'Indomie 12 dus',
+          action: 'pesanan dikonfirmasi',
+          completionCondition: 'Pesanan dikirim',
+          summary: 'New order from Toko Berkah',
+          confidence: 0.9,
+          evidenceMessageIds: context.evidenceMessageIds,
+        },
+        operations: [],
+      });
+    }
+
+    return reply({ choice: 'new_work', threadId: null, supportingMessageIds: [first] });
+  };
+}
+
+// T-32 with the new work created by the first message: a fragment attaches to it, and no third item appears.
+async function tenMinuteFollowUp(day0: number, fragmentScore: number) {
+  const before = await tokoThreads();
+  const first = await message('ada pesanan baru toko berkah lagi', day0);
+  const firstUnit = await unit(day0, [first]);
+
+  await greyVerdict(firstUnit, [{ threadId: fixtureThread, score: 0.5 }]);
+  generate.mockImplementation(firstAnswer(first));
+  await runComprehension(jobServices(), { workspaceId, unitId: firstUnit, threadId: null });
+  const newWork = (await tokoThreads()).filter((id) => !before.includes(id));
+
+  const follow = await message('uda di konfirm ya ternyata 12 biji', day0 + 2 * minute);
+  const followUnit = await unit(day0 + 2 * minute, [follow]);
+
+  await resolveCandidates(
+    { resolveConnection: resolve, publishComprehend: vi.fn() },
+    { workspaceId, unitId: followUnit },
+    {
+      candidates: [{ id: newWork[0] ?? fixtureThread, score: fragmentScore, quantity: null }],
+      quantity: null,
+    },
+    new Date(day0),
+  );
+  generate.mockImplementation(async (request) =>
+    request.mode === 'grey'
+      ? reply({ choice: 'candidate', threadId: newWork[0], supportingMessageIds: [first] })
+      : reply({
+          operations: [
+            {
+              type: 'progress',
+              tense: 'sudah_terjadi',
+              confidence: 0.9,
+              evidenceMessageIds: [follow],
+            },
+          ],
+        }),
+  );
+  await runComprehension(jobServices(), { workspaceId, unitId: followUnit, threadId: null });
+
+  expect(newWork).toHaveLength(1);
+  expect(
+    (await pool.query('SELECT thread_id FROM labels WHERE unit_id = $1', [followUnit])).rows,
+  ).toEqual([{ thread_id: newWork[0] }]);
+  expect(await count('SELECT count(*)::int AS n FROM orphans WHERE workspace_id = $1')).toBe(0);
+}
+
+test('SRS §6.7 (T-32, FR-RES-02): a fragment that scores in the grey zone attaches to the work the first message created', async () => {
+  await tenMinuteFollowUp(day(31), 0.5);
+});
+
+test('SRS §6.7 (T-32, D18): a fragment that scores below 0.45 is promoted to grey over that work and attaches to it too', async () => {
+  await tenMinuteFollowUp(day(32), 0.2);
 });
