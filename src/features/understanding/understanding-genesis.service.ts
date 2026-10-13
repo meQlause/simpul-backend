@@ -81,13 +81,9 @@ function rejection(output: Output) {
     return 'G3';
   }
 
-  if (!genesis.completionCondition) {
-    return 'G4';
-  }
-
-  return output.operations.some((operation) => operation.evidenceMessageIds.length > 0)
-    ? null
-    : 'empty_evidence';
+  // The genesis carries its own evidence (at least one supplied message id, checked in decode).
+  // New work need not come with an operation; one without evidence is discarded (SRS §7.2).
+  return genesis.completionCondition ? null : 'G4';
 }
 
 async function writeGenesis(
