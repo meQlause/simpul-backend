@@ -63,7 +63,16 @@ export async function browserChannels(pool: Pool) {
       };
     },
     registerWebhook: async () => {},
-    describeChat: async () => ({ chatType: 'supergroup', title: 'Browser test group' }),
+    describeChat: async (_connection, chatId) => ({
+      chatType: 'supergroup',
+      title:
+        (
+          await pool.query<{ display_name: string }>(
+            'SELECT display_name FROM channels WHERE provider_chat_id = $1',
+            [chatId],
+          )
+        ).rows[0]?.display_name ?? 'Browser test group',
+    }),
     checkReadiness: async () =>
       ['bot_identity', 'group', 'membership', 'privacy_mode', 'webhook'].map((key) => ({
         key,

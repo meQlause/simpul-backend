@@ -24,7 +24,7 @@ export async function selectReadiness(
      channel.connection_status AS "channelStatus",channel.monitored,
      EXISTS (SELECT 1 FROM channel_connection_sessions AS session WHERE session.workspace_id = channel.workspace_id
        AND session.bot_connection_id = connection.id AND session.candidate_chat_id = channel.provider_chat_id
-       AND session.purpose = 'receive_check' AND session.credential_version = connection.credential_version
+       AND session.purpose IN ('identify_group','receive_check') AND session.credential_version = connection.credential_version
        AND session.received_at IS NOT NULL AND session.expires_at > $3) AS inbound
      FROM channels AS channel JOIN bot_connections AS connection
        ON connection.id = channel.bot_connection_id AND connection.workspace_id = channel.workspace_id

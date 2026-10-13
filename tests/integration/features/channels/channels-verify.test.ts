@@ -8,6 +8,7 @@ import {
   provider,
   webhookSecret,
   draftWithVerification,
+  setFixtureNow,
 } from '../../../helpers/channel-activation.js';
 import { DomainError } from '../../../../src/platform/errors/domain-error.js';
 
@@ -30,6 +31,34 @@ async function receiveSession(connectionId: string) {
   expect(issued.status).toBe(201);
 
   return issued.body.data as { id: string; command: string };
+}
+
+async function identifySession(connectionId: string) {
+  const issued = await request(app)
+    .post('/api/v1/telegram/connections/' + connectionId + '/sessions')
+    .set('Cookie', cookie)
+    .send({ purpose: 'identify_group' });
+
+  expect(issued.status).toBe(201);
+
+  return issued.body.data as { id: string; command: string };
+}
+
+function inboundStatus(data: { checks: { key: string; status: string }[] }) {
+  return data.checks.find((check) => check.key === 'inbound')?.status;
+}
+
+// Moves the clock one second past the session's expiry, then sends an ordinary message in its group.
+async function deliverAfterExpiry(connectionId: string, chatId: number, sessionId: string) {
+  const { rows } = await pool.query<{ expires_at: Date }>(
+    'SELECT expires_at FROM channel_connection_sessions WHERE id = $1',
+    [sessionId],
+  );
+  const afterExpiry = new Date(rows[0].expires_at.getTime() + 1000);
+
+  setFixtureNow(afterExpiry);
+  await deliver(connectionId, 'after expiry', chatId, { date: afterExpiry.getTime() / 1000 });
+  setFixtureNow(instant);
 }
 
 function deliver(connectionId: string, text: string, chatId: number, extras: object = {}) {
@@ -253,4 +282,87 @@ test('Channels API section 5: rotating credentials requires a new inbound proof'
   await deliver(draft.connectionId, 'ordinary after rotation', draft.chatId);
   expect((await verify(draft.channelId)).body.data.activationReady).toBe(true);
   expect(provider.send).not.toHaveBeenCalled();
+});
+
+test('Channels API section 5 (identify): a command and a fresh ordinary message in the draft group prove inbound', async () => {
+  const draft = await target('Identify proof inbound');
+  const session = await identifySession(draft.connectionId);
+
+  expect((await deliver(draft.connectionId, session.command, draft.chatId)).status).toBe(200);
+  expect((await deliver(draft.connectionId, 'identify proof message', draft.chatId)).status).toBe(
+    200,
+  );
+
+  const verified = await verify(draft.channelId);
+
+  expect(verified.status).toBe(200);
+  expect(verified.body.data.activationReady).toBe(true);
+  expect(inboundStatus(verified.body.data)).toBe('pass');
+});
+
+test('Channels API section 5 (identify): a proof in another group, before the command, or after expiry does not prove inbound', async () => {
+  const draft = await target('Identify proof rejected');
+  const otherChat = draft.chatId - 1;
+  const elsewhere = await identifySession(draft.connectionId);
+
+  await deliver(draft.connectionId, elsewhere.command, otherChat);
+  await deliver(draft.connectionId, 'ordinary in the draft group', draft.chatId);
+  await deliver(draft.connectionId, 'ordinary in the identified group', otherChat);
+  expect(inboundStatus((await verify(draft.channelId)).body.data)).toBe('pending');
+
+  const early = await identifySession(draft.connectionId);
+
+  await deliver(draft.connectionId, 'before the command', draft.chatId);
+  await deliver(draft.connectionId, early.command, draft.chatId);
+  expect(inboundStatus((await verify(draft.channelId)).body.data)).toBe('pending');
+
+  const late = await identifySession(draft.connectionId);
+
+  await deliver(draft.connectionId, late.command, draft.chatId);
+  await deliverAfterExpiry(draft.connectionId, draft.chatId, late.id);
+  expect(inboundStatus((await verify(draft.channelId)).body.data)).toBe('pending');
+});
+
+test('Channels API section 5 (identify): a proof received before the draft row exists counts once the draft is saved', async () => {
+  const bot = (await pool.query<{ id: string }>('SELECT id FROM bot_connections')).rows[0].id;
+  const chat = '-5439901';
+  const session = await identifySession(bot);
+
+  await deliver(bot, session.command, Number(chat));
+  await deliver(bot, 'ordinary before the draft', Number(chat));
+
+  const saved = await request(app)
+    .post('/api/v1/channels')
+    .set('Cookie', cookie)
+    .send({ botConnectionId: bot, providerChatId: chat, displayName: 'Saved after proof' });
+
+  expect(saved.status).toBe(201);
+
+  const verified = await verify(saved.body.data.id);
+
+  expect(inboundStatus(verified.body.data)).toBe('pass');
+});
+
+test('Channels API section 5 (identify): rotating the credential after the proof makes inbound pending again', async () => {
+  const draft = await target('Identify proof rotated');
+  const session = await identifySession(draft.connectionId);
+
+  await deliver(draft.connectionId, session.command, draft.chatId);
+  await deliver(draft.connectionId, 'ordinary before rotation', draft.chatId);
+  expect(inboundStatus((await verify(draft.channelId)).body.data)).toBe('pass');
+
+  const version = (
+    await pool.query<{ credential_version: number }>(
+      'SELECT credential_version FROM bot_connections WHERE id = $1',
+      [draft.connectionId],
+    )
+  ).rows[0].credential_version;
+  const rotated = await request(app)
+    .put('/api/v1/telegram/connections/' + draft.connectionId + '/credentials')
+    .set('Cookie', cookie)
+    .set('Idempotency-Key', 'rotate-identify-proof')
+    .send({ botToken: 'test-only-identify-rotated', expectedCredentialVersion: version });
+
+  expect(rotated.status).toBe(200);
+  expect(inboundStatus((await verify(draft.channelId)).body.data)).toBe('pending');
 });
