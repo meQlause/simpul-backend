@@ -7,8 +7,10 @@ import {
   storedMediaId,
 } from './ingest.repository.js';
 import { receiveRecipientAction } from '../delivery/index.js';
+import { answerClarification } from '../understanding/index.js';
 import type {
   publishCoalesce,
+  publishComprehension,
   publishNotification,
   publishMedia,
 } from '../../platform/queue/index.js';
@@ -36,6 +38,7 @@ export type WebhookServices = {
   publish?: ReturnType<typeof publishCoalesce>;
   publishNotification?: ReturnType<typeof publishNotification>;
   publishMedia?: ReturnType<typeof publishMedia>;
+  publishComprehend?: ReturnType<typeof publishComprehension>;
 };
 
 export async function authenticateWebhook(
@@ -79,6 +82,28 @@ export async function authenticateWebhook(
   return { workspaceId: connection.workspaceId, connectionId, provider };
 }
 
+// The services a button or a reply needs: the update claim, the notification and the answer (FR-RES-02).
+function actionServices(
+  tx: PoolClient,
+  services: WebhookServices,
+  scope: { workspaceId: string; connectionId: string },
+  input: { updateId: string; now: Date },
+) {
+  return {
+    now: input.now,
+    claimUpdate: () => claimProviderUpdate(tx, scope, input.updateId),
+    publishNotification: services.publishNotification,
+    answerQuestion: (
+      answerTx: PoolClient,
+      answer: { workspaceId: string; questionId: string; actorId: string; answer: string },
+    ) =>
+      answerClarification(answerTx, answer, {
+        now: input.now,
+        publishComprehend: services.publishComprehend,
+      }),
+  };
+}
+
 export async function receiveUpdate(
   services: WebhookServices,
   scope: { workspaceId: string; connectionId: string; provider: string },
@@ -92,11 +117,12 @@ export async function receiveUpdate(
 
   if (event.type === 'action') {
     await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
-      receiveRecipientAction(tx, scope, event, {
-        now: services.now(),
-        claimUpdate: () => claimProviderUpdate(tx, scope, event.updateId),
-        publishNotification: services.publishNotification,
-      }),
+      receiveRecipientAction(
+        tx,
+        scope,
+        event,
+        actionServices(tx, services, scope, { updateId: event.updateId, now: services.now() }),
+      ),
     );
     await acknowledgeAction(services, scope, event.receiptId);
   }
@@ -159,11 +185,12 @@ async function ingestMessage(
     }
 
     if (
-      await receiveRecipientAction(tx, scope, event, {
-        now,
-        claimUpdate: () => claimProviderUpdate(tx, scope, event.updateId),
-        publishNotification: services.publishNotification,
-      })
+      await receiveRecipientAction(
+        tx,
+        scope,
+        event,
+        actionServices(tx, services, scope, { updateId: event.updateId, now }),
+      )
     ) {
       return;
     }

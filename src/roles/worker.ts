@@ -18,6 +18,7 @@ import {
   publishMatching,
   publishComprehension,
   publishNotification,
+  publishQuestion,
 } from '../platform/queue/index.js';
 
 export type PipelineServices = {
@@ -44,6 +45,7 @@ export async function registerPipelineJobs(queue: PgBoss, services: PipelineServ
     publishResolve: publishResolution(queue),
     publishComprehend: publishComprehension(queue),
     publishMatcher: publishMatching(queue),
+    publishQuestion: publishQuestion(queue),
   });
   await registerDeliveryJobs(queue, {
     ...services,

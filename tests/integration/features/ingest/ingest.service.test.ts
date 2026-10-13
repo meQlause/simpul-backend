@@ -8,6 +8,7 @@ import {
   app,
   cookie,
   pool,
+  telegramFetch,
   webhookApp,
   webhookSecret,
   draftWithVerification,
@@ -168,4 +169,110 @@ test('body_safe has NIK, bank-account and card patterns redacted while body is u
   expect(
     (await pool.query('SELECT text FROM units WHERE channel_id = $1', [channelId])).rows,
   ).toEqual([{ text: safe }]);
+});
+
+const instantOfFixture = '2026-10-10T04:01:00Z';
+const telegramText = (updateId: number, text: string) => ({
+  update_id: updateId,
+  message: {
+    message_id: updateId,
+    date: 1791604860,
+    text,
+    from: { id: 604, is_bot: false },
+    chat: { id: chatId, title: 'Crash transaction group', type: 'supergroup' },
+  },
+});
+const postTelegram = (body: unknown) =>
+  request(webhookApp)
+    .post('/api/v1/webhooks/telegram/' + connectionId)
+    .set('X-Telegram-Bot-Api-Secret-Token', webhookSecret)
+    .send(body as object);
+
+// Three active work items of this chat for the question to choose among.
+async function candidateThreads() {
+  const domain = await pool.query<{ id: string }>(
+    "SELECT id FROM vocab_domains WHERE workspace_id = $1 AND name = 'Order'",
+    [workspaceId],
+  );
+  const ids: string[] = [];
+
+  for (const displayId of ['ORD-0901', 'ORD-0902', 'ORD-0903']) {
+    const row = await pool.query<{ id: string }>(
+      `INSERT INTO threads (workspace_id, display_id, status, domain_id, channel_id, summary, genesis_confidence)
+       VALUES ($1, $2, 'active', $3, $4, 'Candidate ' || $2, 1) RETURNING id`,
+      [workspaceId, displayId, domain.rows[0]?.id, channelId],
+    );
+
+    ids.push(row.rows[0]?.id ?? '');
+  }
+
+  return ids;
+}
+
+// A question of this chat, offered the three candidates, open for ten minutes.
+async function openQuestion(threads: string[]) {
+  const unit = await pool.query<{ id: string }>(
+    `INSERT INTO units (workspace_id, channel_id, text, ts_first, ts_last) VALUES ($1, $2, 'question unit', $3, $3) RETURNING id`,
+    [workspaceId, channelId, instantOfFixture],
+  );
+  const question = await pool.query<{ id: string }>(
+    `INSERT INTO open_questions (workspace_id, unit_id, channel_id, thread_ids, asked_at, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $5::timestamptz + interval '10 minutes') RETURNING id`,
+    [workspaceId, unit.rows[0]?.id, channelId, threads, instantOfFixture],
+  );
+
+  return question.rows[0]?.id ?? '';
+}
+
+test('SRS §6.7 (FR-RES-02): a reply of 2 answers the open question of this chat and stores no message; other text is stored', async () => {
+  await pool.query(
+    "UPDATE person_identities SET external_id = '604' WHERE workspace_id = $1 AND provider = 'telegram' AND person_id = md5('point-star-person-2')::uuid",
+    [workspaceId],
+  );
+  const threads = await candidateThreads();
+  const first = await openQuestion(threads);
+
+  expect((await postTelegram(telegramText(6101, '2'))).status).toBe(200);
+  expect(
+    (await pool.query('SELECT answer FROM open_questions WHERE id = $1', [first])).rows,
+  ).toEqual([{ answer: threads[1] }]);
+  expect(
+    (await pool.query("SELECT count(*)::int AS n FROM messages_raw WHERE provider_msg_id = '6101'"))
+      .rows[0]?.n,
+  ).toBe(0);
+
+  const second = await openQuestion(threads);
+
+  expect((await postTelegram(telegramText(6102, '2 ORD-0091'))).status).toBe(200);
+  expect(
+    (await pool.query('SELECT answer FROM open_questions WHERE id = $1', [second])).rows,
+  ).toEqual([{ answer: null }]);
+  expect(
+    (await pool.query("SELECT count(*)::int AS n FROM messages_raw WHERE provider_msg_id = '6102'"))
+      .rows[0]?.n,
+  ).toBe(1);
+});
+
+test('SRS §6.7 (FR-UI-19): a question callback is acknowledged once, even when its answer is ignored', async () => {
+  telegramFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true, result: true })));
+
+  const response = await postTelegram({
+    update_id: 6201,
+    callback_query: {
+      id: 'cb-6201',
+      from: { id: 604, is_bot: false },
+      data: 'q:00000000-0000-4000-8000-0000000000ee:5',
+      message: {
+        message_id: 6201,
+        date: 1791604860,
+        text: 'Which order did you mean?',
+        chat: { id: chatId, title: 'Crash transaction group', type: 'supergroup' },
+      },
+    },
+  });
+
+  expect(response.status).toBe(200);
+  expect(
+    telegramFetch.mock.calls.filter(([url]) => String(url).includes('answerCallbackQuery')),
+  ).toHaveLength(1);
 });

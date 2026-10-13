@@ -1,6 +1,7 @@
 import {
   createQueue,
   publishCoalesce,
+  publishComprehension,
   publishMatching,
   publishNotification,
   publishMedia,
@@ -111,6 +112,7 @@ if (process.argv[2] === 'create-workspace') {
           publish: queue ? publishCoalesce(queue, config.INGEST_DEBOUNCE_SECONDS) : undefined,
           publishNotification: queue ? publishNotification(queue) : undefined,
           publishMedia: queue ? publishMedia(queue) : undefined,
+          publishComprehend: queue ? publishComprehension(queue) : undefined,
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },
         telegram: providers.adapterFor('telegram'),

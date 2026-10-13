@@ -68,6 +68,13 @@ export function publishNotification(boss: PgBoss) {
     });
 }
 
+export function publishQuestion(boss: PgBoss) {
+  return (tx: PoolClient, payload: { workspaceId: string; questionId: string }) =>
+    boss.send('delivery.question', payload, {
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
+}
+
 export function publishResolution(boss: PgBoss) {
   return (tx: PoolClient, payload: { workspaceId: string; unitId: string }) =>
     boss.send('understanding.resolve', payload, {

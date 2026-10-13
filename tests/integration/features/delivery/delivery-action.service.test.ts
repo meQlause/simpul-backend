@@ -5,6 +5,7 @@ import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.j
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 import { scopedTransaction } from '../../../../src/platform/db/scoped-transaction.js';
 import { receiveRecipientAction } from '../../../../src/features/delivery/delivery-action.service.js';
+import { recipientActionTarget } from '../../../../src/features/delivery/delivery-action.repository.js';
 import { answerClarification } from '../../../../src/features/understanding/understanding-answer.service.js';
 
 const pool = databaseFixture();
@@ -207,6 +208,31 @@ test('SRS §6.7 (FR-RES-02): another connection, or an inactive person, cannot a
   expect(await run(callback('upd-inactive', open, 1), now)).toBe(false);
   await pool.query('UPDATE people SET active = true WHERE id = $1', [budiPerson]);
 
+  expect((await answerOf(open)).answer).toBeNull();
+  expect(publishComprehend).not.toHaveBeenCalled();
+});
+
+test('SRS §6.7 (D10): a reply that is both an answer and a status is neither, and the message is stored', async () => {
+  const open = await question(7, later());
+  const now = new Date(instant.getTime() + minute);
+
+  // A sent reminder to Budi in this chat, about a thread of this chat: a reply "1" is a status too.
+  await pool.query(
+    `INSERT INTO notifications (workspace_id, label_id, thread_id, recipient_person_id, channel, body_rendered, held_until, sent_at, kind, destination_channel_id, stale_since, created_at)
+     SELECT $1, NULL, t.id, NULL, 'telegram', 'Reminder', $2, $2, 'reminder', $3, t.last_activity_at, $2
+     FROM threads t WHERE t.workspace_id = $1 AND t.display_id = 'ORD-0091'`,
+    [seed.workspaceId, instant, channel],
+  );
+  const status = await scopedTransaction(resolve, seed.workspaceId, (tx) =>
+    recipientActionTarget(tx, scope, text('upd-both', '1'), {
+      displayId: undefined,
+      notificationId: undefined,
+    }),
+  );
+
+  expect(status).toBeDefined();
+
+  expect(await run(text('upd-both', '1'), now)).toBe(false);
   expect((await answerOf(open)).answer).toBeNull();
   expect(publishComprehend).not.toHaveBeenCalled();
 });

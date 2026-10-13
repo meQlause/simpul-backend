@@ -1,4 +1,8 @@
-import { createQueue, publishCoalesce } from '../../src/platform/queue/index.js';
+import {
+  createQueue,
+  publishCoalesce,
+  publishComprehension,
+} from '../../src/platform/queue/index.js';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { beforeAll, afterAll, expect, vi } from 'vitest';
 import request from 'supertest';
@@ -53,6 +57,9 @@ export let app: ReturnType<typeof createApp>;
 
 export let webhookApp: ReturnType<typeof createApp>;
 
+// The Telegram fetch of the webhook app, so a test can answer and count the calls it makes.
+export const telegramFetch = vi.fn<typeof fetch>();
+
 export const webhookSecret = randomBytes(32).toString('base64url');
 
 export let cookie: string;
@@ -97,9 +104,10 @@ beforeAll(async () => {
       lookupConnection: createConnectionLookup(pool),
       secretStore: createSecretStore(services.connectionSetup.masterKey),
       providers: createProviderRegistry([
-        createTelegramProvider('https://telegram.example', vi.fn<typeof fetch>()),
+        createTelegramProvider('https://telegram.example', telegramFetch),
       ]),
       publish: publishCoalesce(queue),
+      publishComprehend: publishComprehension(queue),
       now: () => now,
     },
   });
