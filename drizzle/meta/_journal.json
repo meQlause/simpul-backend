@@ -92,6 +92,13 @@
       "when": 1791714286297,
       "tag": "0012_retention_edit_links",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791901457769,
+      "tag": "0017_unit_resolutions",
+      "breakpoints": true
     }
   ]
 }

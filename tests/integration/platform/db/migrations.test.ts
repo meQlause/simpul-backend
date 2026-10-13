@@ -62,6 +62,7 @@ const tables = [
   'media_outcomes',
   'units',
   'unit_messages',
+  'unit_resolutions',
   'labels',
   'threads',
   'progress_markers',

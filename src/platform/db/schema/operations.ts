@@ -3,6 +3,7 @@ import {
   pgTable,
   text,
   boolean,
+  integer,
   uuid,
   jsonb,
   check,
@@ -120,6 +121,30 @@ export const openQuestions = pgTable(
     check('oq_candidates_valid', sql`cardinality(${table.threadIds}) BETWEEN 1 AND 3`),
     check('oq_expiry_valid', sql`${table.expiresAt} > ${table.askedAt}`),
     index('oq_channel_day_idx').on(table.channelId, table.askedAt.desc()),
+  ],
+);
+
+export const unitResolutions = pgTable(
+  'unit_resolutions',
+  {
+    ...joinColumns(),
+    unitId: reference('unit_id', () => units.id, 'cascade').primaryKey(),
+    verdict: text('verdict').notNull(),
+    decidedBy: text('decided_by').notNull(),
+    candidates: jsonb('candidates')
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    chosenThreadId: reference('chosen_thread_id', () => threads.id, 'set null'),
+    contextMessageCount: integer('context_message_count').default(0).notNull(),
+  },
+  (table) => [
+    check('unit_resolutions_verdict_valid', sql`${table.verdict} IN ('ATTACH', 'GREY', 'CREATE')`),
+    check(
+      'unit_resolutions_decided_valid',
+      sql`${table.decidedBy} IN ('score', 'reference', 'model_context', 'question', 'admin')`,
+    ),
+    check('unit_resolutions_candidates_valid', sql`jsonb_array_length(${table.candidates}) <= 3`),
+    check('unit_resolutions_context_valid', sql`${table.contextMessageCount} >= 0`),
   ],
 );
 

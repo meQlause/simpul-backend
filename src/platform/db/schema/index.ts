@@ -36,6 +36,7 @@ export {
   notifications,
   corrections,
   openQuestions,
+  unitResolutions,
   orphans,
   reviewItems,
   decisions,

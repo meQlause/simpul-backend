@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import type { GenerateContentParameters } from '@google/genai';
 import { createGeminiModel } from '../../../../src/platform/llm/gemini.js';
 
 const settings = {
@@ -121,4 +122,40 @@ test('D-3: comprehension sends only the supplied safe operation context as data'
       contents: JSON.stringify({ message: 'correction', context }),
     }),
   );
+});
+
+test('SRS §6.7: grey mode decides among supplied candidates with cited support; genesis reads context only', async () => {
+  const generate = vi.fn<(request: GenerateContentParameters) => Promise<{ text: string }>>(
+    async () => ({ text: '{}' }),
+  );
+  const model = createGeminiModel(settings, generate);
+  const context = {
+    operations: [],
+    evidenceMessageIds: ['unit-message'],
+    conversation: [{ messageId: 'context-message', text: 'ada pesanan baru toko berkah' }],
+    candidates: [
+      { id: 'thread-2', displayId: 'ORD-0002', customer: 'Toko Berkah', summary: 'New order' },
+    ],
+  };
+
+  await model.generate({
+    mode: 'grey',
+    tier: 'standard',
+    bodySafe: 'uda di konfirm',
+    temperature: 0,
+    context,
+  });
+  await model.generate({
+    mode: 'genesis',
+    tier: 'standard',
+    bodySafe: 'uda di konfirm',
+    temperature: 0,
+    context,
+  });
+
+  const [grey, genesis] = generate.mock.calls.map(([request]) => request);
+
+  expect(grey?.config?.systemInstruction).toContain('not_sure');
+  expect(genesis?.config?.systemInstruction).toContain('reading only');
+  expect(JSON.parse(String(grey?.contents))).toEqual({ message: 'uda di konfirm', context });
 });

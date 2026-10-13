@@ -23,6 +23,7 @@ export async function createQueue(pool: Pool, scheduling = false, onError?: () =
     'understanding.comprehend',
     'delivery.gate',
     'delivery.send',
+    'delivery.question',
     'delivery.staleness',
     'delivery.digest',
     'scheduler.tick',

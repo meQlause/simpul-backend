@@ -21,6 +21,7 @@ const tables = [
   'unit_embeddings',
   'unit_messages',
   'media_outcomes',
+  'unit_resolutions',
   'messages_raw',
   'units',
   'threads',

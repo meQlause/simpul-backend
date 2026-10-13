@@ -207,6 +207,7 @@ function operationalRows(workspaceId: string) {
       { thread_ids: [workspaceId], channel_id: workspaceId, asked_at: instant, expires_at: later },
     ],
     ['orphans', { unit_id: workspaceId, reason: 'Test unresolved unit' }],
+    ['unit_resolutions', { unit_id: workspaceId, verdict: 'CREATE', decided_by: 'score' }],
     [
       'review_items',
       {

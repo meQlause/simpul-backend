@@ -1,6 +1,6 @@
 type ModelRequest = {
   workspaceId?: string;
-  mode: 'triage' | 'comprehend' | 'genesis';
+  mode: 'triage' | 'comprehend' | 'genesis' | 'grey';
   tier: 'triage' | 'standard' | 'strong';
   bodySafe: string;
   temperature: number;
@@ -10,6 +10,8 @@ type ModelRequest = {
     operations: { opId: string; type: string; evidence: string }[];
     evidenceMessageIds?: string[];
     categories?: { id: string; name: string }[];
+    conversation?: { messageId: string; text: string }[];
+    candidates?: { id: string; displayId: string; customer: string | null; summary: string }[];
   };
 };
 
