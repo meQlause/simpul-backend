@@ -98,6 +98,8 @@ export const configAuditSchemas = {
       digestTime: zod.string(),
       holdSeconds: zod.number(),
       timezone: zod.string(),
+      contextWindowMinutes: zod.number(),
+      contextMaxMessages: zod.number(),
     })
     .partial(),
   people: zod

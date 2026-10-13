@@ -84,13 +84,18 @@ export async function selectMe(tx: PoolClient, scope: { workspaceId: string; act
   return result.rows[0];
 }
 
-type Settings = zod.infer<typeof settingsSchema> & { holdSeconds: number; timezone: string };
+type Settings = Required<zod.infer<typeof settingsSchema>> & {
+  holdSeconds: number;
+  timezone: string;
+};
 
 export async function selectSettings(tx: PoolClient, workspaceId: string) {
   const result = await tx.query<Settings & { id: string }>(
     `SELECT policy.id, to_char(quiet_start, 'HH24:MI') AS "quietStart",
     to_char(quiet_end, 'HH24:MI') AS "quietEnd", budget_per_hour AS "budgetPerHour",
-    to_char(digest_time, 'HH24:MI') AS "digestTime", hold_seconds AS "holdSeconds", workspace.timezone
+    to_char(digest_time, 'HH24:MI') AS "digestTime", hold_seconds AS "holdSeconds", workspace.timezone,
+    coalesce((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'context_window_minutes'), 30)::int AS "contextWindowMinutes",
+    coalesce((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'context_max_messages'), 10)::int AS "contextMaxMessages"
     FROM policies AS policy JOIN workspaces AS workspace ON workspace.id = policy.workspace_id
     WHERE policy.workspace_id = $1 FOR UPDATE OF policy`,
     [workspaceId],
@@ -108,6 +113,15 @@ export async function updateSettings(
     `UPDATE policies SET quiet_start = $2, quiet_end = $3, budget_per_hour = $4,
     digest_time = $5 WHERE workspace_id = $1`,
     [workspaceId, input.quietStart, input.quietEnd, input.budgetPerHour, input.digestTime],
+  );
+  // The two context values live in thresholds (FR-UI-21); an omitted one keeps its stored value.
+  await tx.query(
+    `INSERT INTO thresholds (workspace_id, scope, key, value)
+    SELECT $1, 'workspace', entry.key, entry.value
+    FROM (VALUES ('context_window_minutes', $2::numeric), ('context_max_messages', $3::numeric)) entry(key, value)
+    WHERE entry.value IS NOT NULL
+    ON CONFLICT ON CONSTRAINT thresholds_uq DO UPDATE SET value = EXCLUDED.value`,
+    [workspaceId, input.contextWindowMinutes ?? null, input.contextMaxMessages ?? null],
   );
 }
 

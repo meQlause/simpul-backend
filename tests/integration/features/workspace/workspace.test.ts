@@ -103,6 +103,8 @@ test('GET /settings returns the workspace delivery preferences without internal 
     digestTime: '08:30',
     holdSeconds: 60,
     timezone: 'Asia/Jakarta',
+    contextWindowMinutes: 30,
+    contextMaxMessages: 10,
   });
 });
 
@@ -147,6 +149,8 @@ test('PUT /settings accepts a window crossing midnight, returns saved settings a
     digestTime: '09:00',
     holdSeconds: 60,
     timezone: 'Asia/Jakarta',
+    contextWindowMinutes: 30,
+    contextMaxMessages: 10,
   });
   expect(
     (
@@ -155,6 +159,124 @@ test('PUT /settings accepts a window crossing midnight, returns saved settings a
       )
     ).rows,
   ).toEqual([{ count: 1 }]);
+});
+
+const quietHours = {
+  quietStart: '21:00',
+  quietEnd: '07:00',
+  budgetPerHour: 6,
+  digestTime: '08:30',
+};
+const storedContext = async () =>
+  (
+    await pool.query(
+      `SELECT key, value::int AS value FROM thresholds
+       WHERE workspace_id = (SELECT id FROM workspaces LIMIT 1) AND scope = 'workspace'
+         AND key IN ('context_window_minutes', 'context_max_messages') ORDER BY key`,
+    )
+  ).rows;
+
+test('SRS §6.7 (FR-UI-21): the context window and message cap read with defaults, are saved to thresholds, and are kept when omitted', async () => {
+  expect(await supertest(app).get('/api/v1/settings').set('Cookie', cookie)).toMatchObject({
+    body: { data: { contextWindowMinutes: 30, contextMaxMessages: 10 } },
+  });
+
+  const saved = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ ...quietHours, contextWindowMinutes: 0, contextMaxMessages: 5 });
+
+  expect(saved.status).toBe(200);
+  expect(saved.body.data).toMatchObject({ contextWindowMinutes: 0, contextMaxMessages: 5 });
+  expect(await storedContext()).toEqual([
+    { key: 'context_max_messages', value: 5 },
+    { key: 'context_window_minutes', value: 0 },
+  ]);
+
+  const omitted = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send(quietHours);
+
+  expect(omitted.status).toBe(200);
+  expect(omitted.body.data).toMatchObject({ contextWindowMinutes: 0, contextMaxMessages: 5 });
+});
+
+test.each([
+  [180, 30],
+  [0, 1],
+])(
+  'SRS §6.7 (FR-UI-21): a context window of %i minutes and a cap of %i messages are accepted',
+  async (minutes, messages) => {
+    const response = await supertest(app)
+      .put('/api/v1/settings')
+      .set('Cookie', cookie)
+      .send({ ...quietHours, contextWindowMinutes: minutes, contextMaxMessages: messages });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toMatchObject({
+      contextWindowMinutes: minutes,
+      contextMaxMessages: messages,
+    });
+  },
+);
+
+test.each([
+  { contextWindowMinutes: 181 },
+  { contextWindowMinutes: -1 },
+  { contextWindowMinutes: 1.5 },
+  { contextMaxMessages: 0 },
+  { contextMaxMessages: 31 },
+  { messageTextAccess: true },
+])('SRS §6.7 (FR-UI-21): %j is refused with E-VALIDATION and stores nothing', async (extra) => {
+  const before = await storedContext();
+  const response = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ ...quietHours, ...extra });
+
+  expect(response.status).toBe(422);
+  expect(response.body.error.code).toBe('E-VALIDATION');
+  expect(await storedContext()).toEqual(before);
+});
+
+test('SRS §6.7 (FR-UI-21): the context values of another workspace are never changed by a save', async () => {
+  await pool.query(
+    "INSERT INTO workspaces (id, name, timezone) VALUES ('00000000-0000-4000-8000-0000000007f1', 'Other', 'Asia/Jakarta')",
+  );
+  await pool.query(
+    "INSERT INTO thresholds (workspace_id, scope, key, value) VALUES ('00000000-0000-4000-8000-0000000007f1', 'workspace', 'context_window_minutes', 45)",
+  );
+
+  await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ ...quietHours, contextWindowMinutes: 7 });
+
+  expect(
+    (
+      await pool.query(
+        "SELECT value::int AS value FROM thresholds WHERE workspace_id = '00000000-0000-4000-8000-0000000007f1' AND key = 'context_window_minutes'",
+      )
+    ).rows,
+  ).toEqual([{ value: 45 }]);
+  await pool.query(
+    "DELETE FROM thresholds WHERE workspace_id = '00000000-0000-4000-8000-0000000007f1'",
+  );
+  await pool.query("DELETE FROM workspaces WHERE id = '00000000-0000-4000-8000-0000000007f1'");
+});
+
+test('SRS §11.4 (FR-UI-21): the one config audit row of a save carries both context values in after', async () => {
+  await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ ...quietHours, contextWindowMinutes: 12, contextMaxMessages: 4 });
+
+  const latest = await pool.query(
+    "SELECT after FROM config_audit WHERE table_name = 'policies' ORDER BY created_at DESC LIMIT 1",
+  );
+
+  expect(latest.rows[0]?.after).toMatchObject({ contextWindowMinutes: 12, contextMaxMessages: 4 });
 });
 
 test.each(['id', 'workspaceId', 'level'])(

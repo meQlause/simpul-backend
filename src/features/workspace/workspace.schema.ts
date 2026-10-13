@@ -46,6 +46,8 @@ export const settingsSchema = zod
     [QUIET_END]: time,
     budgetPerHour: zod.number().int().min(1).max(50),
     digestTime: time,
+    contextWindowMinutes: zod.number().int().min(0).max(180).optional(),
+    contextMaxMessages: zod.number().int().min(1).max(30).optional(),
   })
   .refine((input) => input.quietStart !== input.quietEnd, {
     path: [QUIET_END],

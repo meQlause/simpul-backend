@@ -119,6 +119,8 @@ export async function getSettings(resolveConnection: ConnectionResolver, workspa
       digestTime: row.digestTime,
       holdSeconds: row.holdSeconds,
       timezone: row.timezone,
+      contextWindowMinutes: row.contextWindowMinutes,
+      contextMaxMessages: row.contextMaxMessages,
     };
   });
 }
