@@ -34,7 +34,13 @@ function decode(text: string, contextOpIds: string[]) {
   }
 }
 
-async function quarantine(dependencies: Dependencies, scope: Scope) {
+export async function quarantine<Unit extends { workspaceId: string; unitId: string }>(
+  dependencies: {
+    resolveConnection: ConnectionResolver;
+    alert: (event: Unit & { reason: 'model_invalid_json' }) => void;
+  },
+  scope: Unit,
+) {
   const changed = await scopedTransaction(
     dependencies.resolveConnection,
     scope.workspaceId,

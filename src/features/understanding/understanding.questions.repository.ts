@@ -22,7 +22,12 @@ export async function resolutionFacts(tx: PoolClient, scope: Omit<Scope, 'channe
   return rows[0];
 }
 
-export async function askQuestion(tx: PoolClient, scope: Scope, candidates: string[], now: Date) {
+export async function askQuestion(
+  tx: PoolClient,
+  scope: Scope,
+  candidates: string[],
+  now: Date,
+): Promise<string | undefined> {
   const threadIds = candidates.slice(0, maximumCandidates);
 
   await tx.query(
@@ -35,10 +40,10 @@ export async function askQuestion(tx: PoolClient, scope: Scope, candidates: stri
   );
 
   if (existing.rowCount) {
-    return;
+    return undefined;
   }
 
-  const { rowCount } = await tx.query(
+  const { rows } = await tx.query<{ id: string }>(
     `INSERT INTO open_questions (workspace_id, unit_id, channel_id, thread_ids, asked_at, expires_at)
     SELECT w.id, $2, $3, $5, $4, $4::timestamptz + interval '10 minutes' FROM workspaces w
     WHERE w.id = $1 AND cardinality($5::uuid[]) BETWEEN 1 AND 3
@@ -47,11 +52,31 @@ export async function askQuestion(tx: PoolClient, scope: Scope, candidates: stri
       < COALESCE((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'questions_per_channel_per_day'), 3)
     AND NOT EXISTS (SELECT 1 FROM unnest($5::uuid[]) t(id) WHERE
       (SELECT count(*) FROM open_questions q WHERE q.workspace_id = $1 AND t.id = ANY(q.thread_ids) AND (q.asked_at AT TIME ZONE w.timezone)::date = ($4::timestamptz AT TIME ZONE w.timezone)::date)
-      >= COALESCE((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'questions_per_thread_per_day'), 1))`,
+      >= COALESCE((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'questions_per_thread_per_day'), 1))
+    RETURNING id`,
     [scope.workspaceId, scope.unitId, scope.channelId, now, threadIds],
   );
 
-  if (!rowCount) {
+  if (!rows[0]) {
     await insertOrphan(tx, scope, 'question_quota');
   }
+
+  return rows[0]?.id;
+}
+
+// The answer is a candidate's thread id or 'none'; only an open, unexpired question takes it.
+export async function answerQuestion(
+  tx: PoolClient,
+  input: { workspaceId: string; questionId: string; actorId: string; answer: string },
+  now: Date,
+): Promise<string | undefined> {
+  const { rows } = await tx.query<{ unitId: string }>(
+    `UPDATE open_questions SET answer = $3, answered_by = $4
+    WHERE workspace_id = $1 AND id = $2 AND answer IS NULL AND unit_id IS NOT NULL AND expires_at > $5
+    AND ($3 = 'none' OR $3 = ANY(thread_ids::text[]))
+    RETURNING unit_id AS "unitId"`,
+    [input.workspaceId, input.questionId, input.answer, input.actorId, now],
+  );
+
+  return rows[0]?.unitId;
 }

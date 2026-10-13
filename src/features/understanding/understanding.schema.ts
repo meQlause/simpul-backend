@@ -27,6 +27,7 @@ export const candidatesInput = z.strictObject({
       id: z.guid(),
       score: z.number().min(0).max(1),
       quantity: z.number().finite().nullable(),
+      reference: z.boolean().default(false),
     }),
   ),
 });
@@ -47,4 +48,10 @@ export const genesisOutput = z.strictObject({
     })
     .nullable(),
   operations: comprehensionOutput.shape.operations,
+});
+
+export const greyOutput = z.strictObject({
+  choice: z.enum(['candidate', 'new_work', 'not_sure']),
+  threadId: z.guid().nullable(),
+  supportingMessageIds: z.array(z.guid()),
 });

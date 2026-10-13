@@ -1,6 +1,9 @@
 import { expect, test } from 'vitest';
 import {
+  decidedBy,
+  followUpVerdict,
   genesisGate,
+  greyChoice,
   quantityCandidates,
   verdict,
 } from '../../../../src/features/understanding/understanding.rules.js';
@@ -44,4 +47,36 @@ test('SRS §6.1: a contradicting quantity removes a candidate regardless of its 
 
 test.each(['status_query', 'ack', 'noise'])('SRS §7.3: genesisGate rejects %s at G1', (intent) => {
   expect(genesisGate(intent)).toBe('G1');
+});
+
+test('SRS §9.2: decidedBy is reference only for an ATTACH that the reply or explicit id decided', () => {
+  expect(decidedBy('ATTACH', true)).toBe('reference');
+  expect(decidedBy('ATTACH', false)).toBe('score');
+  expect(decidedBy('GREY', true)).toBe('score');
+  expect(decidedBy('CREATE', true)).toBe('score');
+});
+
+test('SRS §6.7: greyChoice attaches only to a cited candidate of the list and creates only with cited new work', () => {
+  const supplied = { candidateIds: ['t1', 't2'], messageIds: ['m1', 'm2'] };
+  const choice = (
+    choiceValue: 'candidate' | 'new_work' | 'not_sure',
+    threadId: string | null,
+    supportingMessageIds: string[],
+  ) => greyChoice({ choice: choiceValue, threadId, supportingMessageIds }, supplied);
+
+  expect(choice('candidate', 't1', ['m1'])).toEqual({ kind: 'attach', threadId: 't1' });
+  expect(choice('candidate', 't1', [])).toEqual({ kind: 'unsure' });
+  expect(choice('candidate', 't1', ['foreign'])).toEqual({ kind: 'unsure' });
+  expect(choice('candidate', 't9', ['m1'])).toEqual({ kind: 'unsure' });
+  expect(choice('candidate', null, ['m1'])).toEqual({ kind: 'unsure' });
+  expect(choice('new_work', null, ['m1'])).toEqual({ kind: 'create' });
+  expect(choice('new_work', null, [])).toEqual({ kind: 'unsure' });
+  expect(choice('not_sure', null, ['m1'])).toEqual({ kind: 'unsure' });
+});
+
+test('SRS §6.7 (FR-RES-03): a CREATE with recent work in its window is grey; otherwise the verdict is unchanged', () => {
+  expect(followUpVerdict('CREATE', ['t1'])).toBe('GREY');
+  expect(followUpVerdict('CREATE', [])).toBe('CREATE');
+  expect(followUpVerdict('ATTACH', ['t1'])).toBe('ATTACH');
+  expect(followUpVerdict('GREY', ['t1'])).toBe('GREY');
 });
