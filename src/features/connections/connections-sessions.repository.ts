@@ -7,6 +7,7 @@ export type SessionRow = {
   candidate_chat_id: string | null;
   candidate_title: string | null;
   candidate_chat_type: string | null;
+  received_at: Date | null;
 };
 
 export async function insertSession(
@@ -43,7 +44,7 @@ export async function insertSession(
 
 export async function selectSession(tx: PoolClient, workspaceId: string, sessionId: string) {
   const result = await tx.query<SessionRow>(
-    `SELECT id, expires_at, consumed_at, candidate_chat_id, candidate_title, candidate_chat_type
+    `SELECT id, expires_at, consumed_at, candidate_chat_id, candidate_title, candidate_chat_type, received_at
      FROM channel_connection_sessions WHERE workspace_id = $1 AND id = $2`,
     [workspaceId, sessionId],
   );
@@ -108,7 +109,8 @@ export async function storeReceiveCheck(
   const proof = await tx.query(
     `UPDATE channel_connection_sessions AS session SET received_at = $4 FROM bot_connections AS connection
      WHERE session.workspace_id = $1 AND session.bot_connection_id = $2 AND session.candidate_chat_id = $3
-       AND session.purpose = 'receive_check' AND session.received_at IS NULL AND session.expires_at > $4
+       AND session.purpose IN ('identify_group','receive_check') AND session.consumed_at IS NULL
+       AND session.received_at IS NULL AND session.expires_at > $4
        AND connection.workspace_id = session.workspace_id AND connection.id = session.bot_connection_id
        AND connection.credential_version = session.credential_version
        AND $5::timestamptz >= date_trunc('second',session.created_at) RETURNING session.id`,

@@ -83,6 +83,7 @@ export async function pollSession(
             chatType: row.candidate_chat_type,
           }
         : null,
+    receivedAt: row.received_at?.toISOString() ?? null,
   };
 }
 
