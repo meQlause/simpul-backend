@@ -26,6 +26,7 @@ export const policies = pgTable(
     digestTime: time('digest_time', { precision: 0 }).notNull(),
     holdSeconds: integer('hold_seconds').default(DEFAULT_HOLD_SECONDS).notNull(),
     escalationLimit: integer('escalation_limit').default(1).notNull(),
+    messageTextAccess: boolean('message_text_access').default(false).notNull(),
   },
   (table) => [
     uniqueIndex('policies_ws_uq').on(table.workspaceId),

@@ -99,6 +99,13 @@
       "when": 1791901457769,
       "tag": "0017_unit_resolutions",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791944267384,
+      "tag": "0018_message_log",
+      "breakpoints": true
     }
   ]
 }

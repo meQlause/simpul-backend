@@ -209,6 +209,17 @@ function operationalRows(workspaceId: string) {
     ['orphans', { unit_id: workspaceId, reason: 'Test unresolved unit' }],
     ['unit_resolutions', { unit_id: workspaceId, verdict: 'CREATE', decided_by: 'score' }],
     [
+      'unit_corrections',
+      {
+        unit_id: workspaceId,
+        action: 'attach',
+        thread_id: workspaceId,
+        previous_outcome: 'rejected',
+        corrected_by: workspaceId,
+      },
+    ],
+    ['message_access_log', { person_id: workspaceId, channel_id: workspaceId }],
+    [
       'review_items',
       {
         kind: 'unrouted',

@@ -6,6 +6,8 @@ const tables = [
   'workspace_databases',
   'config_audit',
   'idempotency_keys',
+  'message_access_log',
+  'unit_corrections',
   'corrections',
   'decisions',
   'digest_items',

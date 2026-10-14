@@ -77,6 +77,8 @@ const tables = [
   'decisions',
   'config_audit',
   'idempotency_keys',
+  'message_access_log',
+  'unit_corrections',
   'nodes',
   'edges',
   'unit_embeddings',
@@ -122,6 +124,26 @@ test('Migrations apply to an empty PostgreSQL 15 with pgvector and are reversibl
   }
 
   expect(await tableNames()).toEqual(tables);
+}, 30000);
+
+test('AC22: migration 0018 adds the two tables, and the text-access flag is false on an existing policy row', async () => {
+  for (const migration of globSync('drizzle/*.sql')
+    .sort()
+    .filter((path) => basename(path) < '0018_')) {
+    await pool.query(readFileSync(migration, 'utf8'));
+  }
+
+  await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:00:00Z') }));
+  await pool.query(readFileSync('drizzle/0018_message_log.sql', 'utf8'));
+
+  expect(await tableNames()).toEqual(
+    expect.arrayContaining(['message_access_log', 'unit_corrections']),
+  );
+  expect(
+    (await pool.query('SELECT message_text_access FROM policies')).rows.every(
+      (row) => row.message_text_access === false,
+    ),
+  ).toBe(true);
 }, 30000);
 
 test('System-side workspace keys and secrets exist without a local workspaces row, retaining the secret-to-key foreign key', async () => {

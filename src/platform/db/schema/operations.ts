@@ -165,6 +165,35 @@ export const orphans = pgTable(
   ],
 );
 
+export const unitCorrections = pgTable(
+  'unit_corrections',
+  {
+    ...tenantColumns(),
+    unitId: reference('unit_id', () => units.id, 'cascade').notNull(),
+    action: text('action').notNull(),
+    threadId: reference('thread_id', () => threads.id, 'cascade').notNull(),
+    previousOutcome: text('previous_outcome').notNull(),
+    correctedBy: reference('corrected_by', () => people.id).notNull(),
+  },
+  (table) => [
+    check('unit_corrections_action_valid', sql`${table.action} IN ('create', 'attach')`),
+    index('unit_corrections_unit_idx').on(table.workspaceId, table.unitId, table.createdAt.desc()),
+  ],
+);
+
+export const messageAccessLog = pgTable(
+  'message_access_log',
+  {
+    ...tenantColumns(),
+    personId: reference('person_id', () => people.id).notNull(),
+    channelId: reference('channel_id', () => channels.id, 'cascade').notNull(),
+    accessedAt: instant('accessed_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('message_access_log_ws_time_idx').on(table.workspaceId, table.accessedAt.desc()),
+  ],
+);
+
 export const reviewItems = pgTable(
   'review_items',
   {

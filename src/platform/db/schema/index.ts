@@ -42,6 +42,8 @@ export {
   decisions,
   configAudit,
   idempotencyKeys,
+  unitCorrections,
+  messageAccessLog,
 } from './operations.js';
 
 export {
