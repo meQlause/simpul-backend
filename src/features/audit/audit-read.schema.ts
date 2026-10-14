@@ -16,7 +16,7 @@ function filterKey(filter: Filter) {
   return JSON.stringify([filter.kind ?? null, filter.q || null]);
 }
 
-function decodeCursor(value: string | undefined, filter: Filter) {
+export function decodeCursor(value: string | undefined, filter: Filter) {
   if (value === undefined) {
     return undefined;
   }

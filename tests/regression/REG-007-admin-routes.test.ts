@@ -105,6 +105,7 @@ const bodies: Record<string, object> = {
   },
   'get /decisions': {},
   'get /decisions/:decisionId': {},
+  'get /messages': {},
   'get /work': {},
   'get /work/export': {},
   'get /work/:displayId': {},
