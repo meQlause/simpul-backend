@@ -10,6 +10,7 @@ export type MessageFacts = {
   text: string | null;
   outcome: Outcome;
   reason: string | null;
+  expiresAt: string | null;
   triageClass: 'EVENT' | 'QUERY' | 'NOISE';
   work: { displayId: string } | null;
   correction: {
@@ -36,10 +37,18 @@ type Step =
       contextMessages: number;
       candidates: { displayId: string; summary: string; score: string }[];
     }
-  | { key: 'outcome'; status: 'done' | 'held' | 'failed' | 'pending'; reason: string | null }
+  | {
+      key: 'outcome';
+      status: 'done' | 'held' | 'failed' | 'pending';
+      reason: string | null;
+      expiresAt: string | null;
+    }
   | { key: 'notified'; decisionId: string };
 
-export type MessageRow = Omit<MessageFacts, 'resolution' | 'decisionId' | 'triageClass'> & {
+export type MessageRow = Omit<
+  MessageFacts,
+  'resolution' | 'decisionId' | 'triageClass' | 'expiresAt'
+> & {
   steps: Step[];
 };
 
@@ -60,7 +69,7 @@ export function scoreText(score: number): string {
 }
 
 export function messageRow(facts: MessageFacts): MessageRow {
-  const { resolution, decisionId, triageClass, ...rest } = facts;
+  const { resolution, decisionId, triageClass, expiresAt, ...rest } = facts;
   const steps: Step[] = [{ key: 'read', triageClass }];
 
   if (resolution && triageClass !== 'NOISE') {
@@ -77,7 +86,12 @@ export function messageRow(facts: MessageFacts): MessageRow {
     });
   }
 
-  steps.push({ key: 'outcome', status: outcomeStatus[facts.outcome], reason: facts.reason });
+  steps.push({
+    key: 'outcome',
+    status: outcomeStatus[facts.outcome],
+    reason: facts.reason,
+    expiresAt,
+  });
 
   if (decisionId) {
     steps.push({ key: 'notified', decisionId });

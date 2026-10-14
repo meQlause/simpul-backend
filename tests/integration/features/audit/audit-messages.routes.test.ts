@@ -63,9 +63,9 @@ test('AC1: GET /messages returns each unit once with its outcome, newest first, 
     created: baseline.created + 1,
     attached: baseline.attached + 2,
     held: baseline.held + 1,
-    rejected: baseline.rejected + 2,
-    ignored: baseline.ignored + 1,
-    pending: baseline.pending + 6,
+    rejected: baseline.rejected + 3,
+    ignored: baseline.ignored + 2,
+    pending: baseline.pending + 4,
   });
   expect((await request(app).get('/api/v1/messages')).status).toBe(401);
   // No model is supplied to this app, so the correction route is not mounted.
@@ -79,17 +79,21 @@ test('AC1: GET /messages returns each unit once with its outcome, newest first, 
   ).toBe(404);
 });
 
-test('AC2: each outcome carries its reason in the outcome step, and a question that expired is pending', async () => {
+test('AC2: each outcome carries its reason in the outcome step, and a question that expired is rejected', async () => {
   const rows = await newestRows();
   const outcomeStep = (unitId: string) =>
     rows.find((row) => row.unitId === unitId)?.steps.find((step) => step.key === 'outcome');
 
   expect(outcomeStep(units.rejectedG3)).toMatchObject({ status: 'failed', reason: 'G3' });
-  expect(outcomeStep(units.held)).toMatchObject({ status: 'held', reason: 'question' });
-  expect(outcomeStep(units.ignored)).toMatchObject({ status: 'done', reason: 'NOISE' });
-  expect(outcomeStep(units.queryG1)).toMatchObject({ status: 'pending', reason: 'query' });
+  expect(outcomeStep(units.held)).toMatchObject({
+    status: 'held',
+    reason: 'question_open',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  });
+  expect(outcomeStep(units.ignored)).toMatchObject({ status: 'done', reason: 'noise' });
+  expect(outcomeStep(units.queryG1)).toMatchObject({ status: 'done', reason: 'query' });
   expect(outcomeStep(units.expiredQuestion)).toMatchObject({
-    status: 'pending',
+    status: 'failed',
     reason: 'question_expired',
   });
   expect(
@@ -134,7 +138,7 @@ test('AC5: outcome filters the rows and the total, not the counts, and an unknow
   expect(rejected.body.data.every((row: { outcome: string }) => row.outcome === 'rejected')).toBe(
     true,
   );
-  expect(rejected.body.page.total).toBe(baseline.rejected + 2);
+  expect(rejected.body.page.total).toBe(baseline.rejected + 3);
   expect(rejected.body.counts).toEqual(unfiltered.body.counts);
   expect((await get('?outcome=nonsense')).status).toBe(422);
   expect((await get('?outcome=nonsense')).body.error.code).toBe('E-VALIDATION');

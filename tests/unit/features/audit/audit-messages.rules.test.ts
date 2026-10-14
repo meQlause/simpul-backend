@@ -13,6 +13,7 @@ const base: MessageFacts = {
   text: 'ada pesanan baru',
   outcome: 'rejected',
   reason: 'G3',
+  expiresAt: null,
   triageClass: 'EVENT',
   work: null,
   correction: null,
@@ -30,21 +31,37 @@ test('AC2: a rejected, held, ignored or pending unit lists its steps in order an
   const held = messageRow({
     ...base,
     outcome: 'held',
-    reason: 'question',
+    reason: 'question_open',
+    expiresAt: '2099-01-01T00:00:00.000Z',
     resolution: { verdict: 'GREY', decidedBy: 'question', contextMessages: 2, candidates: [] },
   });
   const ignored = messageRow({
     ...base,
     outcome: 'ignored',
-    reason: 'NOISE',
+    reason: 'noise',
     triageClass: 'NOISE',
   });
   const pending = messageRow({ ...base, outcome: 'pending', reason: null });
 
   expect(keys(rejected)).toEqual(['read', 'matched', 'outcome']);
-  expect(rejected.steps.at(-1)).toEqual({ key: 'outcome', status: 'failed', reason: 'G3' });
-  expect(held.steps.at(-1)).toEqual({ key: 'outcome', status: 'held', reason: 'question' });
-  expect(ignored.steps.at(-1)).toEqual({ key: 'outcome', status: 'done', reason: 'NOISE' });
+  expect(rejected.steps.at(-1)).toEqual({
+    key: 'outcome',
+    status: 'failed',
+    reason: 'G3',
+    expiresAt: null,
+  });
+  expect(held.steps.at(-1)).toEqual({
+    key: 'outcome',
+    status: 'held',
+    reason: 'question_open',
+    expiresAt: '2099-01-01T00:00:00.000Z',
+  });
+  expect(ignored.steps.at(-1)).toEqual({
+    key: 'outcome',
+    status: 'done',
+    reason: 'noise',
+    expiresAt: null,
+  });
   expect(pending.steps.at(-1)).toMatchObject({ key: 'outcome', status: 'pending' });
   expect(rejected.steps[0]).toEqual({ key: 'read', triageClass: 'EVENT' });
 });

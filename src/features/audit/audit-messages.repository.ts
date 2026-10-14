@@ -7,11 +7,15 @@ export type MessageFilter = ReturnType<typeof parseMessageQuery> & {
   unitId?: string;
 };
 
-type MessageDbRow = Omit<MessageFacts, 'occurredAt'> & { occurredAt: Date };
+type MessageDbRow = Omit<MessageFacts, 'occurredAt' | 'expiresAt'> & {
+  occurredAt: Date;
+  expiresAt: Date | null;
+};
 
 // Each table is reduced to one row per unit before it joins the units, so the workspace is read in
 // a few hash joins instead of one lookup per unit. Outcome: a correction, a genesis link, an
-// unretracted label, an unanswered question, NOISE, an open orphan, then pending.
+// unretracted label, an unanswered question, NOISE, a QUERY with a G1 orphan, an open orphan, an
+// expired question, then pending.
 // ponytail: outcome is derived per request over every unit of the workspace; store it on units when a workspace passes ~100k units
 const messages = `WITH corrected AS MATERIALIZED (
   SELECT DISTINCT ON (uc.unit_id) uc.unit_id, uc.action, t.display_id, p.name AS "correctedByName",
@@ -80,7 +84,7 @@ const messages = `WITH corrected AS MATERIALIZED (
   LEFT JOIN candidates cl ON cl.unit_id = u.id
   WHERE u.workspace_id = $1
 ), messages AS MATERIALIZED (
-  SELECT "unitId", "occurredAt", "triageClass", channel, "senderName", "transcriptText", "decisionId", resolution,
+  SELECT "unitId", "occurredAt", "triageClass", channel, "senderName", "transcriptText", "questionExpiresAt", "decisionId", resolution,
     CASE WHEN "correctionAction" IS NOT NULL THEN jsonb_build_object('workDisplayId', "correctionDisplay",
       'action', "correctionAction", 'correctedBy', jsonb_build_object('name', "correctedByName"),
       'correctedAt', "correctedAt") END AS correction,
@@ -93,13 +97,15 @@ const messages = `WITH corrected AS MATERIALIZED (
       WHEN "labelDisplay" IS NOT NULL THEN 'attached'
       WHEN "questionExpiresAt" > $2 THEN 'held'
       WHEN "triageClass" = 'NOISE' THEN 'ignored'
-      WHEN "orphanReason" IS NOT NULL AND ("triageClass" <> 'QUERY' OR "orphanReason" <> 'G1') THEN 'rejected'
+      WHEN "triageClass" = 'QUERY' AND "orphanReason" = 'G1' THEN 'ignored'
+      WHEN "orphanReason" IS NOT NULL THEN 'rejected'
+      WHEN "questionExpiresAt" IS NOT NULL THEN 'rejected'
       ELSE 'pending'
     END AS outcome,
     CASE
       WHEN "correctionAction" IS NOT NULL OR "genesisDisplay" IS NOT NULL OR "labelDisplay" IS NOT NULL THEN NULL
-      WHEN "questionExpiresAt" > $2 THEN 'question'
-      WHEN "triageClass" = 'NOISE' THEN 'NOISE'
+      WHEN "questionExpiresAt" > $2 THEN 'question_open'
+      WHEN "triageClass" = 'NOISE' THEN 'noise'
       WHEN "triageClass" = 'QUERY' AND "orphanReason" = 'G1' THEN 'query'
       WHEN "orphanReason" IS NOT NULL THEN "orphanReason"
       WHEN "questionExpiresAt" IS NOT NULL THEN 'question_expired'
@@ -133,6 +139,7 @@ export async function selectMessages(
       CASE WHEN $6::boolean THEN left(COALESCE("transcriptText", (SELECT string_agg(m.body_safe, E'\\n' ORDER BY m.server_ts, m.id)
         FROM unit_messages um JOIN messages_raw m ON m.id = um.message_id WHERE um.unit_id = messages."unitId")), 500) END AS text,
       outcome, reason, "triageClass",
+      CASE WHEN outcome = 'held' THEN "questionExpiresAt" END AS "expiresAt",
       work, correction, resolution, "decisionId"
     FROM messages WHERE ${matches}
       AND ($7::timestamptz IS NULL OR ("occurredAt", "unitId") < ($7, $8::uuid))
@@ -147,7 +154,11 @@ export async function selectMessages(
   );
 
   return {
-    rows: result.rows.map((row) => ({ ...row, occurredAt: row.occurredAt.toISOString() })),
+    rows: result.rows.map((row) => ({
+      ...row,
+      occurredAt: row.occurredAt.toISOString(),
+      expiresAt: row.expiresAt ? row.expiresAt.toISOString() : null,
+    })),
     total: total.rows[0].total,
   };
 }
