@@ -2,7 +2,10 @@ import type { PoolClient } from 'pg';
 import type { MessageFacts, Outcome } from './audit-messages.rules.js';
 import type { parseMessageQuery } from './audit-messages.schema.js';
 
-export type MessageFilter = ReturnType<typeof parseMessageQuery> & { text: boolean };
+export type MessageFilter = ReturnType<typeof parseMessageQuery> & {
+  text: boolean;
+  unitId?: string;
+};
 
 type MessageDbRow = Omit<MessageFacts, 'occurredAt'> & { occurredAt: Date };
 
@@ -11,8 +14,10 @@ type MessageDbRow = Omit<MessageFacts, 'occurredAt'> & { occurredAt: Date };
 // unretracted label, an unanswered question, NOISE, an open orphan, then pending.
 // ponytail: outcome is derived per request over every unit of the workspace; store it on units when a workspace passes ~100k units
 const messages = `WITH corrected AS MATERIALIZED (
-  SELECT DISTINCT ON (uc.unit_id) uc.unit_id, uc.action, t.display_id
+  SELECT DISTINCT ON (uc.unit_id) uc.unit_id, uc.action, t.display_id, p.name AS "correctedByName",
+    uc.created_at AS "correctedAt"
   FROM unit_corrections uc JOIN threads t ON t.id = uc.thread_id
+  LEFT JOIN people p ON p.id = uc.corrected_by AND p.workspace_id = $1
   WHERE uc.workspace_id = $1
   ORDER BY uc.unit_id, uc.created_at DESC
 ), genesis AS MATERIALIZED (
@@ -56,6 +61,7 @@ const messages = `WITH corrected AS MATERIALIZED (
     jsonb_build_object('id', c.id, 'name', c.display_name) AS channel, p.name AS "senderName",
     CASE WHEN u.source = 'transcript' THEN u.text END AS "transcriptText",
     cr.action AS "correctionAction", cr.display_id AS "correctionDisplay",
+    cr."correctedByName", cr."correctedAt",
     g.display_id AS "genesisDisplay", lb.display_id AS "labelDisplay",
     o.reason AS "orphanReason", oq.expires_at AS "questionExpiresAt", dd.id AS "decisionId",
     CASE WHEN rs.verdict IS NOT NULL THEN jsonb_build_object('verdict', rs.verdict,
@@ -76,7 +82,8 @@ const messages = `WITH corrected AS MATERIALIZED (
 ), messages AS MATERIALIZED (
   SELECT "unitId", "occurredAt", "triageClass", channel, "senderName", "transcriptText", "decisionId", resolution,
     CASE WHEN "correctionAction" IS NOT NULL THEN jsonb_build_object('workDisplayId', "correctionDisplay",
-      'action', "correctionAction") END AS correction,
+      'action', "correctionAction", 'correctedBy', jsonb_build_object('name', "correctedByName"),
+      'correctedAt', "correctedAt") END AS correction,
     CASE WHEN COALESCE("correctionDisplay", "genesisDisplay", "labelDisplay") IS NOT NULL
       THEN jsonb_build_object('displayId', COALESCE("correctionDisplay", "genesisDisplay", "labelDisplay")) END AS work,
     CASE
@@ -101,7 +108,8 @@ const messages = `WITH corrected AS MATERIALIZED (
 )`;
 
 const matches = `($3::text IS NULL OR outcome = $3)
-  AND ($4::text IS NULL OR strpos(lower(concat_ws(' ', work->>'displayId', "senderName", channel->>'name')), lower($4)) > 0)`;
+  AND ($4::text IS NULL OR strpos(lower(concat_ws(' ', work->>'displayId', "senderName", channel->>'name')), lower($4)) > 0)
+  AND ($5::uuid IS NULL OR "unitId" = $5)`;
 
 export async function selectMessages(
   tx: PoolClient,
@@ -109,20 +117,26 @@ export async function selectMessages(
   filter: MessageFilter,
   now: Date,
 ) {
-  const filters = [workspaceId, now, filter.outcome ?? null, filter.q || null];
+  const filters = [
+    workspaceId,
+    now,
+    filter.outcome ?? null,
+    filter.q || null,
+    filter.unitId ?? null,
+  ];
   const total = await tx.query<{ total: number }>(
     `${messages} SELECT count(*)::int AS total FROM messages WHERE ${matches}`,
     filters,
   );
   const result = await tx.query<MessageDbRow>(
     `${messages} SELECT "unitId", "occurredAt", channel, "senderName",
-      CASE WHEN $5::boolean THEN left(COALESCE("transcriptText", (SELECT string_agg(m.body_safe, E'\\n' ORDER BY m.server_ts, m.id)
+      CASE WHEN $6::boolean THEN left(COALESCE("transcriptText", (SELECT string_agg(m.body_safe, E'\\n' ORDER BY m.server_ts, m.id)
         FROM unit_messages um JOIN messages_raw m ON m.id = um.message_id WHERE um.unit_id = messages."unitId")), 500) END AS text,
       outcome, reason, "triageClass",
       work, correction, resolution, "decisionId"
     FROM messages WHERE ${matches}
-      AND ($6::timestamptz IS NULL OR ("occurredAt", "unitId") < ($6, $7::uuid))
-    ORDER BY "occurredAt" DESC, "unitId" DESC LIMIT $8`,
+      AND ($7::timestamptz IS NULL OR ("occurredAt", "unitId") < ($7, $8::uuid))
+    ORDER BY "occurredAt" DESC, "unitId" DESC LIMIT $9`,
     [
       ...filters,
       filter.text,

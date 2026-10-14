@@ -12,7 +12,12 @@ export type MessageFacts = {
   reason: string | null;
   triageClass: 'EVENT' | 'QUERY' | 'NOISE';
   work: { displayId: string } | null;
-  correction: { workDisplayId: string; action: 'create' | 'attach' } | null;
+  correction: {
+    workDisplayId: string;
+    action: 'create' | 'attach';
+    correctedBy: { name: string | null };
+    correctedAt: string;
+  } | null;
   resolution: {
     verdict: string;
     decidedBy: string;

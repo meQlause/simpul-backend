@@ -81,6 +81,7 @@ if (process.argv[2] === 'create-workspace') {
       ? TENANT_APPLICATION_CONNECTIONS
       : TENANT_REQUEST_CONNECTIONS,
   });
+  const { createGeminiModel } = await import('./platform/llm/gemini.js');
   const services = ['api', 'webhook'].includes(config.PROCESS_ROLE)
     ? {
         authentication: createAuthentication(
@@ -103,6 +104,21 @@ if (process.argv[2] === 'create-workspace') {
           now: () => new Date(),
           publishMatcher: queue ? publishMatching(queue) : undefined,
         },
+        audit:
+          config.PROCESS_ROLE === 'api'
+            ? {
+                model: createGeminiModel({
+                  emit,
+                  apiKey: config.GEMINI_API_KEY,
+                  models: {
+                    triage: config.GEMINI_MODEL_TRIAGE,
+                    standard: config.GEMINI_MODEL_STANDARD,
+                    strong: config.GEMINI_MODEL_STRONG,
+                  },
+                }),
+                publishMatcher: queue ? publishMatching(queue) : undefined,
+              }
+            : undefined,
         webhook: {
           resolveConnection,
           lookupConnection: createConnectionLookup(pool, resolveConnection),

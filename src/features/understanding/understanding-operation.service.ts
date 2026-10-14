@@ -57,7 +57,7 @@ function validateCorrectionTarget(operation: Operation, options: OperationOption
   }
 }
 
-async function retract(tx: PoolClient, scope: Scope, input: { opId: string; now: Date }) {
+export async function retract(tx: PoolClient, scope: Scope, input: { opId: string; now: Date }) {
   if (!(await retireOperation(tx, scope, input))) {
     throw new DomainError('E-VALIDATION');
   }

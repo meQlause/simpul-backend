@@ -68,6 +68,15 @@ test('AC1: GET /messages returns each unit once with its outcome, newest first, 
     pending: baseline.pending + 6,
   });
   expect((await request(app).get('/api/v1/messages')).status).toBe(401);
+  // No model is supplied to this app, so the correction route is not mounted.
+  expect(
+    (
+      await request(app)
+        .post(`/api/v1/messages/${units.created}/correct`)
+        .set('Cookie', cookie)
+        .send({})
+    ).status,
+  ).toBe(404);
 });
 
 test('AC2: each outcome carries its reason in the outcome step, and a question that expired is pending', async () => {

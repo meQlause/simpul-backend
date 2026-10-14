@@ -332,3 +332,40 @@ export async function seedMessageLog(pool: Pool, workspaceId: string): Promise<M
     client.release();
   }
 }
+
+let orphanStamp = 0;
+
+// A unit the pipeline left without an outcome, an orphan with the given reason, so a correction can
+// act on it. Each call adds one unit a minute later than the one before.
+export async function addOrphanUnit(pool: Pool, workspaceId: string, reason: string, text: string) {
+  orphanStamp += 1;
+  const when = new Date(Date.parse('2026-10-10T07:00:00Z') + orphanStamp * 60000);
+  const sales = (
+    await pool.query<{ id: string }>(
+      "SELECT id FROM channels WHERE workspace_id = $1 AND display_name = 'Sales & Order'",
+      [workspaceId],
+    )
+  ).rows[0].id;
+  const message = await pool.query<{ id: string }>(
+    `INSERT INTO messages_raw (workspace_id, channel_id, provider_msg_id, sender_external_id, body, body_safe, server_ts, received_ts)
+     VALUES ($1, $2, $3, '4444', $4, $4, $5, $5) RETURNING id`,
+    [workspaceId, sales, `orphan-${randomUUID()}`, text, when],
+  );
+  const unit = await pool.query<{ id: string }>(
+    `INSERT INTO units (workspace_id, channel_id, sender_id, text, triage_class, ts_first, ts_last)
+     VALUES ($1, $2, md5('point-star-person-2')::uuid, $3, 'EVENT', $4, $4) RETURNING id`,
+    [workspaceId, sales, text, when],
+  );
+
+  await pool.query(
+    'INSERT INTO unit_messages (workspace_id, unit_id, message_id) VALUES ($1, $2, $3)',
+    [workspaceId, unit.rows[0].id, message.rows[0].id],
+  );
+  await pool.query('INSERT INTO orphans (workspace_id, unit_id, reason) VALUES ($1, $2, $3)', [
+    workspaceId,
+    unit.rows[0].id,
+    reason,
+  ]);
+
+  return { unitId: unit.rows[0].id, messageId: message.rows[0].id };
+}

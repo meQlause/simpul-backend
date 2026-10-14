@@ -82,6 +82,7 @@ export async function startBrowserServer(pool: Pool, port: number) {
       now: () => new Date('2026-10-10T04:01:00Z'),
     },
     overview: { now: () => new Date('2026-10-10T04:01:00Z') },
+    audit: { model: { generate: async () => '{"operations":[]}' } },
     ...(await browserChannels(pool)),
   };
   const app = createApp('api', undefined, undefined, services);

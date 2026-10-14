@@ -19,6 +19,7 @@ const auth = createAuthentication(pool, {
 const app = createApp('api', undefined, undefined, {
   authentication: auth,
   resolveConnection: createConnectionResolver(pool),
+  audit: { model: { generate: async () => '{"operations":[]}' } },
   database: {
     systemPool: pool,
     systemHost: 'system.example',
@@ -106,6 +107,7 @@ const bodies: Record<string, object> = {
   'get /decisions': {},
   'get /decisions/:decisionId': {},
   'get /messages': {},
+  'post /messages/:unitId/correct': { action: 'attach', workDisplayId: 'ORD-0098' },
   'get /work': {},
   'get /work/export': {},
   'get /work/:displayId': {},
@@ -166,6 +168,7 @@ const bodies: Record<string, object> = {
 const statuses: Record<string, number> = {
   'get /database': 404,
   'put /database': 404,
+  'post /messages/:unitId/correct': 404,
   'post /work/:displayId/close/undo': 409,
   'post /categories': 201,
   'post /rules': 201,
@@ -291,6 +294,7 @@ async function login(name: string, email: string) {
 beforeAll(async () => {
   await applyMigrations(pool);
   await loadPointStarSeed(pool, pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') }));
+  await pool.query('ANALYZE'); // the planner needs real row counts for the 8,400-unit seed
   await seedTenantRows(pool, workspaceB);
   tables = await scopedTableNames(pool);
   personA = (await pool.query<{ id: string }>("SELECT id FROM people WHERE name = 'Budi Santoso'"))
@@ -308,7 +312,7 @@ beforeAll(async () => {
 }, 120000);
 
 function request(route: Route, personId = personA) {
-  const path = `/api/v1${route.path.replace(':decisionId', decisionA).replace(':itemId', reviewItemA).replace(':ruleId', ruleA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
+  const path = `/api/v1${route.path.replace(':unitId', workspaceB).replace(':decisionId', decisionA).replace(':itemId', reviewItemA).replace(':ruleId', ruleA).replace(':displayId', 'ORD-0098').replace(':categoryId', categoryA).replace(':personId', personId).replace(':connectionId', connectionA).replace(':sessionId', sessionA).replace(':channelId', channelA)}`;
   const agent = supertest(app);
 
   if (route.method === 'get') {

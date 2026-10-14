@@ -1,8 +1,16 @@
 import { Router } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import { listController, detailController, messagesController } from './audit.controller.js';
+import type { CorrectionServices } from '../understanding/index.js';
+import {
+  listController,
+  detailController,
+  messagesController,
+  correctController,
+} from './audit.controller.js';
 
-export function auditRouter(resolveConnection: ConnectionResolver) {
+type AuditServices = Partial<Pick<CorrectionServices, 'model' | 'publishMatcher'>>;
+
+export function auditRouter(resolveConnection: ConnectionResolver, services: AuditServices = {}) {
   const router = Router();
 
   router.get('/decisions', listController(resolveConnection));
@@ -11,6 +19,19 @@ export function auditRouter(resolveConnection: ConnectionResolver) {
     '/messages',
     messagesController(resolveConnection, () => new Date()),
   );
+
+  // Without a model the correction cannot draft a summary, so the route is left unmounted.
+  if (services.model) {
+    router.post(
+      '/messages/:unitId/correct',
+      correctController({
+        resolveConnection,
+        model: services.model,
+        now: () => new Date(),
+        publishMatcher: services.publishMatcher,
+      }),
+    );
+  }
 
   return router;
 }

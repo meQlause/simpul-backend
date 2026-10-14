@@ -2,8 +2,9 @@ import type { RequestHandler } from 'express';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import { listDecisions, getDecision } from './audit-read.service.js';
 import { parseDecisionId, parseDecisionQuery } from './audit-read.schema.js';
-import { listMessages } from './audit-messages.service.js';
-import { parseMessageQuery } from './audit-messages.schema.js';
+import { correctMessage, listMessages } from './audit-messages.service.js';
+import { parseCorrection, parseMessageQuery, parseUnitId } from './audit-messages.schema.js';
+import type { CorrectionServices } from '../understanding/index.js';
 
 export function listController(resolveConnection: ConnectionResolver): RequestHandler {
   return async (request, response) => {
@@ -39,5 +40,19 @@ export function messagesController(
     response.json(
       await listMessages(resolveConnection, scope, parseMessageQuery(request.query), now()),
     );
+  };
+}
+
+export function correctController(services: CorrectionServices): RequestHandler {
+  return async (request, response) => {
+    const scope = response.locals.scope as { workspaceId: string; actorId: string };
+
+    response.json({
+      data: await correctMessage(
+        services,
+        { ...scope, unitId: parseUnitId(request.params.unitId) },
+        parseCorrection(request.body),
+      ),
+    });
   };
 }

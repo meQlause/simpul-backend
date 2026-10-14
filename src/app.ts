@@ -36,6 +36,7 @@ type ApiServices = {
   overview?: { now: () => Date };
   rules?: { now: () => Date };
   review?: ReviewServices;
+  audit?: Parameters<typeof auditRouter>[1];
 };
 
 function mountSetup(app: Express, services: ApiServices) {
@@ -76,7 +77,7 @@ function mountFeatures(
     workspaceRouter(services.resolveConnection, mail, services.overview?.now, services.database),
   );
   app.use('/api/v1', peopleRouter(services.resolveConnection));
-  app.use('/api/v1', auditRouter(services.resolveConnection));
+  app.use('/api/v1', auditRouter(services.resolveConnection, services.audit));
   app.use(
     '/api/v1',
     workRouter(services.resolveConnection, services.work?.now ?? (() => new Date())),

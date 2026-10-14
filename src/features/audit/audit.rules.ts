@@ -1,6 +1,6 @@
 export function workDecision(facts: {
   displayId: string;
-  action: 'completed' | 'cancelled' | 'outside_chat' | 'undo';
+  action: 'completed' | 'cancelled' | 'outside_chat' | 'undo' | 'corrected';
 }) {
   return { title: facts.displayId + ' · ' + facts.action, detail: facts.action };
 }
