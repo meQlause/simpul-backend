@@ -11,6 +11,7 @@ import {
   type MessageLogUnits,
 } from '../../../fixtures/message-log.js';
 import { createApp } from '../../../../src/app.js';
+import { routeLabel } from '../../../../src/features/delivery/delivery-routing.service.js';
 import { createConnectionResolver } from '../../../../src/platform/db/connection-resolver.js';
 
 const pool = databaseFixture();
@@ -297,6 +298,16 @@ test('T19: a created work item has one label with the unit evidence, and the mat
   expect(labels[0].evidence_message_ids).toEqual([unit.messageId]);
   expect(publishMatcher).toHaveBeenCalledTimes(1);
   expect(publishMatcher.mock.calls[0][1]).toMatchObject({ labelId: labels[0].id });
+
+  // The gate routes the label: the active 'new' rule for Order notifies its recipient once.
+  await routeLabel(
+    {
+      resolveConnection: createConnectionResolver(pool),
+      now: () => new Date('2026-10-14T03:00:00Z'),
+    },
+    { workspaceId: seed.workspaceId, labelId: labels[0].id },
+  );
+  expect(await count('SELECT id FROM notifications WHERE label_id = $1', [labels[0].id])).toBe(1);
 });
 
 test('T20: attach on a held unit answers the question, writes the model label on ORD-0098 and publishes it', async () => {
