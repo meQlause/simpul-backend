@@ -100,6 +100,7 @@ export const configAuditSchemas = {
       timezone: zod.string(),
       contextWindowMinutes: zod.number(),
       contextMaxMessages: zod.number(),
+      messageTextAccess: zod.boolean(),
     })
     .partial(),
   people: zod

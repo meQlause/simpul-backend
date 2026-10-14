@@ -121,6 +121,7 @@ export async function getSettings(resolveConnection: ConnectionResolver, workspa
       timezone: row.timezone,
       contextWindowMinutes: row.contextWindowMinutes,
       contextMaxMessages: row.contextMaxMessages,
+      messageTextAccess: row.messageTextAccess,
     };
   });
 }

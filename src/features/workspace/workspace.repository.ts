@@ -93,7 +93,7 @@ export async function selectSettings(tx: PoolClient, workspaceId: string) {
   const result = await tx.query<Settings & { id: string }>(
     `SELECT policy.id, to_char(quiet_start, 'HH24:MI') AS "quietStart",
     to_char(quiet_end, 'HH24:MI') AS "quietEnd", budget_per_hour AS "budgetPerHour",
-    to_char(digest_time, 'HH24:MI') AS "digestTime", hold_seconds AS "holdSeconds", workspace.timezone,
+    to_char(digest_time, 'HH24:MI') AS "digestTime", hold_seconds AS "holdSeconds", workspace.timezone, policy.message_text_access AS "messageTextAccess",
     coalesce((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'context_window_minutes'), 30)::int AS "contextWindowMinutes",
     coalesce((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'context_max_messages'), 10)::int AS "contextMaxMessages"
     FROM policies AS policy JOIN workspaces AS workspace ON workspace.id = policy.workspace_id
@@ -111,8 +111,15 @@ export async function updateSettings(
 ) {
   await tx.query(
     `UPDATE policies SET quiet_start = $2, quiet_end = $3, budget_per_hour = $4,
-    digest_time = $5 WHERE workspace_id = $1`,
-    [workspaceId, input.quietStart, input.quietEnd, input.budgetPerHour, input.digestTime],
+    digest_time = $5, message_text_access = coalesce($6, message_text_access) WHERE workspace_id = $1`,
+    [
+      workspaceId,
+      input.quietStart,
+      input.quietEnd,
+      input.budgetPerHour,
+      input.digestTime,
+      input.messageTextAccess ?? null,
+    ],
   );
   // The two context values live in thresholds (FR-UI-21); an omitted one keeps its stored value.
   await tx.query(

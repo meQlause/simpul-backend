@@ -105,6 +105,7 @@ test('GET /settings returns the workspace delivery preferences without internal 
     timezone: 'Asia/Jakarta',
     contextWindowMinutes: 30,
     contextMaxMessages: 10,
+    messageTextAccess: false,
   });
 });
 
@@ -151,6 +152,7 @@ test('PUT /settings accepts a window crossing midnight, returns saved settings a
     timezone: 'Asia/Jakarta',
     contextWindowMinutes: 30,
     contextMaxMessages: 10,
+    messageTextAccess: false,
   });
   expect(
     (
@@ -227,7 +229,7 @@ test.each([
   { contextWindowMinutes: 1.5 },
   { contextMaxMessages: 0 },
   { contextMaxMessages: 31 },
-  { messageTextAccess: true },
+  { notASetting: true },
 ])('SRS §6.7 (FR-UI-21): %j is refused with E-VALIDATION and stores nothing', async (extra) => {
   const before = await storedContext();
   const response = await supertest(app)
@@ -444,4 +446,49 @@ test('a refused replacement preserves the existing configuration and encrypted s
     secret.rows,
   );
   expect((await pool.query('SELECT id FROM config_audit ORDER BY id')).rows).toEqual(audit.rows);
+});
+
+test('AC22: GET /settings reports messageTextAccess false on the seed', async () => {
+  const response = await supertest(app).get('/api/v1/settings').set('Cookie', cookie);
+
+  expect(response.status).toBe(200);
+  expect(response.body.data.messageTextAccess).toBe(false);
+});
+
+test('AC22: PUT /settings with messageTextAccess true stores it and records the change in one config audit row', async () => {
+  const response = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ ...quietHours, messageTextAccess: true });
+
+  expect(response.status).toBe(200);
+  expect(response.body.data.messageTextAccess).toBe(true);
+  expect((await pool.query('SELECT message_text_access FROM policies')).rows).toEqual([
+    { message_text_access: true },
+  ]);
+  const [audit] = (
+    await pool.query(
+      "SELECT actor_id, before, after FROM config_audit WHERE table_name = 'policies' ORDER BY created_at DESC",
+    )
+  ).rows;
+
+  expect(audit.before).toMatchObject({ messageTextAccess: false });
+  expect(audit.after).toMatchObject({ messageTextAccess: true });
+  expect(audit.actor_id).toEqual(
+    (await pool.query("SELECT id FROM people WHERE name = 'Siti Aminah'")).rows[0].id,
+  );
+});
+
+test('AC22: PUT /settings without messageTextAccess keeps the stored value, and a non-boolean returns 422', async () => {
+  const kept = await supertest(app).put('/api/v1/settings').set('Cookie', cookie).send(quietHours);
+
+  expect(kept.status).toBe(200);
+  expect(kept.body.data.messageTextAccess).toBe(true);
+
+  const refused = await supertest(app)
+    .put('/api/v1/settings')
+    .set('Cookie', cookie)
+    .send({ ...quietHours, messageTextAccess: 'yes' });
+
+  expect(refused.status).toBe(422);
 });
