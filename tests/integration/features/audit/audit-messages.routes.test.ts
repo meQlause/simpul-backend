@@ -162,9 +162,11 @@ test('AC8: with access on, text is the first 500 characters of body_safe, and th
   expect(response.body.textAccess).toBe(true);
   expect(long.text).toBe('y'.repeat(500));
   expect(JSON.stringify(response.body)).not.toContain('xxxxxxxxxx');
+  expect((await get('?q=yyyyyyyy')).body.data).toEqual([]);
 });
 
 test('AC9: with access on, a page writes one access row per distinct channel, every time it is read, and an empty page writes none', async () => {
+  const started = Date.now();
   const before = (await pool.query('SELECT count(*)::int AS n FROM message_access_log')).rows[0].n;
   const first = await get('?limit=100');
   const channels = new Set(
@@ -183,6 +185,17 @@ test('AC9: with access on, a page writes one access row per distinct channel, ev
   expect((await pool.query('SELECT count(*)::int AS n FROM message_access_log')).rows[0].n).toBe(
     before + 2 * channels,
   );
+
+  const actor = (await pool.query("SELECT id FROM people WHERE auth_user_id = 'message-admin'"))
+    .rows[0].id;
+  const logged = (
+    await pool.query(
+      'SELECT person_id, accessed_at FROM message_access_log ORDER BY accessed_at DESC',
+    )
+  ).rows;
+
+  expect(logged.every((row) => row.person_id === actor)).toBe(true);
+  expect(logged[0].accessed_at.getTime()).toBeGreaterThanOrEqual(started);
 });
 
 test('AC10: pages follow the cursor without overlap, a cursor cannot change the filter, and limit above 100 is refused', async () => {
