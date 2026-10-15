@@ -21,6 +21,7 @@ export async function createQueue(pool: Pool, scheduling = false, onError?: () =
     'understanding.triage',
     'understanding.resolve',
     'understanding.comprehend',
+    'understanding.embed',
     'delivery.gate',
     'delivery.send',
     'delivery.question',
@@ -78,6 +79,13 @@ export function publishQuestion(boss: PgBoss) {
 export function publishResolution(boss: PgBoss) {
   return (tx: PoolClient, payload: { workspaceId: string; unitId: string }) =>
     boss.send('understanding.resolve', payload, {
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
+}
+
+export function publishEmbedding(boss: PgBoss) {
+  return (tx: PoolClient, payload: { workspaceId: string; unitId: string }) =>
+    boss.send('understanding.embed', payload, {
       db: { executeSql: (text, values) => tx.query(text, values) },
     });
 }

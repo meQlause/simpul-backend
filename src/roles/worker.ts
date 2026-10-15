@@ -1,6 +1,6 @@
 import type { PgBoss } from 'pg-boss';
 import type { ConnectionResolver } from '../platform/db/connection-resolver.js';
-import type { ModelPort } from '../platform/llm/port.js';
+import type { EmbeddingPort, ModelPort } from '../platform/llm/port.js';
 import type { createSecretStore } from '../platform/secrets/index.js';
 import type { createProviderRegistry } from '../platform/providers/index.js';
 import {
@@ -17,6 +17,7 @@ import {
   publishResolution,
   publishMatching,
   publishComprehension,
+  publishEmbedding,
   publishNotification,
   publishQuestion,
 } from '../platform/queue/index.js';
@@ -24,6 +25,8 @@ import {
 export type PipelineServices = {
   resolveConnection: ConnectionResolver;
   model: ModelPort;
+  embedding: EmbeddingPort;
+  embeddingModel: string;
   transcriber: { transcribe: (audio: { data: Uint8Array; mimeType: string }) => Promise<string> };
   now: () => Date;
   secretStore: ReturnType<typeof createSecretStore>;
@@ -44,6 +47,7 @@ export async function registerPipelineJobs(queue: PgBoss, services: PipelineServ
     ...services,
     publishResolve: publishResolution(queue),
     publishComprehend: publishComprehension(queue),
+    publishEmbed: publishEmbedding(queue),
     publishMatcher: publishMatching(queue),
     publishQuestion: publishQuestion(queue),
   });

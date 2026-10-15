@@ -5,17 +5,24 @@ import { resolveRuntimeUnit } from './understanding-runtime.service.js';
 import { comprehendUnit } from './understanding.comprehension.js';
 import { comprehendGenesisUnit } from './understanding-genesis.service.js';
 import { comprehendGreyUnit } from './understanding-grey.service.js';
+import { embedUnit } from './understanding-embed.service.js';
 
 type Services = Parameters<typeof triageUnit>[0] &
   Parameters<typeof resolveRuntimeUnit>[0] &
   Omit<Parameters<typeof comprehendUnit>[0], 'alert'> &
-  Parameters<typeof comprehendGreyUnit>[0] & { alert: (event: unknown) => void };
+  Parameters<typeof comprehendGreyUnit>[0] &
+  Parameters<typeof embedUnit>[0] & { alert: (event: unknown) => void };
 const workOptions = { pollingIntervalSeconds: 0.5 };
 
 export async function registerUnderstandingJobs(queue: PgBoss, services: Services) {
   await queue.work('understanding.triage', workOptions, async (jobs) => {
     for (const job of jobs) {
       await triageUnit(services, queryPayload.parse(job.data));
+    }
+  });
+  await queue.work('understanding.embed', workOptions, async (jobs) => {
+    for (const job of jobs) {
+      await embedUnit(services, queryPayload.parse(job.data));
     }
   });
   await queue.work('understanding.resolve', workOptions, async (jobs) => {

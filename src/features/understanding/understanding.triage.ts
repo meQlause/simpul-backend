@@ -14,6 +14,8 @@ type Dependencies = {
   model: ModelPort;
   audit: (event: Payload & { injectionSuspected: true }) => void;
   publishResolve: (tx: PoolClient, payload: Payload) => Promise<unknown>;
+  // Optional: a caller that does not embed (tests, the replay) leaves the unit without a vector until the backfill.
+  publishEmbed?: (tx: PoolClient, payload: Payload) => Promise<unknown>;
 };
 
 export async function triageUnit(dependencies: Dependencies, payload: Payload) {
@@ -54,6 +56,7 @@ export async function triageUnit(dependencies: Dependencies, payload: Payload) {
 
     if (changed && triage.triageClass !== 'NOISE') {
       await dependencies.publishResolve(tx, scope);
+      await dependencies.publishEmbed?.(tx, scope);
     }
   });
 }

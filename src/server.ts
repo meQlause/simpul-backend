@@ -37,6 +37,10 @@ if (process.argv[2] === 'create-workspace') {
   const { runMigrations } = await import('./roles/migrate-command.js');
 
   await runMigrations(config);
+} else if (process.argv[2] === 'backfill-embeddings') {
+  const { runBackfillEmbeddings } = await import('./roles/backfill-embeddings.js');
+
+  await runBackfillEmbeddings(config);
 } else {
   const pool = createSystemPool(config.DATABASE_URL);
   const emit = createMetricSink(createLogger(config.LOG_LEVEL));
@@ -148,6 +152,7 @@ if (process.argv[2] === 'create-workspace') {
     const { registerPipelineJobs } = await import('./roles/worker.js');
     const { createGeminiModel } = await import('./platform/llm/gemini.js');
     const { createGeminiTranscriber } = await import('./platform/llm/transcription.js');
+    const { createGeminiEmbedding } = await import('./platform/llm/gemini-embedding.js');
     const logger = createLogger(config.LOG_LEVEL);
 
     const pipelineServices = {
@@ -157,6 +162,11 @@ if (process.argv[2] === 'create-workspace') {
       providers,
       secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
       publicBaseUrl: config.PUBLIC_BASE_URL,
+      embedding: createGeminiEmbedding({
+        apiKey: config.GEMINI_API_KEY,
+        model: config.GEMINI_MODEL_EMBEDDING,
+      }),
+      embeddingModel: config.GEMINI_MODEL_EMBEDDING,
       model: createGeminiModel({
         emit,
         apiKey: config.GEMINI_API_KEY,

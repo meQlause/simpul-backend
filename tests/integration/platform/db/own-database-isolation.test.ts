@@ -312,6 +312,10 @@ function pipelineServices(): Parameters<typeof registerPipelineJobs>[1] {
     now: () => new Date(now.getTime() + 12000),
     publicBaseUrl: 'https://simpul.example',
     debounceSeconds: 0,
+    embedding: {
+      embed: async () => Array.from({ length: 768 }, (_item, index) => (index === 0 ? 1 : 0)),
+    },
+    embeddingModel: 'embedding-model',
     audit: vi.fn(),
     alert: vi.fn(),
     transcriber: { transcribe: vi.fn(async () => '') },
