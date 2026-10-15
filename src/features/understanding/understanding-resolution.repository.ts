@@ -13,7 +13,22 @@ const contextSettings = `
     SELECT LEAST(180, GREATEST(0, COALESCE((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'context_window_minutes'), ${defaultWindowMinutes})))::int AS minutes,
            LEAST(30, GREATEST(1, COALESCE((SELECT value FROM thresholds WHERE workspace_id = $1 AND scope = 'workspace' AND key = 'context_max_messages'), ${defaultMaximumMessages})))::int AS cap
   ),
-  unit AS (SELECT channel_id, ts_first FROM units WHERE workspace_id = $1 AND id = $2)`;
+  unit AS (
+    SELECT u.channel_id, u.ts_first, u.referenced_date, w.timezone, (u.ts_first AT TIME ZONE w.timezone)::date AS local_day
+    FROM units u JOIN workspaces w ON w.id = u.workspace_id WHERE u.workspace_id = $1 AND u.id = $2
+  ),
+  -- FR-RES-05: a past referenced day (local) replaces the window with that whole day; a window of zero still switches it off.
+  span AS (
+    SELECT past.flag AS dated,
+      CASE WHEN past.flag THEN unit.referenced_date::timestamp AT TIME ZONE unit.timezone
+        ELSE unit.ts_first - (settings.minutes * interval '1 minute') END AS start,
+      CASE WHEN past.flag THEN (unit.referenced_date + 1)::timestamp AT TIME ZONE unit.timezone
+        ELSE unit.ts_first END AS finish
+    FROM settings CROSS JOIN unit
+    CROSS JOIN LATERAL (
+      SELECT COALESCE(settings.minutes > 0 AND unit.referenced_date < unit.local_day, false) AS flag
+    ) past
+  )`;
 
 export async function recordResolution(
   tx: PoolClient,
@@ -85,10 +100,9 @@ export async function conversationContext(tx: PoolClient, scope: Scope) {
     `${contextSettings}
      SELECT id AS "messageId", text FROM (
        SELECT m.id, m.body_safe AS text, m.server_ts
-       FROM messages_raw m CROSS JOIN settings CROSS JOIN unit
+       FROM messages_raw m CROSS JOIN settings CROSS JOIN unit CROSS JOIN span
        WHERE m.workspace_id = $1 AND m.channel_id = unit.channel_id AND m.origin = 'user'
-         AND m.body_safe <> '' AND m.server_ts < unit.ts_first
-         AND m.server_ts >= unit.ts_first - (settings.minutes * interval '1 minute')
+         AND m.body_safe <> '' AND m.server_ts < span.finish AND m.server_ts >= span.start
          AND m.id NOT IN (SELECT message_id FROM unit_messages WHERE workspace_id = $1 AND unit_id = $2)
        ORDER BY m.server_ts DESC LIMIT (SELECT cap FROM settings)
      ) recent ORDER BY server_ts`,
@@ -117,18 +131,19 @@ export async function greyCandidates(tx: PoolClient, workspaceId: string, thread
 }
 
 // Work created from a message inside the window: the candidates of a follow-up (FR-RES-03).
+// On a past referenced day, work that received any message of that day counts (FR-RES-05).
 export async function recentGenesis(tx: PoolClient, scope: Scope) {
   const { rows } = await tx.query<{ threadId: string }>(
     `${contextSettings}
      SELECT t.id AS "threadId"
      FROM threads t
-     JOIN message_thread_link l ON l.workspace_id = $1 AND l.thread_id = t.id AND l.role = 'genesis'
+     JOIN message_thread_link l ON l.workspace_id = $1 AND l.thread_id = t.id
      JOIN messages_raw m ON m.workspace_id = $1 AND m.id = l.message_id
-     CROSS JOIN settings CROSS JOIN unit
+     CROSS JOIN unit CROSS JOIN span
      WHERE t.workspace_id = $1 AND t.status IN ('active', 'tentative')
+       AND (l.role = 'genesis' OR span.dated)
        AND m.channel_id = unit.channel_id
-       AND m.server_ts < unit.ts_first
-       AND m.server_ts >= unit.ts_first - (settings.minutes * interval '1 minute')
+       AND m.server_ts < span.finish AND m.server_ts >= span.start
      GROUP BY t.id
      ORDER BY max(m.server_ts) DESC
      LIMIT ${maximumCandidates}`,

@@ -270,3 +270,137 @@ test('SRS §6.7 (FR-RES-03): at most three newest recent work items; another wor
   });
   expect(await readGenesis(await unit(workspaceId, base + day(1)))).toEqual([]);
 });
+
+// FR-RES-05: a unit that names a past day reads that day, in the workspace's local time (WIB, +07:00).
+const wib = (local: string) => Date.parse(`${local}+07:00`);
+
+async function datedUnit(
+  channel: string,
+  when: number,
+  referencedDate: string | null,
+  ownMessages: string[] = [],
+) {
+  const unitId = await unit(channel, when, ownMessages);
+
+  await pool.query('UPDATE units SET referenced_date = $2 WHERE id = $1', [unitId, referencedDate]);
+
+  return unitId;
+}
+
+async function linkMessage(threadId: string, messageId: string, role: string) {
+  await pool.query(
+    `INSERT INTO message_thread_link (workspace_id, thread_id, message_id, role, confidence) VALUES ($1, $2, $3, $4, '1')`,
+    [workspaceId, threadId, messageId, role],
+  );
+}
+
+// T5 — AC3: the referenced day's messages of the channel, oldest first, instead of the 30 minutes before.
+test("FR-RES-05 (AC3): a past referenced day gives that day's channel messages, oldest first, not the window", async () => {
+  const early = await message(
+    workspaceId,
+    workspaceId,
+    'dari pagi, 12 biji',
+    wib('2026-11-02T08:00:00'),
+  );
+  const late = await message(
+    workspaceId,
+    workspaceId,
+    'sore, jadi batal',
+    wib('2026-11-02T20:00:00'),
+  );
+
+  await message(workspaceId, workspaceId, 'hari sebelumnya', wib('2026-11-01T23:50:00'));
+  await message(workspaceId, workspaceId, 'hari ini sebelum', wib('2026-11-03T08:30:00'));
+  await message(workspaceId, otherChannel, 'chat lain', wib('2026-11-02T21:00:00'));
+  const own = await message(
+    workspaceId,
+    workspaceId,
+    'the unit itself',
+    wib('2026-11-03T08:59:00'),
+  );
+  const unitId = await datedUnit(workspaceId, wib('2026-11-03T09:00:00'), '2026-11-02', [own]);
+
+  expect(await readContext(unitId)).toEqual([
+    { messageId: early, text: 'dari pagi, 12 biji' },
+    { messageId: late, text: 'sore, jadi batal' },
+  ]);
+  await setThreshold('context_max_messages', 1);
+  expect(await readContext(unitId)).toEqual([{ messageId: late, text: 'sore, jadi batal' }]);
+});
+
+// T6 — AC4: a day that is today, ahead, or absent keeps the 30-minute window.
+test('FR-RES-05 (AC4): a referenced day that is today, ahead, or null keeps the window', async () => {
+  const inWindow = await message(workspaceId, workspaceId, 'baru saja', wib('2026-11-10T08:45:00'));
+
+  await message(workspaceId, workspaceId, 'hari sebelumnya', wib('2026-11-09T20:00:00'));
+  const today = await datedUnit(workspaceId, wib('2026-11-10T09:00:00'), '2026-11-10');
+  const ahead = await datedUnit(workspaceId, wib('2026-11-10T09:00:00'), '2026-11-11');
+  const none = await datedUnit(workspaceId, wib('2026-11-10T09:00:00'), null);
+
+  for (const unitId of [today, ahead, none]) {
+    expect(await readContext(unitId)).toEqual([{ messageId: inWindow, text: 'baru saja' }]);
+  }
+});
+
+// T7 — AC5: a window of zero switches date context off as well.
+test('FR-RES-05 (AC5): a window of zero gives no context and no follow-up work for a past day', async () => {
+  await setThreshold('context_window_minutes', 0);
+  await message(workspaceId, workspaceId, 'hari itu', wib('2026-11-21T20:00:00'));
+  await genesisThread({
+    displayId: 'ORD-0701',
+    status: 'active',
+    channel: workspaceId,
+    when: wib('2026-11-21T20:00:00'),
+  });
+  const unitId = await datedUnit(workspaceId, wib('2026-11-22T09:00:00'), '2026-11-21');
+
+  expect(await readContext(unitId)).toEqual([]);
+  expect(await readGenesis(unitId)).toEqual([]);
+});
+
+// T8 — AC6: the referenced day's work of this channel, by any link role, newest first, at most three.
+test('FR-RES-05 (AC6): a past referenced day offers the channel work that received a message that day', async () => {
+  const linked = await genesisThread({
+    displayId: 'ORD-0801',
+    status: 'active',
+    channel: workspaceId,
+    when: wib('2026-11-20T09:00:00'),
+  });
+  const update = await message(workspaceId, workspaceId, 'tambahan', wib('2026-11-24T11:00:00'));
+
+  await linkMessage(linked, update, 'state_change');
+  const genesis = await genesisThread({
+    displayId: 'ORD-0802',
+    status: 'active',
+    channel: workspaceId,
+    when: wib('2026-11-24T10:00:00'),
+  });
+  const tentative = await genesisThread({
+    displayId: 'ORD-0803',
+    status: 'tentative',
+    channel: workspaceId,
+    when: wib('2026-11-24T08:00:00'),
+  });
+
+  await genesisThread({
+    displayId: 'ORD-0804',
+    status: 'active',
+    channel: workspaceId,
+    when: wib('2026-11-24T07:00:00'),
+  });
+  await genesisThread({
+    displayId: 'ORD-0805',
+    status: 'completed',
+    channel: workspaceId,
+    when: wib('2026-11-24T12:00:00'),
+  });
+  await genesisThread({
+    displayId: 'ORD-0806',
+    status: 'active',
+    channel: otherChannel,
+    when: wib('2026-11-24T13:00:00'),
+  });
+  const unitId = await datedUnit(workspaceId, wib('2026-11-25T09:00:00'), '2026-11-24');
+
+  expect(await readGenesis(unitId)).toEqual([linked, genesis, tentative]);
+});
