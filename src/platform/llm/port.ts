@@ -18,3 +18,11 @@ type ModelRequest = {
 };
 
 export type ModelPort = { generate: (request: ModelRequest) => Promise<string> };
+
+export type EmbeddingPort = {
+  embed: (input: {
+    workspaceId?: string;
+    text: string;
+    task: 'document' | 'query';
+  }) => Promise<number[]>;
+};

@@ -136,12 +136,14 @@ export const unitResolutions = pgTable(
       .notNull(),
     chosenThreadId: reference('chosen_thread_id', () => threads.id, 'set null'),
     contextMessageCount: integer('context_message_count').default(0).notNull(),
+    searchQuery: text('search_query'),
+    searchHits: integer('search_hits'),
   },
   (table) => [
     check('unit_resolutions_verdict_valid', sql`${table.verdict} IN ('ATTACH', 'GREY', 'CREATE')`),
     check(
       'unit_resolutions_decided_valid',
-      sql`${table.decidedBy} IN ('score', 'reference', 'model_context', 'question', 'admin')`,
+      sql`${table.decidedBy} IN ('score', 'reference', 'model_context', 'question', 'admin', 'search')`,
     ),
     check('unit_resolutions_candidates_valid', sql`jsonb_array_length(${table.candidates}) <= 3`),
     check('unit_resolutions_context_valid', sql`${table.contextMessageCount} >= 0`),
