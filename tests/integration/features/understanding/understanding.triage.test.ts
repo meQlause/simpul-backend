@@ -37,7 +37,9 @@ beforeAll(async () => {
 }, 120000);
 
 beforeEach(async () => {
-  await pool.query('UPDATE units SET triage_class = NULL, injection_suspected = false');
+  await pool.query(
+    'UPDATE units SET triage_class = NULL, injection_suspected = false, referenced_date = NULL',
+  );
   model.generate.mockResolvedValue('EVENT');
   audit.mockClear();
   publishResolve.mockClear();
@@ -92,4 +94,41 @@ test('SRS §7.1: the model receives body_safe, never the raw database body', asy
     expect.objectContaining({ bodySafe: '[REDACTED]' }),
   ]);
   expect(JSON.stringify(model.generate.mock.calls)).not.toContain('private-phone-number');
+});
+
+// T3 — AC1: the model is told the local day and weekday, and a dated answer is stored.
+test('FR-RES-05: triage gets the local date and weekday, and stores the day the message refers to', async () => {
+  await pool.query(
+    "UPDATE units SET ts_first = '2026-10-15T03:00:00Z', ts_last = '2026-10-15T03:00:00Z'",
+  );
+  model.generate.mockResolvedValue(
+    JSON.stringify({ class: 'EVENT', referencedDate: '2026-10-14' }),
+  );
+
+  await triageUnit(dependencies, payload);
+
+  expect(model.generate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mode: 'triage',
+      responseSchema: expect.any(Object),
+      context: expect.objectContaining({ localDate: '2026-10-15', weekday: 'Thursday' }),
+    }),
+  );
+  const unit = await pool.query(
+    'SELECT triage_class, referenced_date::text AS referenced_date FROM units',
+  );
+
+  expect(unit.rows).toEqual([{ triage_class: 'EVENT', referenced_date: '2026-10-14' }]);
+});
+
+// T4 — AC2: a one-word answer stores the class with no day and still queues resolve.
+test('FR-RES-05: a one-word answer stores the class with no day and still queues resolve', async () => {
+  await triageUnit(dependencies, payload);
+
+  const unit = await pool.query(
+    'SELECT triage_class, referenced_date::text AS referenced_date FROM units',
+  );
+
+  expect(unit.rows).toEqual([{ triage_class: 'EVENT', referenced_date: null }]);
+  expect(publishResolve).toHaveBeenCalledTimes(1);
 });

@@ -8,6 +8,8 @@ type ModelRequest = {
   responseSchema?: Record<string, unknown>;
   context?: {
     operations: { opId: string; type: string; evidence: string }[];
+    localDate?: string;
+    weekday?: string;
     evidenceMessageIds?: string[];
     categories?: { id: string; name: string }[];
     conversation?: { messageId: string; text: string }[];

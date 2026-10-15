@@ -1,9 +1,11 @@
 import type { PoolClient } from 'pg';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { ModelPort } from '../../platform/llm/port.js';
+import { z } from 'zod';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
-import { queryPayload, triageClass } from './understanding.schema.js';
+import { queryPayload, triageOutput } from './understanding.schema.js';
 import { injectionSuspected } from './understanding.rules.js';
+import { readTriage } from './understanding-triage.rules.js';
 import { modelInput, markInjection, storeTriage } from './understanding.triage.repository.js';
 
 type Payload = { workspaceId: string; unitId: string };
@@ -42,13 +44,15 @@ export async function triageUnit(dependencies: Dependencies, payload: Payload) {
     tier: 'triage',
     bodySafe: input.bodySafe,
     temperature: 0,
+    responseSchema: z.toJSONSchema(triageOutput),
+    context: { operations: [], localDate: input.localDate, weekday: input.weekday },
   });
-  const classification = triageClass.parse(output.trim());
+  const triage = readTriage(output);
 
   await scopedTransaction(dependencies.resolveConnection, scope.workspaceId, async (tx) => {
-    const changed = await storeTriage(tx, scope, classification);
+    const changed = await storeTriage(tx, scope, triage);
 
-    if (changed && classification !== 'NOISE') {
+    if (changed && triage.triageClass !== 'NOISE') {
       await dependencies.publishResolve(tx, scope);
     }
   });
