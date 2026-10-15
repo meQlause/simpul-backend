@@ -2,6 +2,23 @@ import { z } from 'zod';
 
 export const triageClass = z.enum(['EVENT', 'QUERY', 'NOISE']);
 
+// A real calendar day, YYYY-MM-DD: "2026-02-30" rolls over in Date and does not round-trip.
+const calendarDay = (value: string) => {
+  const date = new Date(`${value}T00:00:00Z`);
+
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    !Number.isNaN(date.getTime()) &&
+    date.toISOString().startsWith(value)
+  );
+};
+
+export const triageOutput = z.strictObject({
+  class: triageClass,
+  // The model's day is untrusted: anything that is not a real day is dropped, not an error.
+  referencedDate: z.string().refine(calendarDay).nullable().catch(null),
+});
+
 export const queryPayload = z.strictObject({ workspaceId: z.guid(), unitId: z.guid() });
 
 export const comprehensionScope = queryPayload.extend({ threadId: z.guid() });

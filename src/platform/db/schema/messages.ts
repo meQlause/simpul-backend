@@ -3,6 +3,7 @@ import {
   pgTable,
   text,
   boolean,
+  date,
   numeric,
   vector,
   primaryKey,
@@ -52,6 +53,7 @@ export const units = pgTable(
     triageClass: text('triage_class'),
     urgency: text('urgency').default('normal').notNull(),
     injectionSuspected: boolean('injection_suspected').default(false).notNull(),
+    referencedDate: date('referenced_date'),
     source: text('source').default('text').notNull(),
     confidenceMultiplier: numeric('confidence_multiplier', { precision: 3, scale: 2 })
       .default('1.00')
