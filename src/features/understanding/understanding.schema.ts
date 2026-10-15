@@ -19,6 +19,17 @@ export const triageOutput = z.strictObject({
   referencedDate: z.string().refine(calendarDay).nullable().catch(null),
 });
 
+// A search the model asks for once (FR-RES-06). A malformed one is ignored, never a failed answer.
+const searchDay = z.string().refine(calendarDay).nullable().optional().catch(null);
+
+export const searchRequest = z.strictObject({
+  query: z.string().trim().min(3).max(200),
+  from: searchDay,
+  to: searchDay,
+});
+
+const search = searchRequest.nullable().optional().catch(null);
+
 export const queryPayload = z.strictObject({ workspaceId: z.guid(), unitId: z.guid() });
 
 export const comprehensionScope = queryPayload.extend({ threadId: z.guid() });
@@ -65,10 +76,12 @@ export const genesisOutput = z.strictObject({
     })
     .nullable(),
   operations: comprehensionOutput.shape.operations,
+  search,
 });
 
 export const greyOutput = z.strictObject({
   choice: z.enum(['candidate', 'new_work', 'not_sure']),
   threadId: z.guid().nullable(),
   supportingMessageIds: z.array(z.guid()),
+  search,
 });

@@ -56,7 +56,28 @@ export async function runComprehension(
   });
 
   if (next === 'create') {
-    await comprehendGenesisUnit(services, scope);
+    const retrieved = await comprehendGenesisUnit(services, scope);
+
+    if (retrieved) {
+      await decideFromSearch(services, scope, retrieved);
+    }
+  } else if (next !== 'done') {
+    await comprehendUnit(services, { ...scope, threadId: next.threadId });
+  }
+}
+
+// The genesis searched and found work: the grey step decides with what was found, and a choice of new work
+// asks the genesis once more, now without any search (FR-RES-06).
+async function decideFromSearch(
+  services: Parameters<typeof runComprehension>[0],
+  scope: { workspaceId: string; unitId: string; threadId: string | null },
+  retrieved: { messageId: string; text: string }[],
+) {
+  const unit = { workspaceId: scope.workspaceId, unitId: scope.unitId };
+  const next = await comprehendGreyUnit(services, unit, retrieved);
+
+  if (next === 'create') {
+    await comprehendGenesisUnit(services, scope, retrieved);
   } else if (next !== 'done') {
     await comprehendUnit(services, { ...scope, threadId: next.threadId });
   }

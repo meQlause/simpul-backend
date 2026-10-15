@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
-import type { ModelPort } from '../../platform/llm/port.js';
+import type { EmbeddingPort, ModelPort } from '../../platform/llm/port.js';
 import { z } from 'zod';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
 import { modelInput } from './understanding.triage.repository.js';
@@ -15,8 +15,11 @@ import {
   readResolution,
   settleResolution,
 } from './understanding-resolution.repository.js';
+import { searchContext, type SearchFound } from './understanding-embed.service.js';
+import { SEARCH_EXTRA_CANDIDATES, mergeConversation } from './understanding-search.rules.js';
 
 type Scope = { workspaceId: string; unitId: string };
+type Message = { messageId: string; text: string };
 type Services = {
   resolveConnection: ConnectionResolver;
   model: ModelPort;
@@ -26,17 +29,20 @@ type Services = {
     tx: PoolClient,
     payload: { workspaceId: string; questionId: string },
   ) => Promise<unknown>;
+  embedding?: EmbeddingPort;
+  embeddingModel?: string;
 };
 type Candidate = { id: string; displayId: string; customer: string | null; summary: string };
 type Input = {
   bodySafe: string;
   evidenceMessageIds: string[];
-  conversation: { messageId: string; text: string }[];
+  conversation: Message[];
   candidates: Candidate[];
   candidateIds: string[];
 };
 type Decision = 'done' | 'create' | { threadId: string };
 type Choice = ReturnType<typeof greyChoice>;
+type Answer = z.infer<typeof greyOutput>;
 
 const defaultTemperature = 0.2;
 
@@ -123,7 +129,11 @@ async function settle(
   );
 }
 
-async function readGrey(tx: PoolClient, scope: Scope): Promise<Input | Decision> {
+async function readGrey(
+  tx: PoolClient,
+  scope: Scope,
+  retrieved: Message[],
+): Promise<Input | Decision> {
   const resolution = await readResolution(tx, scope);
 
   if (!resolution || resolution.verdict !== 'GREY') {
@@ -147,27 +157,24 @@ async function readGrey(tx: PoolClient, scope: Scope): Promise<Input | Decision>
   return {
     bodySafe: message.bodySafe,
     evidenceMessageIds: message.evidenceMessageIds,
-    conversation: await conversationContext(tx, scope),
+    conversation: mergeConversation(await conversationContext(tx, scope), retrieved),
     candidates: await greyCandidates(tx, scope.workspaceId, resolution.candidateIds),
     candidateIds: resolution.candidateIds,
   };
 }
 
-async function loadInput(services: Services, scope: Scope): Promise<Input | Decision> {
+async function loadInput(
+  services: Services,
+  scope: Scope,
+  retrieved: Message[],
+): Promise<Input | Decision> {
   return scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
-    readGrey(tx, scope),
+    readGrey(tx, scope, retrieved),
   );
 }
 
-// Decides a grey-zone unit: a cited candidate, a cited new work, or a question to the group (FR-RES-02).
-export async function comprehendGreyUnit(services: Services, payload: Scope): Promise<Decision> {
-  const scope = queryPayload.parse(payload);
-  const input = await loadInput(services, scope);
-
-  if (typeof input === 'string' || !('bodySafe' in input)) {
-    return input as Decision;
-  }
-
+// One answer from the model: the first temperature, then the second if the first is not valid JSON.
+async function askModel(services: Services, scope: Scope, input: Input) {
   for (const temperature of [defaultTemperature, 0]) {
     const text = await services.model.generate({
       workspaceId: scope.workspaceId,
@@ -186,19 +193,94 @@ export async function comprehendGreyUnit(services: Services, payload: Scope): Pr
     const decoded = decode(text);
 
     if (decoded?.success) {
-      const choice = greyChoice(decoded.data, {
-        candidateIds: input.candidateIds,
-        messageIds: [
-          ...input.evidenceMessageIds,
-          ...input.conversation.map((entry) => entry.messageId),
-        ],
-      });
-
-      return settle(services, scope, input, choice);
+      return decoded.data;
     }
   }
 
-  await quarantine({ resolveConnection: services.resolveConnection, alert: services.alert }, scope);
+  return null;
+}
 
-  return 'done';
+function supplied(input: Input) {
+  return {
+    candidateIds: input.candidateIds,
+    messageIds: [
+      ...input.evidenceMessageIds,
+      ...input.conversation.map((entry) => entry.messageId),
+    ],
+  };
+}
+
+// The searched work joins the candidates, not yet offered, at most three (FR-RES-06).
+async function withSearch(services: Services, scope: Scope, input: Input, found: SearchFound) {
+  const offered = new Set(input.candidateIds);
+  const added = found.threadIds.filter((id) => !offered.has(id)).slice(0, SEARCH_EXTRA_CANDIDATES);
+  const candidates = await scopedTransaction(services.resolveConnection, scope.workspaceId, (tx) =>
+    greyCandidates(tx, scope.workspaceId, added),
+  );
+
+  return {
+    ...input,
+    conversation: mergeConversation(input.conversation, found.conversation),
+    candidates: [...input.candidates, ...candidates],
+    candidateIds: [...input.candidateIds, ...candidates.map((candidate) => candidate.id)],
+  };
+}
+
+// Decides a grey-zone unit: a cited candidate, a cited new work, or a question to the group (FR-RES-02).
+// `retrieved` is the context a genesis search found; an unsure answer may search once more (FR-RES-06).
+export async function comprehendGreyUnit(
+  services: Services,
+  payload: Scope,
+  retrieved: Message[] = [],
+): Promise<Decision> {
+  const scope = queryPayload.parse(payload);
+  const input = await loadInput(services, scope, retrieved);
+
+  if (typeof input === 'string' || !('bodySafe' in input)) {
+    return input as Decision;
+  }
+
+  const answer = await askModel(services, scope, input);
+
+  if (!answer) {
+    await quarantine(
+      { resolveConnection: services.resolveConnection, alert: services.alert },
+      scope,
+    );
+
+    return 'done';
+  }
+
+  const choice = greyChoice(answer, supplied(input));
+
+  if (choice.kind === 'unsure' && answer.search) {
+    return searchAndAskAgain(services, scope, input, answer);
+  }
+
+  return settle(services, scope, input, choice);
+}
+
+// An unsure answer that asked to search: the search adds context and candidates, and the model is asked once more.
+// Its second answer is final; a second search is never run (AC5, AC8).
+async function searchAndAskAgain(
+  services: Services,
+  scope: Scope,
+  input: Input,
+  answer: Answer,
+): Promise<Decision> {
+  const found = answer.search ? await searchContext(services, scope, answer.search) : null;
+
+  if (!found) {
+    return settle(services, scope, input, greyChoice(answer, supplied(input)));
+  }
+
+  const extended = await withSearch(services, scope, input, found);
+  const second = await askModel(services, scope, extended);
+
+  return settle(
+    services,
+    scope,
+    extended,
+    second ? greyChoice(second, supplied(extended)) : { kind: 'unsure' },
+  );
 }
