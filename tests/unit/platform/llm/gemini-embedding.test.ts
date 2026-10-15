@@ -9,7 +9,10 @@ test('RAG (AC1, AC3): the adapter sends the model, the text, 768 dimensions and 
   const embedContent = vi.fn(async () => ({ embeddings: [{ values: vector(768) }] }));
   const embedding = createGeminiEmbedding(settings, embedContent);
 
-  expect(await embedding.embed({ text: 'pesanan Toko Berkah', task: 'query' })).toHaveLength(768);
+  const values = await embedding.embed({ text: 'pesanan Toko Berkah', task: 'query' });
+
+  expect(values).toHaveLength(768);
+  expect(Math.hypot(...values)).toBeCloseTo(1);
   await embedding.embed({ text: 'pesanan dibatalkan', task: 'document' });
 
   expect(embedContent.mock.calls).toEqual([

@@ -32,7 +32,10 @@ export function createGeminiEmbedding(settings: Settings, embed?: Embed): Embedd
         throw new Error(`embedding has ${values.length} values, expected ${dimensions}`);
       }
 
-      return values;
+      // Unit length, as the data spec stores it; cosine similarity is the same either way.
+      const length = Math.hypot(...values);
+
+      return values.map((value) => value / length);
     },
   };
 }
