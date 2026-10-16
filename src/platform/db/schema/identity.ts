@@ -96,6 +96,9 @@ export const personIdentities = pgTable(
     uniqueIndex('identities_external_uq')
       .on(table.workspaceId, table.provider, table.externalId)
       .where(sql`${table.externalId} IS NOT NULL`),
+    uniqueIndex('identities_handle_uq')
+      .on(table.workspaceId, table.provider, sql`lower(${table.handle})`)
+      .where(sql`${table.handle} IS NOT NULL`),
   ],
 );
 

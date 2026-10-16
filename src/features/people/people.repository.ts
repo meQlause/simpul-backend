@@ -165,3 +165,90 @@ export async function selectRecipientCandidates(
 
   return result.rows[0];
 }
+
+export async function insertPerson(
+  tx: PoolClient,
+  workspaceId: string,
+  input: { id: string; name: string; roleName: string; team: string; handle: string | null },
+) {
+  await tx.query('INSERT INTO people (id, workspace_id, name) VALUES ($1, $2, $3)', [
+    input.id,
+    workspaceId,
+    input.name,
+  ]);
+  const role = await tx.query<{ id: string }>(
+    `INSERT INTO roles (workspace_id, role_key, name, team) VALUES ($1, 'person-' || $2::text, $3, $4)
+    RETURNING id`,
+    [workspaceId, input.id, input.roleName, input.team],
+  );
+
+  await tx.query(
+    "INSERT INTO role_members (workspace_id, role_id, person_id, kind) VALUES ($1, $2, $3, 'member')",
+    [workspaceId, role.rows[0].id, input.id],
+  );
+  await insertIdentity(tx, workspaceId, input.id, input.handle);
+}
+
+async function insertIdentity(
+  tx: PoolClient,
+  workspaceId: string,
+  personId: string,
+  handle: string | null,
+) {
+  if (handle) {
+    await tx.query(
+      "INSERT INTO person_identities (workspace_id, person_id, provider, handle) VALUES ($1, $2, 'telegram', $3)",
+      [workspaceId, personId, handle],
+    );
+  }
+}
+
+export async function handleTaken(
+  tx: PoolClient,
+  workspaceId: string,
+  handle: string,
+  exceptPersonId: string | null,
+) {
+  const result = await tx.query(
+    `SELECT 1 FROM person_identities AS identity JOIN people AS person ON person.id = identity.person_id
+    WHERE identity.workspace_id = $1 AND identity.provider = 'telegram' AND lower(identity.handle) = lower($2)
+    AND person.active AND ($3::uuid IS NULL OR identity.person_id <> $3)`,
+    [workspaceId, handle, exceptPersonId],
+  );
+
+  return result.rowCount !== null && result.rowCount > 0;
+}
+
+export async function replaceIdentity(
+  tx: PoolClient,
+  workspaceId: string,
+  personId: string,
+  handle: string | null,
+) {
+  await tx.query(
+    "DELETE FROM person_identities WHERE workspace_id = $1 AND person_id = $2 AND provider = 'telegram'",
+    [workspaceId, personId],
+  );
+  await insertIdentity(tx, workspaceId, personId, handle);
+}
+
+export async function deactivatePerson(tx: PoolClient, workspaceId: string, personId: string) {
+  await tx.query('UPDATE people SET active = false WHERE workspace_id = $1 AND id = $2', [
+    workspaceId,
+    personId,
+  ]);
+  // The username and the Telegram id go with the person, so someone else can take them.
+  await tx.query('DELETE FROM person_identities WHERE workspace_id = $1 AND person_id = $2', [
+    workspaceId,
+    personId,
+  ]);
+}
+
+export async function selectAdminPersonId(tx: PoolClient, workspaceId: string) {
+  return (
+    await tx.query<{ id: string | null }>(
+      'SELECT admin_person_id AS id FROM workspaces WHERE id = $1',
+      [workspaceId],
+    )
+  ).rows[0]?.id;
+}
