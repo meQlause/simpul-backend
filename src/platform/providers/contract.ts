@@ -83,6 +83,7 @@ export type InboundMessage = {
   chatId: string;
   messageId: string;
   senderExternalId: string;
+  senderHandle?: string;
   body: string;
   mediaRef?: string;
   serverTs: number;

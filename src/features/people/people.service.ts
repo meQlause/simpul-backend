@@ -10,6 +10,7 @@ import {
   handleTaken,
   insertAdminPerson,
   insertPerson,
+  linkSenderIdentity,
   lockPerson,
   replaceIdentity,
   selectAdminPersonId,
@@ -168,6 +169,13 @@ async function syncIdentity(
   if (handle !== undefined && handle?.toLowerCase() !== currentHandle?.toLowerCase()) {
     await replaceIdentity(tx, workspaceId, personId, handle);
   }
+}
+
+export async function linkTelegramSender(
+  tx: PoolClient,
+  input: { workspaceId: string; provider: string; senderExternalId: string; senderHandle: string },
+) {
+  await linkSenderIdentity(tx, input);
 }
 
 export async function resolveRoleRecipient(

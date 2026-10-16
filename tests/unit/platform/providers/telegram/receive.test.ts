@@ -50,3 +50,28 @@ test('FR-UI-03: callback acknowledgement clears the provider interaction without
     expect.objectContaining({ body: JSON.stringify({ callback_query_id: 'receipt' }) }),
   );
 });
+
+test('FR-TG-11: a Telegram username is kept as senderHandle, and absent when the sender has none', () => {
+  const message = {
+    update_id: 5,
+    message: {
+      message_id: 6,
+      date: 1700000000,
+      text: 'halo',
+      from: { id: 13, is_bot: false, username: 'Andi_Sales' },
+      chat: { id: 13, type: 'private' },
+    },
+  };
+
+  expect(parseInboundUpdate(message)).toMatchObject({
+    type: 'message',
+    senderExternalId: '13',
+    senderHandle: 'Andi_Sales',
+  });
+  expect(
+    parseInboundUpdate({
+      ...message,
+      message: { ...message.message, from: { id: 13, is_bot: false } },
+    }),
+  ).not.toHaveProperty('senderHandle');
+});

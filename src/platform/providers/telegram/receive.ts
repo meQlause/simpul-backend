@@ -72,7 +72,11 @@ const incomingMessage = schema.object({
           mime_type: schema.string().default('audio/ogg'),
         })
         .optional(),
-      from: schema.object({ id: schema.number().int().safe(), is_bot: schema.boolean() }),
+      from: schema.object({
+        id: schema.number().int().safe(),
+        is_bot: schema.boolean(),
+        username: schema.string().optional(),
+      }),
       chat: schema.union([
         chat,
         schema.object({
@@ -138,6 +142,7 @@ export const parseInboundUpdate: ReceiveProvider['parse'] = (update) => {
     chatId: String(message.chat.id),
     messageId: String(message.message_id),
     senderExternalId: String(message.from.id),
+    ...(message.from.username ? { senderHandle: message.from.username } : {}),
     body: message.text ?? message.caption ?? '',
     ...(message.voice
       ? {

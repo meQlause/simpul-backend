@@ -26,6 +26,7 @@ import type {
 } from '../../platform/providers/index.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
+import { linkTelegramSender } from '../people/index.js';
 
 const NOT_FOUND = 'E-NOT-FOUND';
 
@@ -195,7 +196,7 @@ async function ingestMessage(
       return;
     }
 
-    const channelId = await storeMessage(tx, scope, event, now);
+    const channelId = await storeAndLinkSender(tx, scope, event, now);
 
     if (!channelId) {
       return;
@@ -241,4 +242,25 @@ async function enqueueMedia(
   if (messageId) {
     await services.publishMedia(tx, { workspaceId: input.workspaceId, messageId });
   }
+}
+
+// Links the sender to the person who holds their username, so the unit built later is theirs (FR-TG-11).
+async function storeAndLinkSender(
+  tx: PoolClient,
+  scope: { workspaceId: string; connectionId: string; provider: string },
+  event: Extract<ReturnType<ReceiveProvider['parse']>, { type: 'message' }>,
+  now: Date,
+) {
+  const channelId = await storeMessage(tx, scope, event, now);
+
+  if (channelId && event.senderHandle) {
+    await linkTelegramSender(tx, {
+      workspaceId: scope.workspaceId,
+      provider: scope.provider,
+      senderExternalId: event.senderExternalId,
+      senderHandle: event.senderHandle,
+    });
+  }
+
+  return channelId;
 }

@@ -252,3 +252,19 @@ export async function selectAdminPersonId(tx: PoolClient, workspaceId: string) {
     )
   ).rows[0]?.id;
 }
+
+// ponytail: one UPDATE with a NOT EXISTS guard; two webhooks racing for the same Telegram id
+// can still hit identities_external_uq and retry. A row lock per username is the upgrade path.
+export async function linkSenderIdentity(
+  tx: PoolClient,
+  input: { workspaceId: string; provider: string; senderExternalId: string; senderHandle: string },
+) {
+  await tx.query(
+    `UPDATE person_identities AS identity SET external_id = $3 FROM people AS person
+    WHERE identity.workspace_id = $1 AND identity.provider = $2 AND lower(identity.handle) = lower($4)
+    AND identity.external_id IS NULL AND person.id = identity.person_id AND person.active
+    AND NOT EXISTS (SELECT 1 FROM person_identities AS taken WHERE taken.workspace_id = $1
+      AND taken.provider = $2 AND taken.external_id = $3)`,
+    [input.workspaceId, input.provider, input.senderExternalId, `@${input.senderHandle}`],
+  );
+}
