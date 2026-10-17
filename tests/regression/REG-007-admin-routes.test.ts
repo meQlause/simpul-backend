@@ -164,6 +164,7 @@ const bodies: Record<string, object> = {
   'put /settings': settings,
   'put /settings/mail': mail,
   'patch /people/:personId': { availability: 'leave' },
+  'post /people': { name: 'Regression person', roleName: 'Regression role', team: 'Other' },
 };
 const statuses: Record<string, number> = {
   'get /database': 404,
@@ -181,6 +182,7 @@ const statuses: Record<string, number> = {
   'post /telegram/connections/:connectionId/sessions': 201,
   'post /telegram/connections': 409,
   'post /channels': 201,
+  'post /people': 201,
 };
 
 async function prepareReviewRoute() {
