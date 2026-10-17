@@ -14,6 +14,7 @@ export {
   botConnections,
   channels,
   channelConnectionSessions,
+  personInvites,
   channelVerifications,
   providerUpdates,
 } from './channels.js';

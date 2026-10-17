@@ -125,6 +125,25 @@ export const channelConnectionSessions = pgTable(
   ],
 );
 
+// The one live Telegram invite of a person (FR-TG-12). It sits here because it references the bot.
+export const personInvites = pgTable(
+  'person_invites',
+  {
+    ...tenantColumns(),
+    personId: reference('person_id', () => people.id).notNull(),
+    botConnectionId: reference('bot_connection_id', () => botConnections.id, 'cascade').notNull(),
+    codeHash: bytes('code_hash').notNull(),
+    expiresAt: instant('expires_at').notNull(),
+    consumedAt: instant('consumed_at'),
+    createdBy: reference('created_by', () => people.id).notNull(),
+  },
+  (table) => [
+    check('person_invites_expiry_valid', sql`${table.expiresAt} > ${table.createdAt}`),
+    uniqueIndex('person_invites_person_uq').on(table.workspaceId, table.personId),
+    uniqueIndex('person_invites_hash_uq').on(table.codeHash),
+  ],
+);
+
 export const channelVerifications = pgTable(
   'channel_verifications',
   {

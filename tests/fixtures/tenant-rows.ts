@@ -75,6 +75,17 @@ function channelRows(workspaceId: string) {
       },
     ],
     [
+      'person_invites',
+      {
+        person_id: workspaceId,
+        bot_connection_id: workspaceId,
+        created_by: workspaceId,
+        code_hash: Buffer.from(`invite-${workspaceId}`),
+        created_at: instant,
+        expires_at: later,
+      },
+    ],
+    [
       'channel_verifications',
       {
         channel_id: workspaceId,

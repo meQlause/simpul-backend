@@ -52,8 +52,15 @@ export const notifications = pgTable(
     cancelledAt: instant('cancelled_at'),
     correctedAt: instant('corrected_at'),
     staleSince: instant('stale_since'),
+    failedAt: instant('failed_at'),
+    failureReason: text('failure_reason'),
   },
   (table) => [
+    check('notif_failure_reason_valid', sql`${table.failureReason} IN ('recipient_unreachable')`),
+    check(
+      'notif_failed_alone',
+      sql`(${table.failedAt} IS NULL) = (${table.failureReason} IS NULL) AND (${table.failedAt} IS NULL OR (${table.sentAt} IS NULL AND ${table.cancelledAt} IS NULL))`,
+    ),
     check(
       'notifications_source_valid',
       sql`${table.labelId} IS NOT NULL OR (${table.kind} IN ('reminder','escalation') AND ${table.threadId} IS NOT NULL)`,
