@@ -61,7 +61,7 @@ beforeEach(async () => {
   await pool.query('DELETE FROM orphans');
 });
 
-test('SRS §7.3: a genesis that passes G1–G5 creates work even with no operations', async () => {
+test('SRS §7.3: a genesis that passes G1–G5 creates work even with no operations, and its message gets one progress label', async () => {
   const before = await created();
 
   generate.mockImplementation(async (request) => newOrder(request));
@@ -70,6 +70,10 @@ test('SRS §7.3: a genesis that passes G1–G5 creates work even with no operati
   expect(generate).toHaveBeenCalledOnce();
   expect((await pool.query('SELECT reason FROM orphans')).rows).toEqual([]);
   expect(await created()).toBe(before + 1);
+  expect(
+    (await pool.query('SELECT type, tense FROM labels WHERE workspace_id = $1', [workspaceId]))
+      .rows,
+  ).toEqual([{ type: 'progress', tense: 'sudah_terjadi' }]);
 });
 
 test('SRS §7.2: an operation without evidence is discarded, the genesis still creates work', async () => {
@@ -86,9 +90,10 @@ test('SRS §7.2: an operation without evidence is discarded, the genesis still c
 
   expect((await pool.query('SELECT reason FROM orphans')).rows).toEqual([]);
   expect(await created()).toBe(before + 1);
+  // Only the genesis label remains: the discarded operation adds none of its own.
   expect(
-    (await pool.query('SELECT * FROM labels WHERE workspace_id = $1', [workspaceId])).rowCount,
-  ).toBe(0);
+    (await pool.query('SELECT type FROM labels WHERE workspace_id = $1', [workspaceId])).rows,
+  ).toEqual([{ type: 'progress' }]);
 });
 
 let sequence = 0;

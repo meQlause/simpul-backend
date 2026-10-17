@@ -156,6 +156,27 @@ async function recordGenesisOperations(
       await persistOperation(tx, input.scope, operation, input.options);
     }
   }
+
+  // The message that started the work is labelled even when the model gave no operation for it,
+  // so rules see the new work: a label citing genesis evidence routes as event "new".
+  const genesis = input.output.genesis!;
+  const covered = input.output.operations.some((operation) =>
+    operation.evidenceMessageIds.some((id) => genesis.evidenceMessageIds.includes(id)),
+  );
+
+  if (!covered) {
+    await persistOperation(
+      tx,
+      input.scope,
+      {
+        type: 'progress',
+        tense: genesis.tense,
+        evidenceMessageIds: genesis.evidenceMessageIds,
+        confidence: genesis.confidence,
+      },
+      input.options,
+    );
+  }
 }
 
 // The search found work: the unit becomes GREY over it (at most three), and the grey step decides (FR-RES-06).
