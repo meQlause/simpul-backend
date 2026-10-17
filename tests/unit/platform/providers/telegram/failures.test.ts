@@ -59,3 +59,46 @@ test('The adapter returns a neutral retry instruction for a rate-limited indicat
   ).resolves.toEqual({ retryAfter: 12 });
   expect(send).toHaveBeenCalledTimes(1);
 });
+
+const ref = {
+  credential: 'test-only-token',
+  providerAccountId: '123',
+  webhookUrl: 'https://simpul.example/hook',
+};
+
+function refused(status: number, description: string) {
+  return vi.fn<typeof fetch>(
+    async () =>
+      new Response(JSON.stringify({ ok: false, error_code: status, description }), { status }),
+  );
+}
+
+test('A rejected token (401) is E-TG-TOKEN-INVALID', async () => {
+  const provider = createTelegramProvider('https://telegram.example', refused(401, 'Unauthorized'));
+
+  await expect(provider.verifyCredential('test-only-token')).rejects.toMatchObject({
+    code: 'E-TG-TOKEN-INVALID',
+  });
+});
+
+test('A group the bot cannot see (400) is E-TG-GROUP-UNAVAILABLE, not a token error', async () => {
+  const provider = createTelegramProvider(
+    'https://telegram.example',
+    refused(400, 'Bad Request: chat not found'),
+  );
+
+  await expect(provider.describeChat(ref, '-12345')).rejects.toMatchObject({
+    code: 'E-TG-GROUP-UNAVAILABLE',
+  });
+});
+
+test('A person who never started the bot (400/403) is not reported as a token error', async () => {
+  const provider = createTelegramProvider(
+    'https://telegram.example',
+    refused(403, 'Forbidden: bot can not initiate conversation with a user'),
+  );
+
+  await expect(
+    provider.send(ref, { kind: 'notification', chatId: '1234567890', text: 'PAY-0003' }),
+  ).rejects.not.toMatchObject({ code: 'E-TG-TOKEN-INVALID' });
+});

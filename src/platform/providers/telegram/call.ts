@@ -4,6 +4,9 @@ import { z as schema } from 'zod';
 const CALL_TIMEOUT_MS = 10000;
 const DEFAULT_RETRY_SECONDS = 60;
 const RATE_LIMIT_STATUS = 429;
+const UNAUTHORIZED_STATUS = 401;
+const NOT_FOUND_STATUS = 404;
+const TOKEN_STATUSES = [UNAUTHORIZED_STATUS, NOT_FOUND_STATUS];
 
 async function readData(response: Response) {
   try {
@@ -40,7 +43,9 @@ function responseFailure(response: Response, data: unknown) {
     return new DomainError('E-TG-RATE-LIMITED', undefined, retryAfter);
   }
 
-  return response.ok ? null : new DomainError('E-TG-TOKEN-INVALID');
+  // Only an unknown token (401) or a malformed one (404) is a token error. Any other refusal comes
+  // back as Telegram's `ok: false` body, and the caller maps it to the code its step owns.
+  return TOKEN_STATUSES.includes(response.status) ? new DomainError('E-TG-TOKEN-INVALID') : null;
 }
 
 export function createCall(baseUrl: string, send: typeof fetch, callTimeoutMs = CALL_TIMEOUT_MS) {
