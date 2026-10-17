@@ -186,6 +186,21 @@ test('AC4: a new username replaces the identity and clears its Telegram id; null
   expect(removed.body.data.identities).toEqual([]);
 });
 
+// Gone from GET /people, and the audit row records no after-state for them.
+async function expectLeftRoster(id: string) {
+  const listed = await supertest(app).get('/api/v1/people').set('Cookie', cookie);
+
+  expect(listed.body.data.map((person: { id: string }) => person.id)).not.toContain(id);
+  expect(
+    (
+      await pool.query(
+        'SELECT after FROM config_audit WHERE record_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [id],
+      )
+    ).rows,
+  ).toEqual([{ after: null }]);
+}
+
 test('AC5: a deactivated person leaves the list, frees the username, and their role goes to the backup', async () => {
   const andiId = await personId('Andi Pratama');
   const roleId = (
@@ -207,10 +222,8 @@ test('AC5: a deactivated person leaves the list, frees the username, and their r
     .send({ active: false });
 
   expect(gone.status).toBe(200);
-
-  const listed = await supertest(app).get('/api/v1/people').set('Cookie', cookie);
-
-  expect(listed.body.data.map((person: { id: string }) => person.id)).not.toContain(andiId);
+  expect(gone.body.data.identities).toEqual([]);
+  await expectLeftRoster(andiId);
   expect(
     (
       await pool.query(

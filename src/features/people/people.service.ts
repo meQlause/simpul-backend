@@ -104,18 +104,22 @@ export async function patchPerson(
       handle: input.telegramHandle,
     });
 
-    const after = (await selectPeople(tx, scope.workspaceId, personId))[0];
+    const current = (await selectPeople(tx, scope.workspaceId, personId))[0];
 
     if (input.active === false) {
       await deactivatePerson(tx, scope.workspaceId, personId);
     }
+
+    // A deactivated person leaves the roster: the audit records no after-state, and the response
+    // carries no identity, because deactivation deleted them.
+    const after = input.active === false ? { ...current, identities: [] } : current;
 
     await recordConfigChange(tx, {
       ...scope,
       tableName: 'people',
       recordId: personId,
       before,
-      after,
+      after: input.active === false ? null : after,
     });
 
     return after;
