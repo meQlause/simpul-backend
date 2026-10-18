@@ -6,6 +6,10 @@ import { databaseFixture } from '../../../helpers/database.js';
 import { applyMigrations } from '../../../helpers/migrations.js';
 import { loadPointStarSeed, pointStarSeed } from '../../../fixtures/point-star.js';
 
+// One snapshot refreshes every queue's statistics in turn through a one-connection pool: about
+// 3.5 s alone, so the 5 s default is too tight under a parallel run. No assertion is relaxed.
+vi.setConfig({ testTimeout: 20000 });
+
 const pool = databaseFixture();
 const seed = pointStarSeed({ now: () => new Date('2026-10-10T04:01:00Z') });
 const emit = vi.fn();
