@@ -96,6 +96,20 @@ async function verifyInitialConfiguration(link: string) {
       hold_seconds: 60,
     },
   ]);
+  expect(
+    (
+      await pool.query(
+        "SELECT audience, body, editable FROM templates WHERE key = 'update' ORDER BY audience",
+      )
+    ).rows,
+  ).toEqual([
+    {
+      audience: 'external',
+      body: '{{work_id}} · {{customer}} · Your order update is ready.',
+      editable: false,
+    },
+    { audience: 'internal', body: '{{work_id}} · {{customer}} · {{summary}}', editable: true },
+  ]);
 }
 
 test('create-workspace creates a workspace, an admin person and a sign-in account, and prints a single-use set-password link', async () => {

@@ -50,6 +50,13 @@ export async function finishWorkspaceProvision(
     workspaceId,
     DEFAULT_DIGEST_TIME,
   ]);
+  // Vocabulary and delivery both read the 'update' pair; the external one is fixed (REG-005).
+  await tx.query(
+    `INSERT INTO templates (workspace_id, key, audience, body, editable) VALUES
+    ($1, 'update', 'internal', '{{work_id}} · {{customer}} · {{summary}}', true),
+    ($1, 'update', 'external', '{{work_id}} · {{customer}} · Your order update is ready.', false)`,
+    [workspaceId],
+  );
 }
 
 type WorkspaceMe = {
