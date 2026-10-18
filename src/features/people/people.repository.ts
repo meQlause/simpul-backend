@@ -31,6 +31,7 @@ type PersonDetail = NamedPerson & {
   level: 'staff' | 'executive';
   availability: 'available' | 'leave';
   identities: { provider: string; handle: string | null }[];
+  telegramStatus: 'connected' | 'waiting' | 'not_connected';
   role: (NamedPerson & { team: string }) | null;
   manager: NamedPerson | null;
   backup: NamedPerson | null;
@@ -64,6 +65,11 @@ export async function selectPeople(
     `SELECT person.id, person.name, person.level, person.availability,
     COALESCE((SELECT jsonb_agg(jsonb_build_object('provider', provider, 'handle', handle) ORDER BY provider)
       FROM person_identities WHERE workspace_id = $1 AND person_id = person.id), '[]') AS identities,
+    CASE WHEN EXISTS (SELECT 1 FROM person_identities WHERE workspace_id = $1 AND person_id = person.id
+        AND provider = 'telegram' AND started_at IS NOT NULL) THEN 'connected'
+      WHEN EXISTS (SELECT 1 FROM person_invites WHERE workspace_id = $1 AND person_id = person.id
+        AND consumed_at IS NULL AND expires_at > now()) THEN 'waiting'
+      ELSE 'not_connected' END AS "telegramStatus",
     (SELECT jsonb_build_object('id', role.id, 'name', role.name, 'team', role.team)
       FROM roles AS role JOIN role_members AS member ON member.role_id = role.id
       WHERE member.person_id = person.id AND member.kind = 'member' AND role.workspace_id = $1
@@ -239,6 +245,10 @@ export async function deactivatePerson(tx: PoolClient, workspaceId: string, pers
   ]);
   // The username and the Telegram id go with the person, so someone else can take them.
   await tx.query('DELETE FROM person_identities WHERE workspace_id = $1 AND person_id = $2', [
+    workspaceId,
+    personId,
+  ]);
+  await tx.query('DELETE FROM person_invites WHERE workspace_id = $1 AND person_id = $2', [
     workspaceId,
     personId,
   ]);

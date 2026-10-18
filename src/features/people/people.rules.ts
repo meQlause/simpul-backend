@@ -41,3 +41,20 @@ export function invalidPatchFields(
 
   return [...new Set(invalid)];
 }
+
+const INVITE_DAYS = 7;
+const DAY_MS = 86400000;
+
+// Telegram stores a username without "@"; a connection may have saved it with one.
+export function bareUsername(username: string) {
+  return username.replace(/^@/u, '');
+}
+
+export function inviteLink(botUsername: string, code: string) {
+  return `https://t.me/${bareUsername(botUsername)}?start=${code}`;
+}
+
+// Epoch milliseconds seven days after `now`.
+export function inviteExpiry(now: Date) {
+  return now.getTime() + INVITE_DAYS * DAY_MS;
+}

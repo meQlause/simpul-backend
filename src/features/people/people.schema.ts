@@ -62,3 +62,14 @@ export function parseNewPerson(input: unknown) {
 
   return parsed.data;
 }
+
+// The invite takes no body: any field, a client-chosen workspace included, is refused (REG-007).
+export function parseInviteBody(input: unknown) {
+  const parsed = zod.strictObject({}).safeParse(input ?? {});
+
+  if (!parsed.success) {
+    throw validationError(parsed.error);
+  }
+
+  return parsed.data;
+}
