@@ -17,6 +17,7 @@ export async function createQueue(pool: Pool, scheduling = false, onError?: () =
   for (const name of [
     'ingest.coalesce',
     'ingest.media',
+    'ingest.start',
     'ingest.retention',
     'understanding.triage',
     'understanding.resolve',
@@ -38,6 +39,24 @@ export async function createQueue(pool: Pool, scheduling = false, onError?: () =
   }
 
   return boss;
+}
+
+// FR-TG-12: a private Start, carrying the invite code's hash and never the code.
+export function publishStart(boss: PgBoss) {
+  return (
+    tx: PoolClient,
+    payload: {
+      workspaceId: string;
+      connectionId: string;
+      chatId: string;
+      senderExternalId: string;
+      senderHandle?: string;
+      codeHash?: string;
+    },
+  ) =>
+    boss.send('ingest.start', payload, {
+      db: { executeSql: (text, values) => tx.query(text, values) },
+    });
 }
 
 export function publishMedia(boss: PgBoss) {

@@ -6,6 +6,7 @@ import type { createProviderRegistry } from '../platform/providers/index.js';
 import {
   registerIngestJobs,
   registerMediaJobs,
+  registerStartJobs,
   registerRetentionJobs,
 } from '../features/ingest/index.js';
 import { registerUnderstandingJobs } from '../features/understanding/index.js';
@@ -43,6 +44,7 @@ export async function registerPipelineJobs(queue: PgBoss, services: PipelineServ
   await registerRetentionJobs(queue, services);
   await registerIngestJobs(queue, { ...services, publishUnit: publishUnit(queue) });
   await registerMediaJobs(queue, { ...services, publishUnit: publishUnit(queue) });
+  await registerStartJobs(queue, services);
   await registerUnderstandingJobs(queue, {
     ...services,
     publishResolve: publishResolution(queue),

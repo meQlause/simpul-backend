@@ -2,6 +2,7 @@ import type { PgBoss } from 'pg-boss';
 import { z as schema } from 'zod';
 import { coalesce, type CoalesceServices } from './ingest.coalesce.service.js';
 import { processMedia } from './ingest.media.service.js';
+import { answerStartUpdate } from './ingest.start.service.js';
 
 const workOptions = { pollingIntervalSeconds: 0.5 };
 const coalescePayload = schema
@@ -32,6 +33,29 @@ export async function registerMediaJobs(
           .strictObject({ workspaceId: schema.guid(), messageId: schema.guid() })
           .parse(job.data),
       );
+    }
+  });
+}
+
+const startPayload = schema.strictObject({
+  workspaceId: schema.guid(),
+  connectionId: schema.guid(),
+  chatId: schema.string().min(1),
+  senderExternalId: schema.string().min(1),
+  senderHandle: schema.string().min(1).optional(),
+  codeHash: schema
+    .string()
+    .regex(/^[0-9a-f]{64}$/u)
+    .optional(),
+});
+
+export async function registerStartJobs(
+  queue: PgBoss,
+  services: Parameters<typeof answerStartUpdate>[0],
+) {
+  await queue.work('ingest.start', workOptions, async (jobs) => {
+    for (const job of jobs) {
+      await answerStartUpdate(services, startPayload.parse(job.data));
     }
   });
 }

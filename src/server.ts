@@ -5,6 +5,7 @@ import {
   publishMatching,
   publishNotification,
   publishMedia,
+  publishStart,
 } from './platform/queue/index.js';
 import { readConfig } from './platform/config/index.js';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -132,6 +133,7 @@ if (process.argv[2] === 'create-workspace') {
           publish: queue ? publishCoalesce(queue, config.INGEST_DEBOUNCE_SECONDS) : undefined,
           publishNotification: queue ? publishNotification(queue) : undefined,
           publishMedia: queue ? publishMedia(queue) : undefined,
+          publishStart: queue ? publishStart(queue) : undefined,
           publishComprehend: queue ? publishComprehension(queue) : undefined,
         },
         mail: { masterKey: config.SECRETS_MASTER_KEY, now: () => new Date() },

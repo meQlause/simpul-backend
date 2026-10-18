@@ -13,8 +13,10 @@ import type {
   publishComprehension,
   publishNotification,
   publishMedia,
+  publishStart,
 } from '../../platform/queue/index.js';
 import type { PoolClient } from 'pg';
+import { createHash } from 'node:crypto';
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createConnectionLookup } from '../../platform/db/connection-lookup.js';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
@@ -24,11 +26,13 @@ import type {
   ReceiveProvider,
   InboundMessage,
 } from '../../platform/providers/index.js';
+import type { PersonStart } from '../../platform/providers/contract.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
 import { linkTelegramSender } from '../people/index.js';
 
 const NOT_FOUND = 'E-NOT-FOUND';
+const INTERNAL = 'E-INTERNAL';
 
 export type WebhookServices = {
   resolveConnection: ConnectionResolver;
@@ -40,6 +44,7 @@ export type WebhookServices = {
   publishNotification?: ReturnType<typeof publishNotification>;
   publishMedia?: ReturnType<typeof publishMedia>;
   publishComprehend?: ReturnType<typeof publishComprehension>;
+  publishStart?: ReturnType<typeof publishStart>;
 };
 
 export async function authenticateWebhook(
@@ -139,6 +144,37 @@ export async function receiveUpdate(
       recordCandidate(tx, scope, event, services.now()),
     );
   }
+
+  if (event.type === 'person-start') {
+    await queueStart(services, scope, event);
+  }
+}
+
+// FR-TG-12: claim the update and queue the Start in one transaction, so a redelivery queues
+// nothing. Only the code's hash leaves this function.
+async function queueStart(
+  services: WebhookServices,
+  scope: { workspaceId: string; connectionId: string },
+  event: PersonStart,
+) {
+  await scopedTransaction(services.resolveConnection, scope.workspaceId, async (tx) => {
+    if (!(await claimProviderUpdate(tx, scope, event.updateId))) {
+      return;
+    }
+
+    if (!services.publishStart) {
+      throw new DomainError(INTERNAL);
+    }
+
+    await services.publishStart(tx, {
+      workspaceId: scope.workspaceId,
+      connectionId: scope.connectionId,
+      chatId: event.chatId,
+      senderExternalId: event.senderExternalId,
+      ...(event.senderHandle ? { senderHandle: event.senderHandle } : {}),
+      ...(event.code ? { codeHash: createHash('sha256').update(event.code).digest('hex') } : {}),
+    });
+  });
 }
 
 async function acknowledgeAction(
@@ -209,7 +245,7 @@ async function ingestMessage(
     }
 
     if (!services.publish) {
-      throw new DomainError('E-INTERNAL');
+      throw new DomainError(INTERNAL);
     }
 
     await services.publish(tx, {
@@ -234,7 +270,7 @@ async function enqueueMedia(
   }
 
   if (!services.publishMedia) {
-    throw new DomainError('E-INTERNAL');
+    throw new DomainError(INTERNAL);
   }
 
   const messageId = await storedMediaId(tx, input, input.event.messageId);
