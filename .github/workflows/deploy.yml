@@ -1,0 +1,60 @@
+name: Deploy
+
+# be-stack B-8: after CI passes on a push to master (or by hand), build the image, migrate, then
+# roll out the services and the worker pool. Signs in through Workload Identity Federation.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    env:
+      REGION: ${{ vars.GCP_REGION }}
+      IMAGE: ${{ vars.GCP_IMAGE_REPOSITORY }}/backend:${{ github.event.workflow_run.head_sha || github.sha }}
+      # gcloud run worker-pools needs grpc from Python's site-packages.
+      CLOUDSDK_PYTHON_SITEPACKAGES: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: google-github-actions/auth@v3.0.0
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v3.0.1
+        with:
+          project_id: ${{ vars.GCP_PROJECT }}
+      - name: Build and push the image
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+      - name: Migrate before any service changes
+        run: |
+          gcloud run jobs update migrate --region="$REGION" --image="$IMAGE"
+          gcloud run jobs update create-workspace --region="$REGION" --image="$IMAGE"
+          gcloud run jobs execute migrate --region="$REGION" --wait
+      - name: Deploy api and webhook
+        run: |
+          gcloud run deploy api --region="$REGION" --image="$IMAGE"
+          gcloud run deploy webhook --region="$REGION" --image="$IMAGE"
+      - name: Deploy the worker pool
+        run: |
+          python3 -m pip install --quiet grpcio
+          gcloud run worker-pools deploy workers --region="$REGION" \
+            --container=worker --image="$IMAGE" --container=scheduler --image="$IMAGE"
