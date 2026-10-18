@@ -58,5 +58,10 @@ export async function sendQuestion(
     if ('retryAfter' in result) {
       throw new DomainError('E-INTERNAL', undefined, result.retryAfter);
     }
+
+    // A group the bot cannot reach fails the job as before; FR-TG-13 is about people only.
+    if ('unreachable' in result) {
+      throw new DomainError('E-INTERNAL');
+    }
   });
 }

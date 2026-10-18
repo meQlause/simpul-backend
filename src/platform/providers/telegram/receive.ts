@@ -1,5 +1,5 @@
 import { z as schema } from 'zod';
-import type { ReceiveProvider } from '../contract.js';
+import type { PersonStart, ReceiveProvider } from '../contract.js';
 
 const MILLISECONDS_PER_SECOND = 1000;
 
@@ -29,6 +29,43 @@ const ordinary = schema.object({
     })
     .refine((message) => !(message.entities ?? []).some((entity) => entity.type === 'bot_command')),
 });
+
+const privateStart = schema.object({
+  update_id: schema.number().int().safe(),
+  message: schema.object({
+    text: schema.string().regex(/^\/start(?: [0-9a-f]{32})?$/u),
+    from: schema.object({
+      id: schema.number().int().safe(),
+      is_bot: schema.literal(false),
+      username: schema.string().optional(),
+    }),
+    chat: schema.object({
+      id: schema.number().int().safe().positive(),
+      type: schema.literal('private'),
+    }),
+  }),
+});
+
+// FR-TG-12: "/start" or "/start <code>" in the bot's private chat, from a person.
+function parsePersonStart(update: unknown): PersonStart | undefined {
+  const parsed = privateStart.safeParse(update);
+
+  if (!parsed.success) {
+    return undefined;
+  }
+
+  const { message } = parsed.data;
+  const code = message.text.split(' ')[1];
+
+  return {
+    type: 'person-start',
+    updateId: String(parsed.data.update_id),
+    chatId: String(message.chat.id),
+    senderExternalId: String(message.from.id),
+    ...(message.from.username ? { senderHandle: message.from.username } : {}),
+    ...(code ? { code } : {}),
+  };
+}
 
 const parseSetupUpdate: ReceiveProvider['parse'] = (update) => {
   const parsed = command.safeParse(update);
@@ -115,8 +152,13 @@ function parseAction(update: unknown): ReturnType<ReceiveProvider['parse']> | un
   };
 }
 
+// A button press or a private Start: both are answered before any group parsing.
+function parseDirect(update: unknown) {
+  return parseAction(update) ?? parsePersonStart(update);
+}
+
 export const parseInboundUpdate: ReceiveProvider['parse'] = (update) => {
-  const action = parseAction(update);
+  const action = parseDirect(update);
 
   if (action) {
     return action;

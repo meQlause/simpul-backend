@@ -55,7 +55,9 @@ export type OutboundMessage = {
   replyToMessageId?: string;
 };
 
-export type SendResult = { providerMessageId: string } | { retryAfter: number };
+// `unreachable`: the provider refused a person's private chat — no Start, or the bot was blocked (FR-TG-13).
+export type SendResult =
+  { providerMessageId: string } | { retryAfter: number } | { unreachable: true };
 
 export type ActivationProvider = SetupProvider & {
   describeChat: (
@@ -75,6 +77,16 @@ type SetupEvent = {
   chatId: string;
   title: string;
   chatType: 'group' | 'supergroup';
+};
+
+// A private-chat Start, with the invite code when the person opened an invite link (FR-TG-12).
+export type PersonStart = {
+  type: 'person-start';
+  updateId: string;
+  chatId: string;
+  senderExternalId: string;
+  senderHandle?: string;
+  code?: string;
 };
 
 export type InboundMessage = {
@@ -107,6 +119,7 @@ export type ReceiveProvider = {
         receiptId?: string;
       }
     | { type: 'setup-message'; chatId: string; sentAt: number }
+    | PersonStart
     | { type: 'ignore' };
 };
 

@@ -75,3 +75,52 @@ test('FR-TG-11: a Telegram username is kept as senderHandle, and absent when the
     }),
   ).not.toHaveProperty('senderHandle');
 });
+
+function privateText(text: string, from: object = { id: 77, is_bot: false, username: 'Budi_S' }) {
+  return {
+    update_id: 9,
+    message: { message_id: 3, date: 1700000000, text, from, chat: { id: 77, type: 'private' } },
+  };
+}
+
+test('FR-TG-12: a private /start, with or without an invite code, is person-start', () => {
+  const code = 'a'.repeat(32);
+
+  expect(parseInboundUpdate(privateText(`/start ${code}`))).toEqual({
+    type: 'person-start',
+    updateId: '9',
+    chatId: '77',
+    senderExternalId: '77',
+    senderHandle: 'Budi_S',
+    code,
+  });
+  expect(parseInboundUpdate(privateText('/start', { id: 77, is_bot: false }))).toEqual({
+    type: 'person-start',
+    updateId: '9',
+    chatId: '77',
+    senderExternalId: '77',
+  });
+});
+
+test('FR-TG-12: a group /start, a bot sender, another argument or plain text is not person-start', () => {
+  const group = {
+    update_id: 9,
+    message: {
+      message_id: 3,
+      date: 1700000000,
+      text: '/start',
+      from: { id: 77, is_bot: false },
+      chat: { id: -100, type: 'group', title: 'Ops' },
+    },
+  };
+
+  for (const update of [
+    group,
+    privateText('/start', { id: 77, is_bot: true }),
+    privateText('/start hello'),
+    privateText(`/start ${'A'.repeat(32)}`),
+    privateText('hello'),
+  ]) {
+    expect(parseInboundUpdate(update).type).not.toBe('person-start');
+  }
+});

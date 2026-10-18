@@ -98,7 +98,32 @@ test('A person who never started the bot (400/403) is not reported as a token er
     refused(403, 'Forbidden: bot can not initiate conversation with a user'),
   );
 
+  // Since FR-TG-13 the refusal is a send result, not an error at all.
   await expect(
     provider.send(ref, { kind: 'notification', chatId: '1234567890', text: 'PAY-0003' }),
-  ).rejects.not.toMatchObject({ code: 'E-TG-TOKEN-INVALID' });
+  ).resolves.toEqual({ unreachable: true });
+});
+
+test.each([
+  [403, 'Forbidden: bot was blocked by the user'],
+  [403, 'Forbidden: bot can not initiate conversation with a user'],
+  [400, 'Bad Request: chat not found'],
+  [400, 'Bad Request: PEER_ID_INVALID'],
+])('FR-TG-13: sendMessage %i "%s" is unreachable', async (status, description) => {
+  const provider = createTelegramProvider('https://telegram.example', refused(status, description));
+
+  await expect(
+    provider.send(ref, { kind: 'notification', chatId: '1234567890', text: 'PAY-0003' }),
+  ).resolves.toEqual({ unreachable: true });
+});
+
+test('FR-TG-13: any other refused sendMessage still throws E-TG-ACTIVATION-FAILED', async () => {
+  const provider = createTelegramProvider(
+    'https://telegram.example',
+    refused(400, 'Bad Request: message is too long'),
+  );
+
+  await expect(
+    provider.send(ref, { kind: 'notification', chatId: '1234567890', text: 'PAY-0003' }),
+  ).rejects.toMatchObject({ code: 'E-TG-ACTIVATION-FAILED' });
 });

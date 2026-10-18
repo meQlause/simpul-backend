@@ -172,3 +172,23 @@ test('SRS §12.4: a transcript follows the normal understanding path using its r
   );
   expect(publishResolve).toHaveBeenCalledTimes(1);
 });
+
+test('FR-TG-13: an unreachable notice throws for the queue, as a refused send did', async () => {
+  transcribe.mockRejectedValueOnce(new Error('unread audio'));
+  const messageId = await voiceMessage('voice-unreachable');
+  const refusing = {
+    ...services,
+    providers: createProviderRegistry([
+      {
+        ...createFakeProvider(exchange),
+        provider: 'telegram',
+        downloadVoice,
+        send: async () => ({ unreachable: true }) as never,
+      },
+    ]),
+  };
+
+  await expect(
+    processMedia(refusing, { workspaceId: seed.workspaceId, messageId }),
+  ).rejects.toMatchObject({ code: 'E-INTERNAL' });
+});

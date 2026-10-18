@@ -1,6 +1,7 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
 import type { createProviderRegistry } from '../../platform/providers/index.js';
+import type { SendResult } from '../../platform/providers/contract.js';
 import type { publishUnit } from '../../platform/queue/index.js';
 import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';
@@ -61,9 +62,7 @@ export async function processMedia(
         text: 'The voice note could not be transcribed. Please type the update in this group.',
       });
 
-      if ('retryAfter' in result) {
-        throw new DomainError('E-INTERNAL', undefined, result.retryAfter);
-      }
+      failRefusedNotice(result);
 
       await recordMediaOutcome(tx, scope, 'unread');
 
@@ -104,4 +103,15 @@ async function saveTranscript(
 
   await recordMediaOutcome(tx, scope, 'transcript');
   await services.publishUnit?.(tx, { workspaceId: scope.workspaceId, unitId });
+}
+
+// A rate limit retries after its wait; a group the bot cannot reach fails the job as before.
+function failRefusedNotice(result: SendResult) {
+  if ('retryAfter' in result) {
+    throw new DomainError('E-INTERNAL', undefined, result.retryAfter);
+  }
+
+  if ('unreachable' in result) {
+    throw new DomainError('E-INTERNAL');
+  }
 }

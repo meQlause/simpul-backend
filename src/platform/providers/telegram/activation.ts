@@ -167,21 +167,47 @@ function outboundBody(message: Parameters<ActivationProvider['send']>[1]) {
   };
 }
 
+const FORBIDDEN_STATUS = 403;
+const BAD_REQUEST_STATUS = 400;
+const refusal = schema.object({
+  ok: schema.literal(false),
+  error_code: schema.number(),
+  description: schema.string().default(''),
+});
+
+// FR-TG-13: 403 (blocked, or never started) and a chat Telegram cannot find mean the person cannot
+// be reached; any other refusal is the send failing, as before.
+function refusedSend(data: unknown): { unreachable: true } {
+  const parsed = refusal.safeParse(data);
+  const reason = parsed.success ? parsed.data : undefined;
+
+  if (
+    reason?.error_code === FORBIDDEN_STATUS ||
+    (reason?.error_code === BAD_REQUEST_STATUS &&
+      /chat not found|PEER_ID_INVALID/u.test(reason.description))
+  ) {
+    return { unreachable: true };
+  }
+
+  throw new DomainError('E-TG-ACTIVATION-FAILED');
+}
+
 async function sendMessage(
   call: Call,
   connection: ConnectionRef,
   message: Parameters<ActivationProvider['send']>[1],
 ): ReturnType<ActivationProvider['send']> {
   try {
+    const data = await call(connection.credential, 'sendMessage', outboundBody(message));
     const result = schema
       .object({
         ok: schema.literal(true),
         result: schema.object({ message_id: schema.number().int().safe() }),
       })
-      .safeParse(await call(connection.credential, 'sendMessage', outboundBody(message)));
+      .safeParse(data);
 
     if (!result.success) {
-      throw new DomainError('E-TG-ACTIVATION-FAILED');
+      return refusedSend(data);
     }
 
     return { providerMessageId: String(result.data.result.message_id) };

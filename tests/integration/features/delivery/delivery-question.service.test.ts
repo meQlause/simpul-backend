@@ -227,3 +227,20 @@ test('SRS §8.4: a retry-after from the provider throws for queue backoff and wr
     (await pool.query('SELECT answer FROM open_questions WHERE id = $1', [questionId])).rows,
   ).toEqual([{ answer: null }]);
 });
+
+test('FR-TG-13: an unreachable question throws for the queue, as a refused send did', async () => {
+  const questionId = await question({
+    unitId: units[7] ?? null,
+    candidates: threads,
+    expiresAt: new Date(instant.getTime() + 10 * minute),
+  });
+
+  send.mockResolvedValueOnce({ unreachable: true } as never);
+
+  await expect(
+    sendQuestion(servicesWith(inline, new Date(instant.getTime() + minute)), {
+      workspaceId: seed.workspaceId,
+      questionId,
+    }),
+  ).rejects.toMatchObject({ code: 'E-INTERNAL' });
+});

@@ -114,3 +114,13 @@ test('Channels §6: if the database commit fails after the post, a reconciliatio
   expect((await activate(draft, 'commit-failure')).status).toBe(200);
   await expectActive(draft.channelId);
 });
+
+test('FR-TG-13: an unreachable indicator fails activation as a refused send did', async () => {
+  const draft = await draftWithVerification('unreachable');
+
+  provider.send.mockResolvedValueOnce({ unreachable: true } as never);
+  const response = await activate(draft, 'unreachable');
+
+  expect(response.status).toBe(502);
+  expect(response.body.error.code).toBe('E-TG-ACTIVATION-FAILED');
+});

@@ -33,6 +33,10 @@ async function postIndicator(
       throw new DomainError('E-TG-RATE-LIMITED', undefined, result.retryAfter);
     }
 
+    if ('unreachable' in result) {
+      throw new DomainError('E-TG-ACTIVATION-FAILED');
+    }
+
     return result;
   } catch (error) {
     if (
