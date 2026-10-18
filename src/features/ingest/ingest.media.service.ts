@@ -1,7 +1,6 @@
 import type { ConnectionResolver } from '../../platform/db/connection-resolver.js';
 import type { createSecretStore } from '../../platform/secrets/index.js';
-import type { createProviderRegistry } from '../../platform/providers/index.js';
-import type { SendResult } from '../../platform/providers/contract.js';
+import type { createProviderRegistry, SendResult } from '../../platform/providers/index.js';
 import type { publishUnit } from '../../platform/queue/index.js';
 import type { PoolClient } from 'pg';
 import { scopedTransaction } from '../../platform/db/scoped-transaction.js';

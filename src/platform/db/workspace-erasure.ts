@@ -35,6 +35,7 @@ const tables = [
   'display_id_counters',
   'templates',
   'role_members',
+  'person_invites',
   'person_identities',
   'channel_connection_sessions',
   'channel_verifications',

@@ -26,13 +26,14 @@ import type {
   ReceiveProvider,
   InboundMessage,
 } from '../../platform/providers/index.js';
-import type { PersonStart } from '../../platform/providers/contract.js';
 import { DomainError } from '../../platform/errors/domain-error.js';
 import { recordCandidate, recordReceiveCheck } from '../connections/index.js';
 import { linkTelegramSender } from '../people/index.js';
 
 const NOT_FOUND = 'E-NOT-FOUND';
 const INTERNAL = 'E-INTERNAL';
+
+type PersonStart = Extract<ReturnType<ReceiveProvider['parse']>, { type: 'person-start' }>;
 
 export type WebhookServices = {
   resolveConnection: ConnectionResolver;

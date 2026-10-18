@@ -55,6 +55,7 @@ const tables = [
   'label_rule_matches',
   'bot_connections',
   'channel_connection_sessions',
+  'person_invites',
   'channel_verifications',
   'provider_updates',
   'channels',
