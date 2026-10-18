@@ -48,7 +48,7 @@ export async function lockPendingNotification(tx: PoolClient, scope: Scope, now:
     LEFT JOIN rules rule ON rule.id = n.rule_id AND rule.workspace_id = $1
     LEFT JOIN person_identities identity ON identity.person_id = n.recipient_person_id AND identity.workspace_id = $1 AND identity.provider = c.provider
     WHERE n.workspace_id = $1 AND n.id = $2 AND n.sent_at IS NULL AND n.cancelled_at IS NULL
-      AND n.digest_id IS NULL AND n.held_until <= $3 AND (l.retracted_at IS NULL OR n.kind = 'correction')
+      AND n.digest_id IS NULL AND n.failed_at IS NULL AND n.held_until <= $3 AND (l.retracted_at IS NULL OR n.kind = 'correction')
       AND c.monitored AND c.connection_status = 'active'
       AND (n.kind NOT IN ('reminder','escalation') OR (t.status = 'active' AND NOT t.historical AND (n.stale_since IS NULL OR n.stale_since = t.last_activity_at))) FOR UPDATE OF n`,
     [scope.workspaceId, scope.notificationId, now],
@@ -92,6 +92,41 @@ export async function replaceDestination(
   );
 
   return result.rows[0].chatId;
+}
+
+// FR-TG-13: Telegram refused the person's private chat. The notification fails for good, the
+// person is no longer Connected, and History & audit says who was not reached. False when the
+// destination is a channel, which keeps the old behaviour.
+export async function markUnreachable(tx: PoolClient, scope: Scope, now: Date) {
+  const failed = await tx.query<{ personId: string; threadId: string | null; name: string }>(
+    `UPDATE notifications n SET failed_at = $3, failure_reason = 'recipient_unreachable'
+    FROM people person WHERE n.workspace_id = $1 AND n.id = $2 AND person.id = n.recipient_person_id
+    RETURNING n.recipient_person_id AS "personId", n.thread_id AS "threadId", person.name`,
+    [scope.workspaceId, scope.notificationId, now],
+  );
+  const recipient = failed.rows[0];
+
+  if (!recipient) {
+    return false;
+  }
+
+  await tx.query(
+    "UPDATE person_identities SET started_at = NULL WHERE workspace_id = $1 AND person_id = $2 AND provider = 'telegram'",
+    [scope.workspaceId, recipient.personId],
+  );
+  await tx.query(
+    `INSERT INTO decisions (workspace_id, kind, thread_id, title, detail, occurred_at, recipient_person_id)
+    VALUES ($1, 'routing', $2, 'Not delivered', $3, $4, $5)`,
+    [
+      scope.workspaceId,
+      recipient.threadId,
+      `${recipient.name} has not started the bot, or blocked it. Nothing was sent.`,
+      now,
+      recipient.personId,
+    ],
+  );
+
+  return true;
 }
 
 export async function recordSentAt(

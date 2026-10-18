@@ -6,6 +6,7 @@ import {
   lockPendingNotification,
   recordSentAt,
   deferNotification,
+  markUnreachable,
   replaceDestination,
   executiveRecipient,
   attachDigest,
@@ -63,14 +64,36 @@ export async function sendNotification(
       message,
     );
 
-    if ('retryAfter' in result) {
-      await retryNotification(tx, services, scope, { now, retryAfter: result.retryAfter });
+    if (!('providerMessageId' in result)) {
+      await settleRefused(tx, services, scope, { now, result });
 
       return;
     }
 
     await recordSentAt(tx, scope, { now, body: message.text });
   });
+}
+
+// Not sent: a rate limit retries after its wait; a person who cannot be reached fails the
+// notification (FR-TG-13); a channel that cannot be reached throws as before.
+async function settleRefused(
+  tx: PoolClient,
+  services: Services,
+  scope: { workspaceId: string; notificationId: string },
+  input: { now: Date; result: { retryAfter: number } | { unreachable: true } },
+) {
+  if ('retryAfter' in input.result) {
+    await retryNotification(tx, services, scope, {
+      now: input.now,
+      retryAfter: input.result.retryAfter,
+    });
+
+    return;
+  }
+
+  if (!(await markUnreachable(tx, scope, input.now))) {
+    throw new DomainError('E-TG-ACTIVATION-FAILED');
+  }
 }
 
 async function holdExecutive(
