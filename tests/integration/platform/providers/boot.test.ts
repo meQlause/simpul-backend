@@ -33,7 +33,7 @@ function environment() {
     TELEGRAM_API_BASE: 'https://telegram.example',
     AUTH_SECRET: 'test-only-auth-secret-with-more-than-32-characters',
     SECRETS_MASTER_KEY: Buffer.alloc(32, 7).toString('base64'),
-    GEMINI_API_KEY: 'test-only-key',
+    GOOGLE_CLOUD_PROJECT: 'test-project',
     GEMINI_MODEL_TRIAGE: 'test-model',
     GEMINI_MODEL_STANDARD: 'test-model',
     GEMINI_MODEL_STRONG: 'test-model',

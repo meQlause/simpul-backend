@@ -138,7 +138,7 @@ test('create-workspace creates a workspace, an admin person and a sign-in accoun
         PUBLIC_BASE_URL: 'https://simpul.example',
         TELEGRAM_API_BASE: 'https://api.telegram.org',
         AUTH_SECRET: 'test-only-auth-secret-with-more-than-32-characters',
-        GEMINI_API_KEY: 'test-model-key',
+        GOOGLE_CLOUD_PROJECT: 'test-project',
         GEMINI_MODEL_TRIAGE: 'test',
         GEMINI_MODEL_STANDARD: 'test',
         GEMINI_MODEL_STRONG: 'test',

@@ -1,8 +1,8 @@
 import type { EmbeddingPort } from './port.js';
-import { GoogleGenAI } from '@google/genai';
+import { vertexClient } from './vertex.js';
 import type { EmbedContentParameters } from '@google/genai';
 
-type Settings = { apiKey: string; model: string };
+type Settings = { vertex: { project: string; location: string }; model: string };
 type Embed = (request: EmbedContentParameters) => Promise<{ embeddings?: { values?: number[] }[] }>;
 
 const dimensions = 768;
@@ -11,7 +11,7 @@ const tasks = { document: 'RETRIEVAL_DOCUMENT', query: 'RETRIEVAL_QUERY' } as co
 
 // Unit text is embedded as a document; a search query as a query (FR-RES-06).
 export function createGeminiEmbedding(settings: Settings, embed?: Embed): EmbeddingPort {
-  const client = new GoogleGenAI({ apiKey: settings.apiKey });
+  const client = vertexClient(settings.vertex);
   const embedContent =
     embed ?? ((request: EmbedContentParameters) => client.models.embedContent(request));
 

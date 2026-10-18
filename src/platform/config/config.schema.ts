@@ -21,7 +21,10 @@ export const configSchema = zod.object({
   TELEGRAM_SEND_PER_CHAT_PER_MINUTE: zod.coerce.number().int().positive().max(20).default(20),
   INGEST_DEBOUNCE_SECONDS: zod.coerce.number().int().positive().default(12),
   AUTH_SECRET: secret,
-  GEMINI_API_KEY: zod.string().min(1),
+  // B-9: models run on Vertex AI in this project, as the process's Google identity.
+  GOOGLE_CLOUD_PROJECT: zod.string().min(1),
+  VERTEX_LOCATION: zod.string().min(1).default('global'),
+  VERTEX_EMBEDDING_LOCATION: zod.string().min(1).default('asia-southeast1'),
   GEMINI_MODEL_TRIAGE: modelId.default('gemini-3.1-flash-lite'),
   GEMINI_MODEL_STANDARD: modelId.default('gemini-3.8-flash'),
   GEMINI_MODEL_STRONG: modelId.default('gemini-3.1-pro-preview'),

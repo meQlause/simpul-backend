@@ -1,7 +1,10 @@
 import { expect, test, vi } from 'vitest';
 import { createGeminiEmbedding } from '../../../../src/platform/llm/gemini-embedding.js';
 
-const settings = { apiKey: 'test-key', model: 'embedding-model' };
+const settings = {
+  vertex: { project: 'test-project', location: 'global' },
+  model: 'embedding-model',
+};
 const vector = (length: number) => Array.from({ length }, () => 0.1);
 
 // T3 — AC1, AC3: one 768-value vector per text, with the task the caller names; a wrong length is refused.

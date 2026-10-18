@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { vertexClient } from './vertex.js';
 import type { GenerateContentParameters } from '@google/genai';
 import type { MetricSink } from '../metrics/index.js';
 import { recordTokens } from './usage.js';
@@ -10,10 +10,10 @@ type Generate = (request: GenerateContentParameters) => Promise<{
 const TIMEOUT_MS = 20000;
 
 export function createGeminiTranscriber(
-  settings: { apiKey: string; model: string; emit?: MetricSink },
+  settings: { vertex: { project: string; location: string }; model: string; emit?: MetricSink },
   generate?: Generate,
 ) {
-  const client = new GoogleGenAI({ apiKey: settings.apiKey });
+  const client = vertexClient(settings.vertex);
   const generateContent =
     generate ?? ((request: GenerateContentParameters) => client.models.generateContent(request));
 

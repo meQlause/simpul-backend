@@ -8,7 +8,7 @@ test('SRS §11.6: transcription reports provider tokens by workspace without aud
     usageMetadata: { totalTokenCount: 15 },
   }));
   const transcriber = createGeminiTranscriber(
-    { apiKey: 'test-only', model: 'standard', emit },
+    { vertex: { project: 'test-project', location: 'global' }, model: 'standard', emit },
     generate,
   );
 
@@ -34,7 +34,7 @@ test('SRS §11.6: transcription reports provider tokens by workspace without aud
 test('SRS §12.4: Gemini receives bounded voice transcription instructions and the original audio bytes', async () => {
   const generate = vi.fn(async () => ({ text: '  tiga dus sudah siap  ' }));
   const transcriber = createGeminiTranscriber(
-    { apiKey: 'test-only', model: 'configured-standard' },
+    { vertex: { project: 'test-project', location: 'global' }, model: 'configured-standard' },
     generate,
   );
 

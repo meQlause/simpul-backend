@@ -114,7 +114,10 @@ if (process.argv[2] === 'create-workspace') {
             ? {
                 model: createGeminiModel({
                   emit,
-                  apiKey: config.GEMINI_API_KEY,
+                  vertex: {
+                    project: config.GOOGLE_CLOUD_PROJECT,
+                    location: config.VERTEX_LOCATION,
+                  },
                   models: {
                     triage: config.GEMINI_MODEL_TRIAGE,
                     standard: config.GEMINI_MODEL_STANDARD,
@@ -165,13 +168,16 @@ if (process.argv[2] === 'create-workspace') {
       secretStore: createSecretStore(config.SECRETS_MASTER_KEY),
       publicBaseUrl: config.PUBLIC_BASE_URL,
       embedding: createGeminiEmbedding({
-        apiKey: config.GEMINI_API_KEY,
+        vertex: {
+          project: config.GOOGLE_CLOUD_PROJECT,
+          location: config.VERTEX_EMBEDDING_LOCATION,
+        },
         model: config.GEMINI_MODEL_EMBEDDING,
       }),
       embeddingModel: config.GEMINI_MODEL_EMBEDDING,
       model: createGeminiModel({
         emit,
-        apiKey: config.GEMINI_API_KEY,
+        vertex: { project: config.GOOGLE_CLOUD_PROJECT, location: config.VERTEX_LOCATION },
         models: {
           triage: config.GEMINI_MODEL_TRIAGE,
           standard: config.GEMINI_MODEL_STANDARD,
@@ -180,7 +186,7 @@ if (process.argv[2] === 'create-workspace') {
       }),
       transcriber: createGeminiTranscriber({
         emit,
-        apiKey: config.GEMINI_API_KEY,
+        vertex: { project: config.GOOGLE_CLOUD_PROJECT, location: config.VERTEX_LOCATION },
         model: config.GEMINI_MODEL_STANDARD,
       }),
       audit: (event: unknown) => logger.warn(event, 'Pipeline injection screen'),

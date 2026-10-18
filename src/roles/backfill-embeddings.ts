@@ -57,7 +57,10 @@ export async function runBackfillEmbeddings(config: ReturnType<typeof readConfig
       pool,
       resolveConnection: createConnectionResolver(pool),
       embedding: createGeminiEmbedding({
-        apiKey: config.GEMINI_API_KEY,
+        vertex: {
+          project: config.GOOGLE_CLOUD_PROJECT,
+          location: config.VERTEX_EMBEDDING_LOCATION,
+        },
         model: config.GEMINI_MODEL_EMBEDDING,
       }),
       embeddingModel: config.GEMINI_MODEL_EMBEDDING,

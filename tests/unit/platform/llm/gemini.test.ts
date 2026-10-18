@@ -3,7 +3,7 @@ import type { GenerateContentParameters } from '@google/genai';
 import { createGeminiModel } from '../../../../src/platform/llm/gemini.js';
 
 const settings = {
-  apiKey: 'test-key',
+  vertex: { project: 'test-project', location: 'global' },
   models: { triage: 'triage-model', standard: 'standard-model', strong: 'strong-model' },
 };
 

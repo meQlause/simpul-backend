@@ -1,9 +1,12 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
 import { databaseFixture } from '../../helpers/database.js';
 import { applyMigrations } from '../../helpers/migrations.js';
 import { createAuthentication } from '../../../src/features/auth/index.js';
+
+// The command runs as a child process: ~1.6 s alone, past 5 s once under the parallel run.
+vi.setConfig({ testTimeout: 20000 });
 
 const pool = databaseFixture(2);
 const execute = promisify(execFile);
@@ -37,7 +40,7 @@ function provision(email: string, smtp?: string, mode = 'own', sender = true) {
         PUBLIC_BASE_URL: 'https://simpul.example',
         TELEGRAM_API_BASE: 'https://api.telegram.org',
         AUTH_SECRET: 'test-only-auth-secret-with-more-than-32-characters',
-        GEMINI_API_KEY: 'test-model-key',
+        GOOGLE_CLOUD_PROJECT: 'test-project',
         SECRETS_MASTER_KEY: Buffer.alloc(32, 1).toString('base64'),
         LOG_LEVEL: 'silent',
         SYSTEM_SMTP_URL: smtp,

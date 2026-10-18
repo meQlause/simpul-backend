@@ -1,11 +1,11 @@
 import type { ModelPort } from './port.js';
-import { GoogleGenAI } from '@google/genai';
+import { vertexClient } from './vertex.js';
 import type { GenerateContentParameters } from '@google/genai';
 import type { MetricSink } from '../metrics/index.js';
 import { recordTokens } from './usage.js';
 
 type Settings = {
-  apiKey: string;
+  vertex: { project: string; location: string };
   models: { triage: string; standard: string; strong: string };
   emit?: MetricSink;
 };
@@ -25,7 +25,7 @@ const instructions = {
 };
 
 export function createGeminiModel(settings: Settings, generate?: Generate): ModelPort {
-  const client = new GoogleGenAI({ apiKey: settings.apiKey });
+  const client = vertexClient(settings.vertex);
   const generateContent =
     generate ?? ((request: GenerateContentParameters) => client.models.generateContent(request));
 

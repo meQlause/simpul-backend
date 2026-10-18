@@ -10,7 +10,7 @@ const environment = {
   TELEGRAM_API_BASE: 'https://api.telegram.org',
   AUTH_SECRET: 'test-only-auth-secret-with-more-than-32-characters',
   SECRETS_MASTER_KEY: Buffer.alloc(32, 7).toString('base64'),
-  GEMINI_API_KEY: 'test-only-key',
+  GOOGLE_CLOUD_PROJECT: 'test-project',
 };
 
 test('B-6: the four Gemini model ids are pinned in configuration against Google’s current list', () => {
@@ -33,4 +33,19 @@ test('be-stack §5: every role listens on 3000 unless PORT names another port', 
   expect(readConfig(environment).PORT).toBe(3000);
   expect(readConfig({ ...environment, PORT: '3001' }).PORT).toBe(3001);
   expect(() => readConfig({ ...environment, PORT: '0' })).toThrow();
+});
+
+test('B-9: models need the Google Cloud project and no API key; the two locations have defaults', () => {
+  const withoutProject: Record<string, string | undefined> = { ...environment };
+
+  delete withoutProject.GOOGLE_CLOUD_PROJECT;
+  const config = readConfig(environment);
+
+  expect(config).toMatchObject({
+    GOOGLE_CLOUD_PROJECT: 'test-project',
+    VERTEX_LOCATION: 'global',
+    VERTEX_EMBEDDING_LOCATION: 'asia-southeast1',
+  });
+  expect(config).not.toHaveProperty('GEMINI_API_KEY');
+  expect(() => readConfig(withoutProject)).toThrow();
 });
